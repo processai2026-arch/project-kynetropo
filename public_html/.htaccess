@@ -1,0 +1,25 @@
+Options -Indexes
+RewriteEngine On
+RewriteBase /
+
+# Don't rewrite real files or directories
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Don't rewrite /api/ requests — let PHP handle them
+RewriteCond %{REQUEST_URI} !^/api/
+
+# Everything else → React SPA
+RewriteRule ^(.*)$ index.html [QSA,L]
+
+# No-cache for index.html (always serve latest deploy)
+<Files "index.html">
+  Header always set Cache-Control "no-cache, no-store, must-revalidate"
+  Header always set Pragma "no-cache"
+  Header always set Expires "0"
+</Files>
+
+# Long-term cache for hashed assets
+<FilesMatch "\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|ttf)$">
+  Header always set Cache-Control "public, max-age=31536000, immutable"
+</FilesMatch>

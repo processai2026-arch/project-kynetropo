@@ -1,0 +1,349 @@
+{
+  "generated_at": "2026-07-27",
+  "client": "Krish Agencies",
+  "entities": {
+    "Customer": {
+      "table": "customers",
+      "files": {
+        "types": "src/types/krish.ts",
+        "api": "src/lib/api/krish.ts",
+        "list_page": "src/pages/Customers.tsx",
+        "controller": "api/controllers/admin/AdminCustomerController.php",
+        "migration": "database/create_customers.sql"
+      },
+      "fields": [
+        { "name": "id", "type": "number", "readonly": true },
+        { "name": "name", "type": "string", "required": true },
+        { "name": "contact_person", "type": "string" },
+        { "name": "email", "type": "string", "required": true },
+        { "name": "phone", "type": "string", "required": true },
+        { "name": "address", "type": "string" },
+        { "name": "city", "type": "string" },
+        { "name": "state", "type": "string" },
+        { "name": "status", "type": "select", "options": ["active","inactive"] },
+        { "name": "notes", "type": "text" },
+        { "name": "user_id", "type": "ref", "ref_entity": "User" }
+      ],
+      "depends_on": [],
+      "referenced_by": ["Machine","Ticket","Order"],
+      "cross_effects": [],
+      "nav_section": "Catalog",
+      "nav_url": "/customers",
+      "routes": ["/customers"]
+    },
+    "Employee": {
+      "table": "employees",
+      "files": {
+        "types": "src/types/krish.ts",
+        "api": "src/lib/api/krish.ts",
+        "list_page": "src/pages/Employees.tsx",
+        "controller": "api/controllers/admin/AdminEmployeeController.php",
+        "migration": "database/create_employees.sql"
+      },
+      "fields": [
+        { "name": "id", "type": "number", "readonly": true },
+        { "name": "name", "type": "string", "required": true },
+        { "name": "email", "type": "string", "required": true },
+        { "name": "phone", "type": "string", "required": true },
+        { "name": "designation", "type": "string" },
+        { "name": "department", "type": "string" },
+        { "name": "status", "type": "select", "options": ["active","inactive"] },
+        { "name": "notes", "type": "text" },
+        { "name": "user_id", "type": "ref", "ref_entity": "User" }
+      ],
+      "depends_on": [],
+      "referenced_by": ["Ticket","AttendanceLog"],
+      "cross_effects": [],
+      "nav_section": "Field Team",
+      "nav_url": "/employees",
+      "routes": ["/employees"]
+    },
+    "Product": {
+      "table": "products",
+      "files": {
+        "types": "src/types/krish.ts",
+        "api": "src/lib/api/krish.ts",
+        "list_page": "src/pages/Products.tsx",
+        "controller": "api/controllers/admin/AdminProductsController.php",
+        "migration": "database/create_products.sql"
+      },
+      "fields": [
+        { "name": "id", "type": "number", "readonly": true },
+        { "name": "name", "type": "string", "required": true },
+        { "name": "sku", "type": "string", "required": true },
+        { "name": "category", "type": "string" },
+        { "name": "description", "type": "text" },
+        { "name": "unit", "type": "string" },
+        { "name": "unit_price", "type": "number", "required": true },
+        { "name": "stock_qty", "type": "number" },
+        { "name": "is_active", "type": "boolean" }
+      ],
+      "depends_on": [],
+      "referenced_by": ["Order","OrderItem"],
+      "cross_effects": [],
+      "nav_section": "Catalog",
+      "nav_url": "/products",
+      "routes": ["/products"]
+    },
+    "Machine": {
+      "table": "machines",
+      "files": {
+        "types": "src/types/krish.ts",
+        "api": "src/lib/api/krish.ts",
+        "list_page": "src/pages/Machines.tsx",
+        "controller": "api/controllers/admin/AdminMachineController.php",
+        "migration": "database/create_machines.sql"
+      },
+      "fields": [
+        { "name": "id", "type": "number", "readonly": true },
+        { "name": "machine_id", "type": "string", "required": true },
+        { "name": "model", "type": "string", "required": true },
+        { "name": "category", "type": "string" },
+        { "name": "customer_id", "type": "ref", "ref_entity": "Customer" },
+        { "name": "location_name", "type": "string", "required": true },
+        { "name": "address", "type": "string" },
+        { "name": "latitude", "type": "number" },
+        { "name": "longitude", "type": "number" },
+        { "name": "geofence_radius_m", "type": "number" },
+        { "name": "installed_date", "type": "date" },
+        { "name": "warranty_expiry", "type": "date" },
+        { "name": "status", "type": "select", "options": ["active","inactive","under_repair"] },
+        { "name": "notes", "type": "text" }
+      ],
+      "depends_on": ["Customer"],
+      "referenced_by": ["Ticket"],
+      "cross_effects": [
+        { "trigger": "gps_checkin", "affects_entity": "AttendanceLog", "operation": "auto-detect nearest machine within geofence, set location_name" }
+      ],
+      "nav_section": "Operations",
+      "nav_url": "/machines",
+      "routes": ["/machines"]
+    },
+    "Ticket": {
+      "table": "tickets",
+      "files": {
+        "types": "src/types/krish.ts",
+        "api": "src/lib/api/krish.ts",
+        "list_page": "src/pages/Tickets.tsx",
+        "controller": "api/controllers/admin/AdminTicketController.php",
+        "migration": "database/create_tickets.sql"
+      },
+      "fields": [
+        { "name": "id", "type": "number", "readonly": true },
+        { "name": "ticket_number", "type": "string", "readonly": true },
+        { "name": "machine_id", "type": "ref", "ref_entity": "Machine" },
+        { "name": "customer_id", "type": "ref", "ref_entity": "Customer" },
+        { "name": "assigned_employee_id", "type": "ref", "ref_entity": "Employee" },
+        { "name": "title", "type": "string", "required": true },
+        { "name": "description", "type": "text" },
+        { "name": "priority", "type": "select", "options": ["low","medium","high","urgent"] },
+        { "name": "status", "type": "select", "options": ["open","assigned","in_progress","resolved","closed"] },
+        { "name": "raised_by", "type": "select", "options": ["customer","admin"] },
+        { "name": "work_notes", "type": "text" },
+        { "name": "resolution_notes", "type": "text" },
+        { "name": "assigned_at", "type": "datetime", "readonly": true },
+        { "name": "started_at", "type": "datetime", "readonly": true },
+        { "name": "resolved_at", "type": "datetime", "readonly": true },
+        { "name": "closed_at", "type": "datetime", "readonly": true }
+      ],
+      "depends_on": ["Machine","Customer","Employee"],
+      "referenced_by": ["TicketNote"],
+      "cross_effects": [
+        { "trigger": "status→in_progress", "affects_field": "started_at", "operation": "set to NOW()" },
+        { "trigger": "status→resolved", "affects_field": "resolved_at", "operation": "set to NOW()" },
+        { "trigger": "status→closed", "affects_field": "closed_at", "operation": "set to NOW()" },
+        { "trigger": "store", "affects_field": "customer_id", "operation": "auto-derived from machine.customer_id" }
+      ],
+      "nav_section": "Operations",
+      "nav_url": "/tickets",
+      "routes": ["/tickets"]
+    },
+    "TicketNote": {
+      "table": "ticket_notes",
+      "files": {
+        "types": "src/types/krish.ts",
+        "controller": "api/controllers/admin/AdminTicketController.php",
+        "migration": "database/create_ticket_notes.sql"
+      },
+      "fields": [
+        { "name": "id", "type": "number", "readonly": true },
+        { "name": "ticket_id", "type": "ref", "ref_entity": "Ticket" },
+        { "name": "author_name", "type": "string" },
+        { "name": "author_role", "type": "select", "options": ["admin","customer","employee"] },
+        { "name": "note", "type": "text", "required": true }
+      ],
+      "depends_on": ["Ticket"],
+      "referenced_by": [],
+      "cross_effects": [],
+      "nav_section": null,
+      "nav_url": null,
+      "routes": ["/admin/tickets/{id}/notes"]
+    },
+    "Order": {
+      "table": "orders",
+      "files": {
+        "types": "src/types/krish.ts",
+        "api": "src/lib/api/krish.ts",
+        "list_page": "src/pages/Orders.tsx",
+        "controller": "api/controllers/admin/AdminOrderController.php",
+        "migration": "database/create_orders.sql"
+      },
+      "fields": [
+        { "name": "id", "type": "number", "readonly": true },
+        { "name": "order_number", "type": "string", "readonly": true },
+        { "name": "customer_id", "type": "ref", "ref_entity": "Customer" },
+        { "name": "status", "type": "select", "options": ["pending","confirmed","processing","dispatched","delivered","cancelled"] },
+        { "name": "total_amount", "type": "number", "readonly": true },
+        { "name": "notes", "type": "text" },
+        { "name": "delivery_address", "type": "string" },
+        { "name": "order_date", "type": "date", "readonly": true },
+        { "name": "expected_delivery", "type": "date" }
+      ],
+      "depends_on": ["Customer"],
+      "referenced_by": ["OrderItem"],
+      "cross_effects": [
+        { "trigger": "store_items", "affects_field": "total_amount", "operation": "recompute SUM(quantity * unit_price)" }
+      ],
+      "nav_section": "Operations",
+      "nav_url": "/orders",
+      "routes": ["/orders"]
+    },
+    "OrderItem": {
+      "table": "order_items",
+      "files": {
+        "types": "src/types/krish.ts",
+        "controller": "api/controllers/admin/AdminOrderController.php",
+        "migration": "database/create_order_items.sql"
+      },
+      "fields": [
+        { "name": "id", "type": "number", "readonly": true },
+        { "name": "order_id", "type": "ref", "ref_entity": "Order" },
+        { "name": "product_id", "type": "ref", "ref_entity": "Product" },
+        { "name": "product_name", "type": "string" },
+        { "name": "unit_price", "type": "number" },
+        { "name": "quantity", "type": "number" },
+        { "name": "subtotal", "type": "number", "readonly": true }
+      ],
+      "depends_on": ["Order","Product"],
+      "referenced_by": [],
+      "cross_effects": [],
+      "nav_section": null,
+      "nav_url": null,
+      "routes": []
+    },
+    "AttendanceLog": {
+      "table": "attendance_logs",
+      "files": {
+        "types": "src/types/krish.ts",
+        "api": "src/lib/api/krish.ts",
+        "list_page": "src/pages/Attendance.tsx",
+        "controller": "api/controllers/admin/AdminAttendanceLogController.php",
+        "migration": "database/create_attendance_logs.sql"
+      },
+      "fields": [
+        { "name": "id", "type": "number", "readonly": true },
+        { "name": "employee_id", "type": "ref", "ref_entity": "Employee" },
+        { "name": "date", "type": "date" },
+        { "name": "check_in_time", "type": "datetime" },
+        { "name": "check_in_lat", "type": "number" },
+        { "name": "check_in_lng", "type": "number" },
+        { "name": "check_out_time", "type": "datetime" },
+        { "name": "check_out_lat", "type": "number" },
+        { "name": "check_out_lng", "type": "number" },
+        { "name": "location_name", "type": "string" },
+        { "name": "status", "type": "select", "options": ["present","absent","half_day"] },
+        { "name": "hours_worked", "type": "number", "readonly": true },
+        { "name": "method", "type": "select", "options": ["gps_auto","manual"] },
+        { "name": "notes", "type": "text" }
+      ],
+      "depends_on": ["Employee"],
+      "referenced_by": [],
+      "cross_effects": [
+        { "trigger": "check_out", "affects_field": "hours_worked", "operation": "TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) / 60" }
+      ],
+      "nav_section": "Field Team",
+      "nav_url": "/attendance",
+      "routes": ["/attendance"]
+    }
+  },
+  "portals": {
+    "admin": {
+      "middleware": "admin",
+      "jwt_guard": "admin",
+      "routes_prefix": "/admin/*",
+      "login_route": "/login",
+      "pages": ["Dashboard","Machines","Tickets","Orders","Products","Customers","Employees","Attendance","UserManagement","Settings"]
+    },
+    "customer": {
+      "middleware": "customer",
+      "jwt_guard": "customer",
+      "routes_prefix": "/customer/*",
+      "login_route": "/login",
+      "pages": ["CustomerPortal","CustomerTickets","CustomerOrders"]
+    },
+    "employee": {
+      "middleware": "employee",
+      "jwt_guard": "employee",
+      "routes_prefix": "/employee/*",
+      "login_route": "/login",
+      "pages": ["EmployeePortal","EmployeeTasks","EmployeeAttendance"]
+    }
+  },
+  "navigation_sections": {
+    "Overview": ["Dashboard"],
+    "Operations": ["Machine","Ticket","Order"],
+    "Catalog": ["Product","Customer"],
+    "Field Team": ["Employee","AttendanceLog"],
+    "System": ["UserManagement"]
+  },
+  "all_routes": {
+    "/": "src/pages/Dashboard.tsx",
+    "/machines": "src/pages/Machines.tsx",
+    "/tickets": "src/pages/Tickets.tsx",
+    "/orders": "src/pages/Orders.tsx",
+    "/products": "src/pages/Products.tsx",
+    "/customers": "src/pages/Customers.tsx",
+    "/employees": "src/pages/Employees.tsx",
+    "/attendance": "src/pages/Attendance.tsx",
+    "/user-management": "src/pages/UserManagement.tsx",
+    "/settings": "src/pages/Settings.tsx",
+    "/customer/": "src/pages/customer/CustomerPortal.tsx",
+    "/customer/tickets": "src/pages/customer/CustomerTickets.tsx",
+    "/customer/orders": "src/pages/customer/CustomerOrders.tsx",
+    "/employee/": "src/pages/employee/EmployeePortal.tsx",
+    "/employee/tasks": "src/pages/employee/EmployeeTasks.tsx",
+    "/employee/attendance": "src/pages/employee/EmployeeAttendance.tsx"
+  },
+  "all_api_paths": {
+    "Customer": "/admin/customers",
+    "Machine": "/admin/machines",
+    "Ticket": "/admin/tickets",
+    "TicketNote": "/admin/tickets/{id}/notes",
+    "Order": "/admin/orders",
+    "Product": "/admin/products",
+    "Employee": "/admin/employees",
+    "AttendanceLog": "/admin/attendance",
+    "Dashboard": "/admin/dashboard-stats",
+    "CustomerPortal_stats": "/customer/dashboard-stats",
+    "CustomerPortal_machines": "/customer/machines",
+    "CustomerPortal_tickets": "/customer/tickets",
+    "CustomerPortal_orders": "/customer/orders",
+    "CustomerPortal_products": "/customer/products",
+    "EmployeePortal_stats": "/employee/dashboard-stats",
+    "EmployeePortal_tickets": "/employee/tickets",
+    "EmployeePortal_attendance": "/employee/attendance"
+  },
+  "database_import_order": [
+    "database/auth_tables.sql",
+    "database/add_employee_user_type.sql",
+    "database/create_customers.sql",
+    "database/create_employees.sql",
+    "database/create_products.sql",
+    "database/create_machines.sql",
+    "database/create_tickets.sql",
+    "database/create_ticket_notes.sql",
+    "database/create_orders.sql",
+    "database/create_order_items.sql",
+    "database/create_attendance_logs.sql"
+  ]
+}

@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS ops_meetings (
+  id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id       INT UNSIGNED NOT NULL DEFAULT 1,
+  client_id       INT UNSIGNED DEFAULT NULL,
+  project_id      INT UNSIGNED DEFAULT NULL,
+  date            DATETIME NOT NULL,
+  type            ENUM('google_meet','in_person','phone_call','whatsapp_call') NOT NULL DEFAULT 'google_meet',
+  link            VARCHAR(500) DEFAULT NULL,
+  attendees       TEXT,
+  agenda          TEXT,
+  outcome         TEXT,
+  next_action     TEXT,
+  next_followup   DATE DEFAULT NULL,
+  booked_by       VARCHAR(100) NOT NULL DEFAULT '',
+  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_tenant (tenant_id),
+  INDEX idx_client (client_id),
+  INDEX idx_project (project_id),
+  INDEX idx_date (date),
+  INDEX idx_followup (next_followup)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

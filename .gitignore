@@ -1,0 +1,23 @@
+# Secrets — never commit. The root .env holds live DB credentials, the JWT
+# secret and API keys. public_html/.gitignore covers the one inside that folder.
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-customer/
+dist-dealer/
+
+# Logs
+*.log
+error_log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/sftp.json.example

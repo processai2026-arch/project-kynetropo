@@ -1,0 +1,455 @@
+/* ===========================================================================
+   Challenge Accepted — destruction experience.
+
+   Isolated from the rest of the application: every rule is namespaced under
+   .kyn-destroy, and the whole layer is unmounted when the animation is not
+   running, so it costs nothing on the normal rendering path.
+
+   Only transform / opacity / filter are animated — no layout-triggering
+   properties — so the sequence stays smooth on ordinary mobile hardware.
+   =========================================================================== */
+
+.kyn-destroy {
+  --kyn-black: #08080b;
+  --kyn-bone: #f4f2ec;
+  --kyn-ember: #ff5a1f;
+  --kyn-hot: #ffe6cc;
+  --kyn-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", "Roboto Mono", Menlo, Consolas, monospace;
+
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow: hidden;
+  background: var(--kyn-black);
+  color: var(--kyn-bone);
+  isolation: isolate;
+}
+
+/* ── Phase 1 — verification ────────────────────────────────────────────── */
+
+.kyn-destroy__verify {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  background: radial-gradient(circle at 50% 45%, #14141a 0%, var(--kyn-black) 70%);
+  animation: kyn-verify-out 220ms ease-in 1s both;
+}
+
+.kyn-destroy__mark {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(244, 242, 236, 0.18);
+  border-radius: 20px;
+  font-size: 2.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--kyn-bone);
+  overflow: hidden;
+}
+
+/* The scanning line sweeping through the Kynetropo challenge mark. */
+.kyn-destroy__scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--kyn-ember), transparent);
+  box-shadow: 0 0 12px 2px rgba(255, 90, 31, 0.55);
+  animation: kyn-scan 1.2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.kyn-destroy__verify-label {
+  font-family: var(--kyn-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: rgba(244, 242, 236, 0.7);
+}
+
+@keyframes kyn-scan {
+  0%   { top: 0%;   opacity: 0; }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+@keyframes kyn-verify-out {
+  to { opacity: 0; transform: scale(0.97); }
+}
+
+/* ── Phase 2 — the challenge shell collapsing into the singularity ─────── */
+
+.kyn-destroy__stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  perspective: 900px;
+}
+
+.kyn-destroy__shell {
+  width: min(560px, 92vw);
+  max-height: 82vh;
+  overflow: hidden;
+  transform-origin: 50% 50%;
+  will-change: transform, filter, opacity;
+  /* Gravity: one-directional, accelerating, no bounce. */
+  animation: kyn-collapse 1.4s cubic-bezier(0.62, 0.02, 0.2, 1) 1.2s both;
+}
+
+@keyframes kyn-collapse {
+  0% {
+    transform: scale(1) rotate(0deg);
+    filter: blur(0) brightness(1) saturate(1);
+    opacity: 1;
+  }
+  55% {
+    filter: blur(3px) brightness(1.7) saturate(1.35);
+  }
+  100% {
+    transform: scale(0.012) rotate(400deg);
+    filter: blur(6px) brightness(2.2) saturate(1.6);
+    opacity: 0.85;
+  }
+}
+
+/*
+ * Staggered content collapse — the shell does not shrink uniformly. Each
+ * visual group gets its own translate/rotate/scale on a delay, so the layout
+ * shears into a spiral rather than zooming out as one flat plane.
+ */
+.kyn-destroy__shell [data-destroy-group] {
+  transform-origin: 50% 50%;
+  will-change: transform, opacity;
+  animation: kyn-group-collapse 1.2s cubic-bezier(0.62, 0.02, 0.2, 1) both;
+}
+
+.kyn-destroy__shell [data-destroy-group="1"] { animation-delay: 1.26s; --kyn-tx: -14%; --kyn-ty: -10%; --kyn-rot: -22deg; }
+.kyn-destroy__shell [data-destroy-group="2"] { animation-delay: 1.32s; --kyn-tx:  12%; --kyn-ty:  -6%; --kyn-rot:  18deg; }
+.kyn-destroy__shell [data-destroy-group="3"] { animation-delay: 1.38s; --kyn-tx: -10%; --kyn-ty:   8%; --kyn-rot:  26deg; }
+.kyn-destroy__shell [data-destroy-group="4"] { animation-delay: 1.44s; --kyn-tx:   9%; --kyn-ty:  12%; --kyn-rot: -19deg; }
+.kyn-destroy__shell [data-destroy-group="5"] { animation-delay: 1.50s; --kyn-tx:  -7%; --kyn-ty:  16%; --kyn-rot:  24deg; }
+.kyn-destroy__shell [data-destroy-group="6"] { animation-delay: 1.56s; --kyn-tx:   5%; --kyn-ty:  20%; --kyn-rot: -28deg; }
+
+@keyframes kyn-group-collapse {
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+  100% { transform: translate(var(--kyn-tx), var(--kyn-ty)) rotate(var(--kyn-rot)) scale(0.6); opacity: 0.55; }
+}
+
+/* ── Singularity ───────────────────────────────────────────────────────── */
+
+.kyn-destroy__singularity {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: 340px;
+  height: 340px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  animation: kyn-disk-grow 1.5s cubic-bezier(0.62, 0.02, 0.2, 1) 1.2s both;
+}
+
+@keyframes kyn-disk-grow {
+  0%   { transform: scale(0.04); opacity: 0; }
+  18%  { opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.kyn-destroy__disk {
+  position: absolute;
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(255, 90, 31, 0) 0deg,
+    rgba(255, 90, 31, 0.85) 60deg,
+    rgba(255, 230, 204, 0.95) 120deg,
+    rgba(255, 90, 31, 0.55) 200deg,
+    rgba(255, 90, 31, 0) 320deg
+  );
+  filter: blur(14px);
+  animation: kyn-spin 2.6s linear infinite;
+}
+
+.kyn-destroy__disk--inner {
+  width: 190px;
+  height: 190px;
+  filter: blur(8px);
+  opacity: 0.9;
+  animation: kyn-spin 1.25s linear infinite reverse;
+}
+
+@keyframes kyn-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Event horizon — a pure black core with a thin, hot rim. */
+.kyn-destroy__horizon {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  background: #000;
+  box-shadow:
+    0 0 0 2px rgba(255, 214, 170, 0.85),
+    0 0 60px 18px rgba(255, 90, 31, 0.45);
+}
+
+/* Polar jets. */
+.kyn-destroy__jet {
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  width: 3px;
+  height: 150px;
+  background: linear-gradient(to top, rgba(255, 230, 204, 0.85), rgba(255, 90, 31, 0));
+  filter: blur(2px);
+  animation: kyn-jet 1.4s ease-in-out infinite;
+}
+
+.kyn-destroy__jet--top    { bottom: 100%; }
+.kyn-destroy__jet--bottom { top: 100%; rotate: 180deg; }
+
+@keyframes kyn-jet {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 0.85; }
+}
+
+/* Darkness progressively swallowing the edges of the screen. */
+.kyn-destroy__darkness {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, transparent 12%, rgba(8, 8, 11, 0.72) 46%, var(--kyn-black) 78%);
+  animation: kyn-darkness 1.5s ease-in 1.2s both;
+}
+
+@keyframes kyn-darkness {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Ember particles ───────────────────────────────────────────────────── */
+
+.kyn-destroy__embers {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.kyn-destroy__ember {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--kyn-hot) 0%, var(--kyn-ember) 60%, rgba(255, 90, 31, 0) 100%);
+  will-change: transform, opacity;
+  animation: kyn-ember 1.35s cubic-bezier(0.62, 0.02, 0.2, 1) both;
+}
+
+@keyframes kyn-ember {
+  0%   { transform: translate(var(--kyn-from-x), var(--kyn-from-y)) scale(1);    opacity: 1; }
+  100% { transform: translate(0, 0) scale(0.08);                                 opacity: 0; }
+}
+
+/* ── Final destroyed screen ────────────────────────────────────────────── */
+
+.kyn-destroy__destroyed {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  overflow-y: auto;
+  background: radial-gradient(circle at 50% 42%, #121216 0%, var(--kyn-black) 62%);
+  animation: kyn-fade-in 220ms ease-out both;
+}
+
+@keyframes kyn-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Faint remnant of the accretion ring. */
+.kyn-destroy__remnant {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 90, 31, 0.22);
+  box-shadow: 0 0 80px 10px rgba(255, 90, 31, 0.08) inset;
+  pointer-events: none;
+}
+
+.kyn-destroy__title {
+  position: relative;
+  font-size: clamp(1.75rem, 8vw, 2.75rem);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--kyn-bone);
+  text-align: center;
+}
+
+.kyn-destroy__title em {
+  font-style: normal;
+  color: var(--kyn-ember);
+}
+
+.kyn-destroy__subtitle {
+  font-family: var(--kyn-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(244, 242, 236, 0.55);
+  text-align: center;
+}
+
+/* Receipt — mono, only fields the backend can actually prove. */
+.kyn-destroy__receipt {
+  position: relative;
+  width: min(380px, 92vw);
+  border: 1px solid rgba(244, 242, 236, 0.14);
+  border-radius: 12px;
+  padding: 1rem 1.125rem;
+  background: rgba(244, 242, 236, 0.03);
+  font-family: var(--kyn-mono);
+  font-size: 0.75rem;
+}
+
+.kyn-destroy__receipt-head {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.625rem;
+  border-bottom: 1px dashed rgba(244, 242, 236, 0.16);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(244, 242, 236, 0.6);
+  font-size: 0.625rem;
+}
+
+.kyn-destroy__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.3125rem 0;
+}
+
+.kyn-destroy__row dt {
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(244, 242, 236, 0.5);
+  font-size: 0.6875rem;
+}
+
+.kyn-destroy__row dd {
+  margin: 0;
+  text-align: right;
+  color: var(--kyn-bone);
+}
+
+.kyn-destroy__row dd.is-ember { color: var(--kyn-ember); }
+
+.kyn-destroy__note {
+  font-family: var(--kyn-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.06em;
+  color: rgba(244, 242, 236, 0.35);
+  text-align: center;
+  max-width: 340px;
+}
+
+/* Ghost CTA. */
+.kyn-destroy__cta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 1.75rem;
+  border: 1px solid rgba(255, 90, 31, 0.55);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--kyn-hot);
+  font-family: var(--kyn-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.kyn-destroy__cta:hover:not(:disabled) {
+  background: rgba(255, 90, 31, 0.12);
+  border-color: var(--kyn-ember);
+}
+
+.kyn-destroy__cta:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.kyn-destroy__dismiss {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 2;
+  padding: 0.5rem 0.875rem;
+  border: 1px solid rgba(244, 242, 236, 0.2);
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(244, 242, 236, 0.7);
+  font-family: var(--kyn-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.kyn-destroy__dismiss:hover { color: var(--kyn-bone); border-color: rgba(244, 242, 236, 0.4); }
+
+/* ── Reduced motion ────────────────────────────────────────────────────── */
+/*
+ * The state must never depend on the animation. With reduced motion we drop
+ * the particles, the rotation and the spin entirely, and cross-fade to the
+ * destroyed screen instead — which still says CHALLENGE EXPIRED / DESTROYED.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .kyn-destroy__shell {
+    animation: kyn-collapse-reduced 320ms ease-out 120ms both;
+  }
+  .kyn-destroy__shell [data-destroy-group] { animation: none; }
+  .kyn-destroy__embers { display: none; }
+  .kyn-destroy__disk,
+  .kyn-destroy__disk--inner { animation: none; filter: blur(18px); opacity: 0.5; }
+  .kyn-destroy__jet { animation: none; opacity: 0.4; }
+  .kyn-destroy__singularity { animation: kyn-fade-in 200ms ease-out both; }
+  .kyn-destroy__darkness { animation: kyn-fade-in 200ms ease-out both; }
+  .kyn-destroy__verify { animation: kyn-fade-in 150ms ease-out both; }
+  .kyn-destroy__scan { animation: none; top: 50%; }
+}
+
+@keyframes kyn-collapse-reduced {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.94); }
+}

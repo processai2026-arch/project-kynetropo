@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS `invoice_customers` (
+  `customer_id`       INT(11) NOT NULL AUTO_INCREMENT,
+  `tenant_id`         INT NOT NULL,
+  `name`              VARCHAR(255) NOT NULL,
+  `email`             VARCHAR(255) DEFAULT NULL,
+  `phone`             VARCHAR(15) DEFAULT NULL,
+  `gstin`             VARCHAR(15) DEFAULT NULL,
+  `address_line1`     VARCHAR(255) DEFAULT NULL,
+  `city`              VARCHAR(100) DEFAULT NULL,
+  `state`             VARCHAR(100) DEFAULT NULL,
+  `pincode`           VARCHAR(10) DEFAULT NULL,
+  `customer_type`     ENUM('b2b','b2c') NOT NULL DEFAULT 'b2c',
+  `total_purchases`   INT NOT NULL DEFAULT 0,
+  `lifetime_revenue`  DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  `created_at`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`        DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`customer_id`),
+  KEY `idx_inv_customers_tenant`      (`tenant_id`),
+  KEY `idx_inv_customers_tenant_type` (`tenant_id`, `customer_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

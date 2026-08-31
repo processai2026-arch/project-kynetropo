@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS `invoice_products` (
+  `product_id`       INT(11) NOT NULL AUTO_INCREMENT,
+  `tenant_id`        INT NOT NULL,
+  `sku`              VARCHAR(100) NOT NULL,
+  `name`             VARCHAR(255) NOT NULL,
+  `description`      TEXT DEFAULT NULL,
+  `category`         VARCHAR(100) DEFAULT NULL,
+  `hsn_code`         VARCHAR(20) DEFAULT NULL,
+  `unit`             VARCHAR(20) NOT NULL DEFAULT 'pcs',
+  `cost_price`       DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  `selling_price`    DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  `current_stock`    INT NOT NULL DEFAULT 0,
+  `min_stock_level`  INT NOT NULL DEFAULT 5,
+  `max_stock_level`  INT NOT NULL DEFAULT 100,
+  `is_active`        TINYINT(1) NOT NULL DEFAULT 1,
+  `created_at`       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`       DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`product_id`),
+  UNIQUE KEY `uq_inv_product_tenant_sku` (`tenant_id`, `sku`),
+  KEY `idx_inv_products_tenant`        (`tenant_id`),
+  KEY `idx_inv_products_tenant_active` (`tenant_id`, `is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

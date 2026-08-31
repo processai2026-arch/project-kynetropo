@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS `marketplace_settlements` (
+  `settlement_id`          INT(11) NOT NULL AUTO_INCREMENT,
+  `tenant_id`              INT NOT NULL,
+  `marketplace`            ENUM('amazon','flipkart','meesho') NOT NULL,
+  `external_id`            VARCHAR(100) DEFAULT NULL,
+  `period_start`           DATE NOT NULL,
+  `period_end`             DATE NOT NULL,
+  `gross_sales`            DECIMAL(14,2) NOT NULL,
+  `returns_refunds`        DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  `marketplace_commission` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  `tds_deducted`           DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  `payment_received`       DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  `expected_amount`        DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  `difference`             DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  `status`                 ENUM('pending','received','disputed') NOT NULL DEFAULT 'pending',
+  `settled_at`             DATETIME DEFAULT NULL,
+  `created_at`             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`settlement_id`),
+  KEY `idx_mp_settlements_tenant`        (`tenant_id`),
+  KEY `idx_mp_settlements_tenant_market` (`tenant_id`, `marketplace`),
+  KEY `idx_mp_settlements_tenant_status` (`tenant_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

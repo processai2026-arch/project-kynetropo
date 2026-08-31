@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS ops_hiring_candidates (
+  id                 INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id          INT UNSIGNED NOT NULL DEFAULT 1,
+  name               VARCHAR(200) NOT NULL,
+  email              VARCHAR(200) DEFAULT NULL,
+  phone              VARCHAR(30)  DEFAULT NULL,
+  assignment_sent    DATE DEFAULT NULL,
+  assignment_due     DATE DEFAULT NULL,
+  submitted          TINYINT(1) NOT NULL DEFAULT 0,
+  workflow_bugs      INT UNSIGNED NOT NULL DEFAULT 0,
+  critical_bugs      INT UNSIGNED NOT NULL DEFAULT 0,
+  reporting_quality  TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  reasoning_quality  TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  score              DECIMAL(4,1) NOT NULL DEFAULT 0,
+  decision           ENUM('pending','selected','rejected') NOT NULL DEFAULT 'pending',
+  rejection_reason   TEXT,
+  start_date         DATE DEFAULT NULL,
+  notes              TEXT,
+  created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_tenant (tenant_id),
+  INDEX idx_decision (decision)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

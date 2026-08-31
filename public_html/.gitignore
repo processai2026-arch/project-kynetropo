@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-customer/
+dist-dealer/
+
+# Environment files — never commit secrets
+.env
+.env.local
+.env.production
+.env.local
+.env.production
+.env.*.local
+
+# SFTP config — may contain credentials
+.vscode/sftp.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+error_log
+
+# Editor
+.vscode/*
+!.vscode/sftp.json.example
+
+# Deployment artifacts — contain secrets, never commit
+deploy/
+api/run_migrate.php
+.env.production
+
+# Built frontend copied into the web root by a deploy. These are OUTPUT, not
+# source: `npm run build` regenerates them into dist/. Committing them is what
+# previously overwrote the Vite entry template and broke the build — the source
+# template now lives at app.html, and index.html is a build artifact only.
+/index.html
+/assets/

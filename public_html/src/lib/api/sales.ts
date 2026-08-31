@@ -1,0 +1,271 @@
+import { apiFetch } from "@/lib/api/client";
+import type {
+  ChallengeCounts,
+  FollowupBucket,
+  Pagination,
+  SalesAccessUser,
+  SalesActivityEntry,
+  SalesCall,
+  SalesChallenge,
+  SalesChallengeDetail,
+  SalesDashboard,
+  SalesFollowup,
+  SalesLead,
+  SalesLeadDetail,
+  SalesMe,
+  SalesMeeting,
+} from "@/types/sales";
+
+/** The API returns `{ success, message, data }`; paginated lists add `pagination`. */
+interface Envelope<T> { success: boolean; message?: string; data: T }
+interface Paginated<T> { success: boolean; data: T[]; pagination: Pagination }
+
+type QueryParams = Record<string, string | number | boolean | undefined | null>;
+
+function qs(params: QueryParams): string {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== "" && v !== "all") search.set(k, String(v));
+  });
+  const s = search.toString();
+  return s ? `?${s}` : "";
+}
+
+// ─── Access ───────────────────────────────────────────────────────────────────
+
+export const salesAccessApi = {
+  me: async (): Promise<SalesMe> => (await apiFetch<Envelope<SalesMe>>("/admin/sales/me")).data,
+  users: async (): Promise<SalesAccessUser[]> =>
+    (await apiFetch<Envelope<SalesAccessUser[]>>("/admin/sales/users")).data,
+  permissionCatalog: async (): Promise<{ catalog: Record<string, string[]>; all: string[]; admin_only: string[] }> =>
+    (await apiFetch<Envelope<{ catalog: Record<string, string[]>; all: string[]; admin_only: string[] }>>(
+      "/admin/sales/permissions",
+    )).data,
+  setPermissions: async (userId: number, permissions: string[]) =>
+    (await apiFetch<Envelope<{ user_id: number; granted: string[]; permissions: string[] }>>(
+      `/admin/sales/users/${userId}/permissions`,
+      { method: "PUT", body: JSON.stringify({ permissions }) },
+    )).data,
+};
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+
+export const salesDashboardApi = {
+  get: async (): Promise<SalesDashboard> =>
+    (await apiFetch<Envelope<SalesDashboard>>("/admin/sales/dashboard", { skipCache: true })).data,
+  activity: async (limit = 50): Promise<SalesActivityEntry[]> =>
+    (await apiFetch<Envelope<SalesActivityEntry[]>>(`/admin/sales/activity?limit=${limit}`)).data,
+};
+
+// ─── Leads ────────────────────────────────────────────────────────────────────
+
+// A type alias (not an interface) so it carries an implicit index signature and
+// can be passed straight to qs().
+export type LeadFilters = {
+  search?: string;
+  temperature?: string;
+  status?: string;
+  assigned_to?: number | string;
+  source?: string;
+  followup_from?: string;
+  followup_to?: string;
+  created_from?: string;
+  created_to?: string;
+  page?: number;
+  limit?: number;
+};
+
+export const salesLeadsApi = {
+  list: (filters: LeadFilters = {}) =>
+    apiFetch<Paginated<SalesLead>>(`/admin/sales/leads${qs(filters)}`),
+  get: async (id: number): Promise<SalesLeadDetail> =>
+    (await apiFetch<Envelope<SalesLeadDetail>>(`/admin/sales/leads/${id}`, { skipCache: true })).data,
+  create: async (body: Partial<SalesLead>): Promise<SalesLead> =>
+    (await apiFetch<Envelope<SalesLead>>("/admin/sales/leads", { method: "POST", body: JSON.stringify(body) })).data,
+  update: async (id: number, body: Partial<SalesLead>): Promise<SalesLead> =>
+    (await apiFetch<Envelope<SalesLead>>(`/admin/sales/leads/${id}`, { method: "PUT", body: JSON.stringify(body) })).data,
+  setTemperature: async (id: number, temperature: string): Promise<SalesLead> =>
+    (await apiFetch<Envelope<SalesLead>>(`/admin/sales/leads/${id}/temperature`, {
+      method: "PUT",
+      body: JSON.stringify({ temperature }),
+    })).data,
+  assign: async (id: number, assigned_to: number | null): Promise<SalesLead> =>
+    (await apiFetch<Envelope<SalesLead>>(`/admin/sales/leads/${id}/assign`, {
+      method: "PUT",
+      body: JSON.stringify({ assigned_to }),
+    })).data,
+  startOnboarding: async (id: number, notes?: string): Promise<SalesLead> =>
+    (await apiFetch<Envelope<SalesLead>>(`/admin/sales/leads/${id}/onboarding`, {
+      method: "POST",
+      body: JSON.stringify({ notes }),
+    })).data,
+  convert: async (id: number) =>
+    (await apiFetch<Envelope<{ lead_id: number; client_id: number; reused_existing_client: boolean }>>(
+      `/admin/sales/leads/${id}/convert`,
+      { method: "POST", body: JSON.stringify({}) },
+    )).data,
+  remove: (id: number) => apiFetch<Envelope<null>>(`/admin/sales/leads/${id}`, { method: "DELETE" }),
+};
+
+// ─── Calls ────────────────────────────────────────────────────────────────────
+
+export interface LogCallPayload {
+  lead_id: number;
+  call_date: string;
+  call_time?: string;
+  duration_minutes?: number;
+  outcome: string;
+  notes?: string;
+  temperature_after?: string;
+  next_followup_date?: string;
+  next_followup_time?: string;
+  next_followup_purpose?: string;
+}
+
+export const salesCallsApi = {
+  list: (filters: { lead_id?: number; outcome?: string; date_from?: string; date_to?: string; page?: number } = {}) =>
+    apiFetch<Paginated<SalesCall>>(`/admin/sales/calls${qs(filters)}`),
+  meta: async (): Promise<{ outcomes: string[]; temperatures: string[] }> =>
+    (await apiFetch<Envelope<{ outcomes: string[]; temperatures: string[] }>>("/admin/sales/calls/meta")).data,
+  log: async (body: LogCallPayload) =>
+    (await apiFetch<Envelope<{ call: SalesCall | null; followup_id: number | null; lead: SalesLead }>>(
+      "/admin/sales/calls",
+      { method: "POST", body: JSON.stringify(body) },
+    )).data,
+};
+
+// ─── Follow-ups ───────────────────────────────────────────────────────────────
+
+export interface FollowupListResult {
+  items: SalesFollowup[];
+  pagination: Pagination;
+  counts: Record<FollowupBucket, number>;
+}
+
+export const salesFollowupsApi = {
+  list: async (bucket: FollowupBucket | "" = "", extra: { lead_id?: number } = {}): Promise<FollowupListResult> =>
+    (await apiFetch<Envelope<FollowupListResult>>(
+      `/admin/sales/followups${qs({ bucket, ...extra })}`,
+      { skipCache: true },
+    )).data,
+  create: async (body: { lead_id: number; due_date: string; due_time?: string; purpose?: string }) =>
+    (await apiFetch<Envelope<{ id: number; lead: SalesLead }>>("/admin/sales/followups", {
+      method: "POST",
+      body: JSON.stringify(body),
+    })).data,
+  update: (id: number, body: { due_date?: string; due_time?: string; purpose?: string }) =>
+    apiFetch<Envelope<null>>(`/admin/sales/followups/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  complete: async (
+    id: number,
+    body: {
+      outcome_notes?: string;
+      next_followup_date?: string;
+      next_followup_time?: string;
+      next_followup_purpose?: string;
+    } = {},
+  ) =>
+    (await apiFetch<Envelope<{ next_followup_id: number | null }>>(`/admin/sales/followups/${id}/complete`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    })).data,
+  cancel: (id: number) => apiFetch<Envelope<null>>(`/admin/sales/followups/${id}/cancel`, { method: "POST" }),
+};
+
+// ─── Meetings ─────────────────────────────────────────────────────────────────
+
+export interface MeetingListResult {
+  items: SalesMeeting[];
+  pagination: Pagination;
+  counts: { today: number; upcoming: number };
+}
+
+export interface ScheduleMeetingPayload {
+  lead_id: number;
+  title: string;
+  meeting_type: string;
+  meeting_date: string;
+  meeting_time?: string;
+  place?: string;
+  meeting_link?: string;
+  participants?: string;
+  notes?: string;
+}
+
+export const salesMeetingsApi = {
+  list: async (
+    filters: { status?: string; meeting_type?: string; lead_id?: number; date_from?: string; date_to?: string } = {},
+  ): Promise<MeetingListResult> =>
+    (await apiFetch<Envelope<MeetingListResult>>(`/admin/sales/meetings${qs(filters)}`, {
+      skipCache: true,
+    })).data,
+  get: async (id: number): Promise<SalesMeeting> =>
+    (await apiFetch<Envelope<SalesMeeting>>(`/admin/sales/meetings/${id}`)).data,
+  create: async (body: ScheduleMeetingPayload): Promise<SalesMeeting> =>
+    (await apiFetch<Envelope<SalesMeeting>>("/admin/sales/meetings", { method: "POST", body: JSON.stringify(body) })).data,
+  update: async (id: number, body: Partial<ScheduleMeetingPayload>): Promise<SalesMeeting> =>
+    (await apiFetch<Envelope<SalesMeeting>>(`/admin/sales/meetings/${id}`, { method: "PUT", body: JSON.stringify(body) })).data,
+  complete: async (
+    id: number,
+    body: {
+      outcome: string;
+      outcome_notes?: string;
+      requirements?: string;
+      decisions?: string;
+      next_action?: string;
+      next_meeting_date?: string;
+      next_followup_date?: string;
+    },
+  ) =>
+    (await apiFetch<Envelope<{ next_meeting_id: number | null; next_followup_id: number | null }>>(
+      `/admin/sales/meetings/${id}/complete`,
+      { method: "POST", body: JSON.stringify(body) },
+    )).data,
+  cancel: (id: number) => apiFetch<Envelope<null>>(`/admin/sales/meetings/${id}/cancel`, { method: "POST" }),
+};
+
+// ─── Challenges ───────────────────────────────────────────────────────────────
+
+export interface ChallengeListResult {
+  items: SalesChallenge[];
+  pagination: Pagination;
+  counts: ChallengeCounts;
+  server_time: string;
+  can_manage: boolean;
+}
+
+export const salesChallengesApi = {
+  list: async (status = ""): Promise<ChallengeListResult> =>
+    (await apiFetch<Envelope<ChallengeListResult>>(`/admin/sales/challenges${qs({ status })}`, { skipCache: true })).data,
+  get: async (id: number): Promise<SalesChallengeDetail> =>
+    (await apiFetch<Envelope<SalesChallengeDetail>>(`/admin/sales/challenges/${id}`, { skipCache: true })).data,
+  create: async (body: {
+    title: string;
+    description?: string;
+    deadline: string;
+    priority?: string;
+    lead_id?: number | null;
+    assignees?: number[];
+  }): Promise<SalesChallengeDetail> =>
+    (await apiFetch<Envelope<SalesChallengeDetail>>("/admin/sales/challenges", {
+      method: "POST",
+      body: JSON.stringify(body),
+    })).data,
+  update: async (id: number, body: Record<string, unknown>): Promise<SalesChallengeDetail> =>
+    (await apiFetch<Envelope<SalesChallengeDetail>>(`/admin/sales/challenges/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    })).data,
+  accept: async (id: number): Promise<SalesChallengeDetail> =>
+    (await apiFetch<Envelope<SalesChallengeDetail>>(`/admin/sales/challenges/${id}/accept`, { method: "POST" })).data,
+  start: async (id: number): Promise<SalesChallengeDetail> =>
+    (await apiFetch<Envelope<SalesChallengeDetail>>(`/admin/sales/challenges/${id}/start`, { method: "POST" })).data,
+  complete: async (id: number, completion_notes?: string): Promise<SalesChallengeDetail> =>
+    (await apiFetch<Envelope<SalesChallengeDetail>>(`/admin/sales/challenges/${id}/complete`, {
+      method: "POST",
+      body: JSON.stringify({ completion_notes }),
+    })).data,
+  expire: async (id: number): Promise<SalesChallengeDetail> =>
+    (await apiFetch<Envelope<SalesChallengeDetail>>(`/admin/sales/challenges/${id}/expire`, { method: "POST" })).data,
+  cancel: async (id: number): Promise<SalesChallengeDetail> =>
+    (await apiFetch<Envelope<SalesChallengeDetail>>(`/admin/sales/challenges/${id}/cancel`, { method: "POST" })).data,
+};

@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS `damaged_stock` (
+  `damaged_id`    INT(11) NOT NULL AUTO_INCREMENT,
+  `tenant_id`     INT NOT NULL,
+  `product_id`    INT(11) NOT NULL,
+  `invoice_id`    INT(11) DEFAULT NULL,
+  `sku`           VARCHAR(100) NOT NULL,
+  `product_name`  VARCHAR(255) NOT NULL,
+  `category`      VARCHAR(100) DEFAULT NULL,
+  `damaged_qty`   INT NOT NULL DEFAULT 0,
+  `cost_price`    DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  `written_off`   TINYINT(1) NOT NULL DEFAULT 0,
+  `written_off_at` DATETIME DEFAULT NULL,
+  `created_at`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`damaged_id`),
+  KEY `idx_damaged_tenant`       (`tenant_id`),
+  KEY `idx_damaged_tenant_prod`  (`tenant_id`, `product_id`),
+  CONSTRAINT `fk_damaged_product` FOREIGN KEY (`product_id`) REFERENCES `invoice_products` (`product_id`),
+  CONSTRAINT `fk_damaged_invoice` FOREIGN KEY (`invoice_id`) REFERENCES `scan_invoices` (`invoice_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -1,0 +1,21 @@
+Options -Indexes
+RewriteEngine On
+RewriteBase /api/
+
+# Pass Authorization header to PHP — required on LiteSpeed (Hostinger)
+# Without this, Bearer tokens are stripped and every authenticated request returns 401
+CGIPassAuth On
+SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1
+
+# Block direct access to all non-public directories
+RewriteRule ^(config|core|models|helpers|middleware|database|controllers)/ - [F,L]
+RewriteRule \.(sql|env|log|md)$ - [F,L]
+
+# Route all requests to index.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]
+
+php_flag display_errors off
+php_flag log_errors on
+php_value error_log error_log

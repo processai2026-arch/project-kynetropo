@@ -1,0 +1,217 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * Sales Follow-Ups Controller — the action queue (Today / Overdue / Upcoming /
+ * Completed). Buckets are computed from the server date, never the client's.
+ *
+ *   GET    /admin/sales/followups                — bucketed list
+ *   POST   /admin/sales/followups                — create
+ *   PUT    /admin/sales/followups/{id}           — reschedule / edit
+ *   POST   /admin/sales/followups/{id}/complete  — mark done (+ optional next one)
+ *   POST   /admin/sales/followups/{id}/cancel    — cancel
+ */
+class AdminSalesFollowupController
+{
+    public function index(Request $request): void
+    {
+        SalesPermissions::enforce($request->user, 'sales.followups.view');
+
+        $bucket = (string)$request->query('bucket', '');
+        if ($bucket !== '' && !in_array($bucket, SalesFollowup::BUCKETS, true)) {
+            Response::error('Invalid bucket. Allowed: ' . implode(', ', SalesFollowup::BUCKETS), 422);
+        }
+
+        $scope  = SalesPermissions::leadScope($request->user);
+        $result = SalesFollowup::all($bucket, [
+            'lead_id'     => $request->query('lead_id'),
+            'assigned_to' => $request->query('assigned_to'),
+        ], $scope, (int)$request->query('page', 1), (int)$request->query('limit', 200));
+
+        Response::success([
+            'items'      => $result['rows'],
+            'pagination' => $result['pagination'],
+            'counts'     => SalesFollowup::counts($scope),
+        ]);
+    }
+
+    public function store(Request $request): void
+    {
+        SalesPermissions::enforce($request->user, 'sales.followups.create');
+
+        $leadId = (int)$request->input('lead_id');
+        $lead   = SalesLead::findRaw($leadId);
+        if (!$lead) {
+            Response::error('Lead not found', 404);
+        }
+        SalesPermissions::assertLeadAccess($request->user, $lead);
+
+        $dueDate = (string)$request->input('due_date', '');
+        if (!$this->isValidDate($dueDate)) {
+            Response::error('A valid follow-up date is required', 422);
+        }
+        $dueTime = $request->input('due_time');
+        if (!empty($dueTime) && !$this->isValidTime((string)$dueTime)) {
+            Response::error('Invalid follow-up time', 422);
+        }
+
+        $id = SalesFollowup::create([
+            'lead_id'     => $leadId,
+            'due_date'    => $dueDate,
+            'due_time'    => $dueTime ?: null,
+            'assigned_to' => $lead['assigned_to'] ?? ($request->user['user_id'] ?? null),
+            'purpose'     => (string)$request->input('purpose', ''),
+        ], isset($request->user['user_id']) ? (int)$request->user['user_id'] : null);
+
+        SalesActivity::log(
+            $leadId, 'followup_created',
+            'Follow-up scheduled for ' . $dueDate . ($dueTime ? ' ' . $dueTime : ''),
+            $request->user, (string)$request->input('purpose', ''), 'followup', $id
+        );
+        SalesLead::refreshSchedule($leadId);
+
+        Response::success(['id' => $id, 'lead' => SalesLead::find($leadId)], 'Follow-up created', 201);
+    }
+
+    public function update(Request $request): void
+    {
+        SalesPermissions::enforce($request->user, 'sales.followups.create');
+
+        $id  = (int)$request->param('id');
+        $row = SalesFollowup::findRaw($id);
+        if (!$row) {
+            Response::error('Follow-up not found', 404);
+        }
+        $this->assertAccess($request, $row);
+
+        if ($row['status'] !== 'pending') {
+            Response::error('Only a pending follow-up can be edited', 409);
+        }
+
+        $data = [];
+        if ($request->input('due_date') !== null) {
+            if (!$this->isValidDate((string)$request->input('due_date'))) {
+                Response::error('Invalid follow-up date', 422);
+            }
+            $data['due_date'] = $request->input('due_date');
+        }
+        if ($request->input('due_time') !== null) {
+            $t = (string)$request->input('due_time');
+            if ($t !== '' && !$this->isValidTime($t)) {
+                Response::error('Invalid follow-up time', 422);
+            }
+            $data['due_time'] = $t ?: null;
+        }
+        if ($request->input('purpose') !== null) {
+            $data['purpose'] = $request->input('purpose');
+        }
+
+        if (!$data) {
+            Response::error('Nothing to update', 400);
+        }
+
+        SalesFollowup::update($id, $data);
+        SalesLead::refreshSchedule((int)$row['lead_id']);
+
+        Response::success(null, 'Follow-up updated');
+    }
+
+    public function complete(Request $request): void
+    {
+        SalesPermissions::enforce($request->user, 'sales.followups.complete');
+
+        $id  = (int)$request->param('id');
+        $row = SalesFollowup::findRaw($id);
+        if (!$row) {
+            Response::error('Follow-up not found', 404);
+        }
+        $this->assertAccess($request, $row);
+
+        if ($row['status'] !== 'pending') {
+            Response::error('This follow-up is already ' . $row['status'], 409);
+        }
+
+        $notes  = $request->input('outcome_notes');
+        $leadId = (int)$row['lead_id'];
+
+        SalesFollowup::complete($id, isset($request->user['user_id']) ? (int)$request->user['user_id'] : null, $notes);
+        SalesActivity::log($leadId, 'followup_completed', 'Follow-up completed', $request->user, (string)$notes, 'followup', $id);
+
+        // Optionally chain the next follow-up in the same action.
+        $nextId   = null;
+        $nextDate = $request->input('next_followup_date');
+        if (!empty($nextDate)) {
+            if (!$this->isValidDate((string)$nextDate)) {
+                Response::error('Invalid next follow-up date', 422);
+            }
+            $nextTime = $request->input('next_followup_time');
+            if (!empty($nextTime) && !$this->isValidTime((string)$nextTime)) {
+                Response::error('Invalid next follow-up time', 422);
+            }
+            $nextId = SalesFollowup::create([
+                'lead_id'     => $leadId,
+                'due_date'    => $nextDate,
+                'due_time'    => $nextTime ?: null,
+                'assigned_to' => $row['assigned_to'],
+                'purpose'     => (string)$request->input('next_followup_purpose', ''),
+            ], isset($request->user['user_id']) ? (int)$request->user['user_id'] : null);
+
+            SalesActivity::log(
+                $leadId, 'followup_created',
+                'Follow-up scheduled for ' . $nextDate,
+                $request->user, '', 'followup', $nextId
+            );
+        }
+
+        SalesLead::touchActivity($leadId);
+        SalesLead::refreshSchedule($leadId);
+
+        Response::success(['next_followup_id' => $nextId], 'Follow-up completed');
+    }
+
+    public function cancel(Request $request): void
+    {
+        SalesPermissions::enforce($request->user, 'sales.followups.complete');
+
+        $id  = (int)$request->param('id');
+        $row = SalesFollowup::findRaw($id);
+        if (!$row) {
+            Response::error('Follow-up not found', 404);
+        }
+        $this->assertAccess($request, $row);
+
+        SalesFollowup::cancel($id);
+        SalesLead::refreshSchedule((int)$row['lead_id']);
+
+        Response::success(null, 'Follow-up cancelled');
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
+    /** A user may act on a follow-up assigned to them, or on one of their leads. */
+    private function assertAccess(Request $request, array $followup): void
+    {
+        if (SalesPermissions::canSeeAllLeads($request->user)) {
+            return;
+        }
+        $userId = isset($request->user['user_id']) ? (int)$request->user['user_id'] : 0;
+        if ((int)($followup['assigned_to'] ?? 0) === $userId) {
+            return;
+        }
+        $lead = SalesLead::findRaw((int)$followup['lead_id']);
+        if (!$lead || (int)($lead['assigned_to'] ?? 0) !== $userId) {
+            Response::error('Follow-up not found', 404);
+        }
+    }
+
+    private function isValidDate(string $value): bool
+    {
+        $d = DateTime::createFromFormat('Y-m-d', $value);
+        return $d !== false && $d->format('Y-m-d') === $value;
+    }
+
+    private function isValidTime(string $value): bool
+    {
+        return (bool)preg_match('/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/', $value);
+    }
+}
