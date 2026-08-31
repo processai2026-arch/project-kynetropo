@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, Building2, CalendarClock, CalendarPlus, CheckCircle2, Mail,
-  Phone, Thermometer, UserCheck,
+  Phone, Thermometer, Undo2, UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -266,6 +266,28 @@ export default function SalesLeadDetail() {
     }
   };
 
+  const handleRevert = async () => {
+    const converted = lead?.status === "converted";
+    const message = converted
+      ? "Undo this conversion? The lead returns to onboarding. The customer record stays in the project system — it is only unlinked."
+      : "Move this lead back out of onboarding?";
+    if (!window.confirm(message)) return;
+    setSaving(true);
+    try {
+      const res = await salesLeadsApi.revert(leadId);
+      toast.success(
+        converted
+          ? `Conversion undone${res.kept_customer_id ? ` — customer #${res.kept_customer_id} was kept` : ""}`
+          : "Moved back to qualified",
+      );
+      void load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not revert the lead");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <SalesLayout>
@@ -354,6 +376,12 @@ export default function SalesLeadDetail() {
                 Open customer record #{lead.converted_client_id} in the project system
               </Link>
             )}
+            {can("sales.leads.convert") && (
+              <p className="mt-2 text-xs text-emerald-700">
+                Converted by mistake? "Undo Convert" returns the lead to onboarding and keeps the
+                customer record.
+              </p>
+            )}
           </div>
         )}
       </section>
@@ -383,6 +411,12 @@ export default function SalesLeadDetail() {
             <Button className="h-11" variant="outline" onClick={() => setDialog("temperature")}>
               <Thermometer className="mr-1.5 h-4 w-4" />
               Temperature
+            </Button>
+          )}
+          {can("sales.leads.convert") && (lead.status === "converted" || lead.status === "onboarding") && (
+            <Button className="h-11" variant="outline" disabled={saving} onClick={handleRevert}>
+              <Undo2 className="mr-1.5 h-4 w-4" />
+              {lead.status === "converted" ? "Undo Convert" : "Undo Onboarding"}
             </Button>
           )}
           {can("sales.leads.convert") && lead.status !== "converted" && (

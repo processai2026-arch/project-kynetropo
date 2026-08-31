@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Home, Users, CalendarClock, Trophy, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
+import { useSalesNotifications } from "@/hooks/useSalesNotifications";
+import { SalesQuickAdd } from "@/components/sales/SalesQuickAdd";
 
 /**
  * Mobile bottom-tab navigation for the sales module (spec §5).
@@ -11,7 +13,7 @@ import { useSalesAccess } from "@/hooks/useSalesAccess";
  * Desktop keeps the application's existing sidebar — the tabs render only
  * below the app's 768px mobile breakpoint, so the desktop UI is untouched.
  * Calls are deliberately NOT a tab: logging a call belongs inside the lead
- * and follow-up workflow.
+ * and follow-up workflow, and is reachable from the quick-add button.
  */
 const TABS = [
   { label: "Home",       to: "/sales",            icon: Home,          permission: "sales.dashboard.view" },
@@ -61,15 +63,30 @@ export function SalesBottomTabs() {
 }
 
 /**
- * Wraps every sales page: adds the bottom tabs and the padding they need on
- * mobile, and leaves desktop rendering to the existing DashboardLayout.
+ * Wraps every sales page: bottom tabs, the quick-add button, and the alert
+ * poller. Desktop rendering is left to the existing DashboardLayout.
+ *
+ * `onCreated` lets a page refresh itself after something is created from the
+ * quick-add sheet.
  */
-export function SalesLayout({ children }: { children: ReactNode }) {
+export function SalesLayout({
+  children,
+  onCreated,
+}: {
+  children: ReactNode;
+  onCreated?: () => void;
+}) {
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
+  const { can, loading } = useSalesAccess();
+
+  // Poll for follow-ups falling due, meetings starting and challenge deadlines.
+  useSalesNotifications(!loading && can("sales.dashboard.view"), (url) => navigate(url));
 
   return (
-    <div className={cn("space-y-5", isMobile && "pb-20")}>
+    <div className={cn("space-y-5", isMobile && "pb-24")}>
       {children}
+      <SalesQuickAdd onCreated={onCreated} />
       <SalesBottomTabs />
     </div>
   );

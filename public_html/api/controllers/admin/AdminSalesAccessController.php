@@ -39,6 +39,35 @@ class AdminSalesAccessController
         ]);
     }
 
+    /**
+     * GET /admin/sales/assignable-users
+     *
+     * The people a challenge can be offered to, or a lead assigned to. Returns
+     * names only — no emails, roles or permissions — so it can safely be opened
+     * up to anyone who creates challenges or assigns leads, without exposing the
+     * full access-control view that /admin/sales/users provides.
+     */
+    public function assignableUsers(Request $request): void
+    {
+        SalesPermissions::enforceAny($request->user, [
+            'sales.challenges.create',
+            'sales.challenges.manage',
+            'sales.leads.assign',
+        ]);
+
+        $rows = Database::fetchAll(
+            "SELECT user_id, name FROM users
+              WHERE tenant_id = ? AND user_type = 'admin' AND is_active = 1
+              ORDER BY name ASC",
+            [Database::tenantId()]
+        );
+
+        Response::success(array_map(fn(array $r): array => [
+            'user_id' => (int)$r['user_id'],
+            'name'    => $r['name'],
+        ], $rows));
+    }
+
     public function permissions(Request $request): void
     {
         $this->enforceAdmin($request);

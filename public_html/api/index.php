@@ -1364,9 +1364,12 @@ $router->put('/admin/sales/users/{id}/permissions',      [AdminSalesAccessContro
 $router->put('/admin/sales/users/{id}/role',             [AdminSalesAccessController::class, 'setRole'],         'admin');
 $router->put('/admin/sales/users/{id}/active',           [AdminSalesAccessController::class, 'setActive'],       'admin');
 
+$router->get('/admin/sales/assignable-users',            [AdminSalesAccessController::class, 'assignableUsers'], 'admin');
+
 // Dashboard + activity
 $router->get('/admin/sales/dashboard',                   [AdminSalesDashboardController::class, 'index'],        'admin');
 $router->get('/admin/sales/activity',                    [AdminSalesDashboardController::class, 'activity'],     'admin');
+$router->get('/admin/sales/notifications',               [AdminSalesDashboardController::class, 'notifications'],'admin');
 
 // Leads (static segments registered before {id})
 $router->get('/admin/sales/leads',                       [AdminSalesLeadController::class, 'index'],             'admin');
@@ -1377,6 +1380,7 @@ $router->put('/admin/sales/leads/{id}/temperature',      [AdminSalesLeadControll
 $router->put('/admin/sales/leads/{id}/assign',           [AdminSalesLeadController::class, 'assign'],            'admin');
 $router->post('/admin/sales/leads/{id}/onboarding',      [AdminSalesLeadController::class, 'startOnboarding'],   'admin');
 $router->post('/admin/sales/leads/{id}/convert',         [AdminSalesLeadController::class, 'convert'],           'admin');
+$router->post('/admin/sales/leads/{id}/revert',          [AdminSalesLeadController::class, 'revertStatus'],      'admin');
 $router->delete('/admin/sales/leads/{id}',               [AdminSalesLeadController::class, 'destroy'],           'admin');
 
 // Calls

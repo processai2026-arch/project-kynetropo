@@ -317,6 +317,78 @@ class AdminSalesLeadController
         Response::success(SalesLead::find($id), 'Lead moved to onboarding');
     }
 
+    /**
+     * POST /admin/sales/leads/{id}/revert
+     *
+     * Steps a lead back out of onboarding or conversion — both are reachable by
+     * a mis-tap, and neither should be a one-way door.
+     *
+     *   converted  -> onboarding   (the conversion link is cleared)
+     *   onboarding -> qualified
+     *
+     * Reverting a conversion UNLINKS the customer; it never deletes the
+     * ops_clients record, which by then may have projects, payments and history
+     * of its own hanging off it. The whole sales timeline is kept, and the
+     * reversal is appended to it rather than erasing what happened.
+     */
+    public function revertStatus(Request $request): void
+    {
+        SalesPermissions::enforce($request->user, 'sales.leads.convert');
+
+        $id  = (int)$request->param('id');
+        $raw = SalesLead::findRaw($id);
+        if (!$raw) {
+            Response::error('Lead not found', 404);
+        }
+        SalesPermissions::assertLeadAccess($request->user, $raw);
+
+        $reason = trim((string)$request->input('reason', ''));
+
+        if ($raw['status'] === 'converted' || !empty($raw['converted_client_id'])) {
+            $clientId = (int)$raw['converted_client_id'];
+
+            Database::execute(
+                "UPDATE sales_leads
+                    SET status = 'onboarding', converted_client_id = NULL,
+                        converted_project_id = NULL, converted_at = NULL
+                  WHERE id = ? AND tenant_id = ?",
+                [$id, Database::tenantId()]
+            );
+
+            SalesActivity::log(
+                $id, 'lead_updated', 'Conversion reverted',
+                $request->user,
+                trim('Unlinked from customer record #' . $clientId
+                     . '. The customer record itself was kept. ' . $reason),
+                'ops_client', $clientId ?: null
+            );
+
+            if ($clientId) {
+                Database::insert('ops_activity_log', [
+                    'tenant_id'   => Database::tenantId(),
+                    'entity_type' => 'client',
+                    'entity_id'   => $clientId,
+                    'action'      => 'sales_lead_unlinked',
+                    'description' => 'Sales lead ' . $raw['lead_code'] . ' reverted its conversion; this customer record was kept.',
+                    'done_by'     => (string)($request->user['name'] ?? ''),
+                ]);
+            }
+
+            Response::success([
+                'lead'             => SalesLead::find($id),
+                'kept_customer_id' => $clientId ?: null,
+            ], 'Conversion reverted — the customer record was kept in the project system');
+        }
+
+        if ($raw['status'] === 'onboarding') {
+            SalesLead::update($id, ['status' => 'qualified']);
+            SalesActivity::log($id, 'lead_updated', 'Moved back out of onboarding', $request->user, $reason);
+            Response::success(['lead' => SalesLead::find($id)], 'Lead moved back to qualified');
+        }
+
+        Response::error('This lead is not in onboarding or converted, so there is nothing to revert', 409);
+    }
+
     public function destroy(Request $request): void
     {
         // Deleting sales history is an administrative action, not a sales one.

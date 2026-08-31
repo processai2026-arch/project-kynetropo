@@ -8,8 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { salesChallengesApi } from "@/lib/api/sales";
+import { salesChallengesApi, salesDashboardApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { ChallengeStatusBadge, formatDateTime } from "@/components/sales/SalesBits";
@@ -39,7 +40,17 @@ export default function SalesChallenges() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", deadline: "", priority: "normal" });
+  const [assignees, setAssignees] = useState<number[]>([]);
+  const [people, setPeople] = useState<{ user_id: number; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
+
+  // Who the challenge can be offered to.
+  useEffect(() => {
+    if (!formOpen || people.length) return;
+    salesDashboardApi.assignableUsers().then(setPeople).catch(() => {
+      /* Not fatal — an unassigned challenge is offered to everyone. */
+    });
+  }, [formOpen, people.length]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -79,10 +90,12 @@ export default function SalesChallenges() {
         // datetime-local gives "YYYY-MM-DDTHH:MM"; the API accepts that form.
         deadline: form.deadline,
         priority: form.priority,
+        assignees,
       });
       toast.success("Challenge created");
       setFormOpen(false);
       setForm({ title: "", description: "", deadline: "", priority: "normal" });
+      setAssignees([]);
       void load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create the challenge");
@@ -240,6 +253,36 @@ export default function SalesChallenges() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Challenging who?</Label>
+              {people.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Loading people…</p>
+              ) : (
+                <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl border p-2">
+                  {people.map((p) => (
+                    <label
+                      key={p.user_id}
+                      className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted"
+                    >
+                      <Checkbox
+                        checked={assignees.includes(p.user_id)}
+                        onCheckedChange={() =>
+                          setAssignees((a) =>
+                            a.includes(p.user_id) ? a.filter((x) => x !== p.user_id) : [...a, p.user_id],
+                          )
+                        }
+                      />
+                      <span className="text-sm">{p.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                {assignees.length === 0
+                  ? "Nobody selected — offered to the whole sales team; the first to accept takes it."
+                  : `Offered to ${assignees.length} ${assignees.length === 1 ? "person" : "people"}; the first to accept takes it.`}
+              </p>
             </div>
             <p className="text-xs text-muted-foreground">
               The deadline is validated and enforced against server time.

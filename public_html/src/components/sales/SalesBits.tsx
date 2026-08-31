@@ -1,6 +1,79 @@
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { ChallengeStatus, LeadStatus, LeadTemperature } from "@/types/sales";
+
+/** Lead sources the backend already recognises. */
+export const LEAD_SOURCES = [
+  "website", "referral", "cold_call", "email", "social",
+  "event", "walk_in", "partner", "other",
+] as const;
+
+const CUSTOM = "__custom__";
+
+/**
+ * Lead source picker: the standard list, plus "Other — type your own" for
+ * anything not covered. The custom value is stored verbatim, so a source like
+ * "IndiaMART" survives exactly as typed rather than collapsing into "other".
+ */
+export function SourceSelect({
+  value,
+  onChange,
+  id = "lead-source",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  id?: string;
+}) {
+  const isPreset = (v: string) => (LEAD_SOURCES as readonly string[]).includes(v);
+  const [custom, setCustom] = useState(!!value && !isPreset(value));
+
+  // A value arriving from outside (editing an existing lead) decides the mode.
+  useEffect(() => {
+    if (value && !isPreset(value)) setCustom(true);
+  }, [value]);
+
+  return (
+    <div className="space-y-2">
+      <Select
+        value={custom ? CUSTOM : value}
+        onValueChange={(v) => {
+          if (v === CUSTOM) {
+            setCustom(true);
+            onChange("");
+          } else {
+            setCustom(false);
+            onChange(v);
+          }
+        }}
+      >
+        <SelectTrigger id={id}>
+          <SelectValue placeholder="Select source" />
+        </SelectTrigger>
+        <SelectContent>
+          {LEAD_SOURCES.map((s) => (
+            <SelectItem key={s} value={s} className="capitalize">
+              {s.replace(/_/g, " ")}
+            </SelectItem>
+          ))}
+          <SelectItem value={CUSTOM}>Other — type your own</SelectItem>
+        </SelectContent>
+      </Select>
+
+      {custom && (
+        <Input
+          autoFocus
+          placeholder="Enter the source, e.g. IndiaMART"
+          value={value}
+          maxLength={60}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+    </div>
+  );
+}
 
 /**
  * Small shared presentation pieces for the sales module. Colour is used

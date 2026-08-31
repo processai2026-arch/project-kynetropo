@@ -72,11 +72,34 @@ export const salesAccessApi = {
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
+export interface SalesNotification {
+  key: string;
+  type:
+    | "followup_due"
+    | "followup_overdue"
+    | "meeting_soon"
+    | "challenge_available"
+    | "challenge_ending"
+    | "challenge_expired";
+  severity: "normal" | "urgent";
+  title: string;
+  body: string;
+  url: string;
+  at: string;
+}
+
 export const salesDashboardApi = {
   get: async (): Promise<SalesDashboard> =>
     (await apiFetch<Envelope<SalesDashboard>>("/admin/sales/dashboard", { skipCache: true })).data,
   activity: async (limit = 50): Promise<SalesActivityEntry[]> =>
     (await apiFetch<Envelope<SalesActivityEntry[]>>(`/admin/sales/activity?limit=${limit}`)).data,
+  notifications: async (): Promise<{ server_time: string; items: SalesNotification[] }> =>
+    (await apiFetch<Envelope<{ server_time: string; items: SalesNotification[] }>>(
+      "/admin/sales/notifications",
+      { skipCache: true },
+    )).data,
+  assignableUsers: async (): Promise<{ user_id: number; name: string }[]> =>
+    (await apiFetch<Envelope<{ user_id: number; name: string }[]>>("/admin/sales/assignable-users")).data,
 };
 
 // ─── Leads ────────────────────────────────────────────────────────────────────
@@ -125,6 +148,12 @@ export const salesLeadsApi = {
     (await apiFetch<Envelope<{ lead_id: number; client_id: number; reused_existing_client: boolean }>>(
       `/admin/sales/leads/${id}/convert`,
       { method: "POST", body: JSON.stringify({}) },
+    )).data,
+  /** Steps a lead back out of conversion or onboarding. */
+  revert: async (id: number, reason?: string) =>
+    (await apiFetch<Envelope<{ lead: SalesLead; kept_customer_id?: number | null }>>(
+      `/admin/sales/leads/${id}/revert`,
+      { method: "POST", body: JSON.stringify({ reason }) },
     )).data,
   remove: (id: number) => apiFetch<Envelope<null>>(`/admin/sales/leads/${id}`, { method: "DELETE" }),
 };

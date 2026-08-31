@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { salesLeadsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
-import { LeadStatusBadge, TemperatureBadge, formatDate, formatTime } from "@/components/sales/SalesBits";
+import { LeadStatusBadge, SourceSelect, TemperatureBadge, formatDate, formatTime } from "@/components/sales/SalesBits";
 import type { SalesLead } from "@/types/sales";
 
 const TEMPERATURES = ["hot", "warm", "cold"] as const;
@@ -20,7 +20,6 @@ const STATUSES = [
   "new", "contacted", "qualified", "meeting_scheduled",
   "proposal", "onboarding", "converted", "lost",
 ] as const;
-const SOURCES = ["website", "referral", "cold_call", "email", "social", "event", "walk_in", "partner", "other"] as const;
 
 const EMPTY_FORM = {
   name: "",
@@ -290,19 +289,8 @@ export default function SalesLeads() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Source</Label>
-                <Select value={form.source} onValueChange={(v) => set("source", v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select source" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SOURCES.map((s) => (
-                      <SelectItem key={s} value={s} className="capitalize">
-                        {s.replace(/_/g, " ")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="lead-source">Source</Label>
+                <SourceSelect id="lead-source" value={form.source} onChange={(v) => set("source", v)} />
               </div>
               <div className="space-y-1.5">
                 <Label>Temperature</Label>
