@@ -158,7 +158,7 @@ export default function SalesAccessControl() {
     try {
       await salesAccessApi.restoreAccess(u.user_id);
       toast.success(`${u.name} can use the app again`);
-      load();
+      void reload();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not restore access");
     } finally {

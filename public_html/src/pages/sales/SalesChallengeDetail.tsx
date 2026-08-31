@@ -11,6 +11,7 @@ import { salesChallengesApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { ChallengeStatusBadge, formatDateTime, humanise } from "@/components/sales/SalesBits";
+import { CommentThread } from "@/components/sales/CommentThread";
 import { ChallengeTimer } from "@/components/sales/ChallengeTimer";
 import { ChallengeExpiredAnimation } from "@/components/sales/challenge/ChallengeExpiredAnimation";
 import type { SalesChallengeDetail as ChallengeDetail } from "@/types/sales";
