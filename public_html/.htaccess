@@ -12,6 +12,12 @@ RewriteCond %{REQUEST_URI} !^/api/
 # Everything else → React SPA
 RewriteRule ^(.*)$ index.html [QSA,L]
 
+# Correct MIME type for the web app manifest, so the browser accepts it
+# and the app is offered as installable.
+<IfModule mod_mime.c>
+  AddType application/manifest+json .webmanifest
+</IfModule>
+
 # No-cache for index.html (always serve latest deploy)
 <Files "index.html">
   Header always set Cache-Control "no-cache, no-store, must-revalidate"
@@ -19,7 +25,21 @@ RewriteRule ^(.*)$ index.html [QSA,L]
   Header always set Expires "0"
 </Files>
 
-# Long-term cache for hashed assets
-<FilesMatch "\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|ttf)$">
+# Long-term cache for hashed assets.
+# sw.js is deliberately excluded: it is NOT content-hashed, and an immutable
+# year-long cache would pin every installed app to the service worker shipped
+# on the day it was installed.
+<FilesMatch "^(?!sw\.js$).*\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|ttf)$">
   Header always set Cache-Control "public, max-age=31536000, immutable"
 </FilesMatch>
+
+# The service worker and the manifest must always be revalidated so a deploy
+# actually reaches installed apps. Listed after the block above so these win.
+<Files "sw.js">
+  Header always set Cache-Control "no-cache, no-store, must-revalidate"
+  Header always set Pragma "no-cache"
+  Header always set Expires "0"
+</Files>
+<Files "manifest.webmanifest">
+  Header always set Cache-Control "no-cache, must-revalidate"
+</Files>

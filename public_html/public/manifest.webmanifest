@@ -1,0 +1,53 @@
+{
+  "name": "Kynetropo Sales",
+  "short_name": "Kyn Sales",
+  "description": "Leads, calls, follow-ups, meetings and sales challenges for the Kynetropo sales team.",
+  "id": "/sales",
+  "start_url": "/sales",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#2ea0da",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Today's Follow-Ups",
+      "short_name": "Follow-Ups",
+      "url": "/sales/followups",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Leads",
+      "short_name": "Leads",
+      "url": "/sales/leads",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Challenges",
+      "short_name": "Challenges",
+      "url": "/sales/challenges",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
