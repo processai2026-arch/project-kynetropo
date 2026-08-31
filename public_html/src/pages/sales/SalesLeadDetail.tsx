@@ -17,6 +17,7 @@ import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { FollowupEditDialog } from "@/components/sales/FollowupEditDialog";
 import { CommentButton, CommentThread, CommentThreadDialog } from "@/components/sales/CommentThread";
+import { ConvertLeadDialog } from "@/components/sales/ConvertLeadDialog";
 import { LeadStatusBadge, TemperatureBadge, formatDate, formatDateTime, formatTime, humanise } from "@/components/sales/SalesBits";
 import type { CommentEntityType, LeadTemperature, SalesFollowup, SalesLeadDetail as LeadDetail } from "@/types/sales";
 import { cn } from "@/lib/utils";
@@ -58,6 +59,7 @@ export default function SalesLeadDetail() {
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [editingFollowup, setEditingFollowup] = useState<SalesFollowup | null>(null);
   const [thread, setThread] = useState<{ type: CommentEntityType; id: number; title: string } | null>(null);
+  const [convertOpen, setConvertOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [outcomeMeetingId, setOutcomeMeetingId] = useState<number | null>(null);
 
@@ -252,24 +254,6 @@ export default function SalesLeadDetail() {
     }
   };
 
-  const handleConvert = async () => {
-    if (!window.confirm("Convert this lead to a customer? The sales history is kept.")) return;
-    setSaving(true);
-    try {
-      const res = await salesLeadsApi.convert(leadId);
-      toast.success(
-        res.reused_existing_client
-          ? "Linked to the existing customer record"
-          : "Converted — customer created in the project system",
-      );
-      void load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not convert the lead");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleRevert = async () => {
     const converted = lead?.status === "converted";
     const message = converted
@@ -446,7 +430,7 @@ export default function SalesLeadDetail() {
                   Onboarding
                 </Button>
               )}
-              <Button className="h-11" variant="outline" disabled={saving} onClick={handleConvert}>
+              <Button className="h-11" variant="outline" disabled={saving} onClick={() => setConvertOpen(true)}>
                 <CheckCircle2 className="mr-1.5 h-4 w-4" />
                 Convert
               </Button>
@@ -972,6 +956,13 @@ export default function SalesLeadDetail() {
         followup={editingFollowup}
         onClose={() => setEditingFollowup(null)}
         onSaved={() => void load()}
+      />
+
+      <ConvertLeadDialog
+        lead={lead}
+        open={convertOpen}
+        onOpenChange={setConvertOpen}
+        onConverted={() => void load()}
       />
 
       <CommentThreadDialog

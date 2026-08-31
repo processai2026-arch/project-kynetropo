@@ -30,6 +30,8 @@ export function useSalesAccess() {
     can,
     canAny,
     isSalesAdmin: data?.is_admin ?? false,
+    /** Set when a missed challenge destroyed this user's access to the app. */
+    lockout: data?.lockout ?? null,
     /** No sales permission at all — the module should not be offered. */
     hasNoAccess: !isLoading && !error && permissions.length === 0,
   };

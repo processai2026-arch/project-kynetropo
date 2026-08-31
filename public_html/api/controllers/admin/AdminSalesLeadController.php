@@ -239,39 +239,93 @@ class AdminSalesLeadController
 
         $tenantId = Database::tenantId();
 
-        // Reuse an existing ops client when one already matches on phone/email,
-        // rather than creating a duplicate customer in the project system.
-        $existing = null;
-        if (!empty($raw['phone'])) {
-            $existing = Database::fetch(
-                'SELECT id FROM ops_clients WHERE tenant_id = ? AND phone = ? LIMIT 1',
-                [$tenantId, $raw['phone']]
-            );
+        // The caller may correct or complete the customer details on the way in
+        // — a lead is captured in a hurry, a customer record is kept for years.
+        // Anything not supplied falls back to what the lead already knows.
+        $name = trim((string)$request->input('name', ''));
+        if ($name === '') {
+            $name = $raw['company'] !== '' ? (string)$raw['company'] : (string)$raw['name'];
         }
-        if (!$existing && !empty($raw['email'])) {
+        if (mb_strlen($name) < 2) {
+            Response::error('A customer name is required', 422);
+        }
+
+        $health = (string)$request->input('health', 'green');
+        if (!in_array($health, ['green', 'yellow', 'red'], true)) {
+            Response::error('Health must be green, yellow or red', 422);
+        }
+
+        $details = [
+            'name'   => mb_substr($name, 0, 200),
+            'phone'  => mb_substr(trim((string)$request->input('phone',  $raw['phone']  ?? '')), 0, 30),
+            'email'  => mb_substr(trim((string)$request->input('email',  $raw['email']  ?? '')), 0, 200),
+            'source' => mb_substr(trim((string)$request->input('source', $raw['source'] ?: 'sales_lead')), 0, 200),
+            'owner'  => mb_substr(trim((string)$request->input('owner', (string)($request->user['name'] ?? ''))), 0, 100),
+            'health' => $health,
+            'stage'  => mb_substr(trim((string)$request->input('stage', 'Onboarding')), 0, 80),
+            'notes'  => trim((string)$request->input('notes', "Converted from sales lead {$raw['lead_code']}.\n" . (string)$raw['notes'])),
+        ];
+
+        // Reuse an existing ops client when one already matches on phone/email,
+        // rather than creating a duplicate customer in the project system. The
+        // caller can point at a specific one instead, or insist on a new record.
+        $existing = null;
+        $linkTo   = (int)$request->input('link_client_id', 0);
+        $forceNew = (bool)$request->input('create_new', false);
+
+        if ($linkTo > 0) {
             $existing = Database::fetch(
-                'SELECT id FROM ops_clients WHERE tenant_id = ? AND email = ? LIMIT 1',
-                [$tenantId, $raw['email']]
+                'SELECT id FROM ops_clients WHERE tenant_id = ? AND id = ? LIMIT 1',
+                [$tenantId, $linkTo]
             );
+            if (!$existing) {
+                Response::error('That customer no longer exists', 404);
+            }
+        } elseif (!$forceNew) {
+            if ($details['phone'] !== '') {
+                $existing = Database::fetch(
+                    'SELECT id FROM ops_clients WHERE tenant_id = ? AND phone = ? LIMIT 1',
+                    [$tenantId, $details['phone']]
+                );
+            }
+            if (!$existing && $details['email'] !== '') {
+                $existing = Database::fetch(
+                    'SELECT id FROM ops_clients WHERE tenant_id = ? AND email = ? LIMIT 1',
+                    [$tenantId, $details['email']]
+                );
+            }
         }
 
         if ($existing) {
             $clientId = (int)$existing['id'];
         } else {
-            $clientId = Database::insert('ops_clients', [
+            $clientId = Database::insert('ops_clients', ['tenant_id' => $tenantId] + $details);
+        }
+
+        // Optionally open the first project for this customer in the same step.
+        // That mapping is the whole relationship between the two records.
+        $projectId   = null;
+        $projectName = trim((string)$request->input('project_name', ''));
+        if ($projectName !== '') {
+            $priority = (string)$request->input('project_priority', 'medium');
+            if (!in_array($priority, ['low', 'medium', 'high', 'critical'], true)) {
+                $priority = 'medium';
+            }
+            $deadline  = (string)$request->input('project_deadline', '');
+            $projectId = Database::insert('ops_projects', [
                 'tenant_id' => $tenantId,
-                'name'      => $raw['company'] !== '' ? $raw['company'] : $raw['name'],
-                'phone'     => (string)$raw['phone'],
-                'email'     => (string)$raw['email'],
-                'source'    => $raw['source'] !== '' ? $raw['source'] : 'sales_lead',
-                'owner'     => (string)($request->user['name'] ?? ''),
-                'health'    => 'green',
+                'client_id' => $clientId,
+                'name'      => mb_substr($projectName, 0, 200),
                 'stage'     => 'Onboarding',
-                'notes'     => trim("Converted from sales lead {$raw['lead_code']}.\n" . (string)$raw['notes']),
+                'owner'     => $details['owner'],
+                'deadline'  => $deadline !== '' ? $deadline : null,
+                'health'    => 'green',
+                'priority'  => $priority,
+                'quoted'    => (float)$request->input('project_quoted', 0),
             ]);
         }
 
-        SalesLead::markConverted($id, $clientId, null);
+        SalesLead::markConverted($id, $clientId, $projectId);
 
         SalesActivity::log(
             $id, 'lead_converted',
@@ -294,10 +348,13 @@ class AdminSalesLeadController
         ]);
 
         Response::success([
-            'lead_id'   => $id,
-            'client_id' => $clientId,
+            'lead_id'    => $id,
+            'client_id'  => $clientId,
+            'project_id' => $projectId,
             'reused_existing_client' => $existing !== null,
-        ], 'Lead converted to customer', 201);
+        ], $existing !== null
+            ? 'Lead linked to the existing customer'
+            : 'Lead converted to customer', 201);
     }
 
     /** POST /admin/sales/leads/{id}/onboarding — move into the onboarding stage. */

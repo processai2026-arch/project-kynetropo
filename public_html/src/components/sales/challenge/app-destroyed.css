@@ -1,0 +1,391 @@
+/*
+ * The app-destruction gate: what a salesperson sees after accepting a challenge
+ * and missing the deadline.
+ *
+ * Everything is namespaced under .kyn-void so none of it can reach the rest of
+ * the app, and every colour is defined here rather than borrowed from the
+ * theme — this screen has to look the same in light and dark mode, because it
+ * IS the mode.
+ *
+ * Motion lives entirely in CSS. The React component only advances a phase
+ * class, so nothing is animated from a rAF loop and a slow phone degrades by
+ * dropping frames rather than by blocking the main thread.
+ */
+
+.kyn-void {
+  --void-ink: #05060c;
+  --void-bone: #f2f4ff;
+  --void-dim: rgba(242, 244, 255, 0.62);
+
+  /* The colourful part: the disk sweeps through the product palette. */
+  --void-cyan: #38e0ff;
+  --void-blue: #2ea0da;
+  --void-violet: #8b5cf6;
+  --void-magenta: #ff4fa3;
+  --void-amber: #ffb020;
+
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(120% 120% at 50% 50%, #0b0f1f 0%, var(--void-ink) 62%, #000 100%);
+  color: var(--void-bone);
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── The mock app being destroyed ─────────────────────────────────────────── */
+
+.kyn-void__stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  perspective: 1400px;
+}
+
+.kyn-void__app {
+  width: min(92vw, 420px);
+  transform-origin: 50% 50%;
+  will-change: transform, opacity, filter;
+}
+
+/* Phase 1 — the interface glitches before it goes. */
+.kyn-void[data-phase="crash"] .kyn-void__app {
+  animation: kyn-void-shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite;
+}
+
+@keyframes kyn-void-shake {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); filter: none; }
+  20%  { transform: translate3d(-3px, 1px, 0) rotate(-0.4deg); filter: hue-rotate(-25deg) saturate(1.6); }
+  40%  { transform: translate3d(4px, -2px, 0) rotate(0.5deg);  filter: hue-rotate(20deg)  saturate(1.4); }
+  60%  { transform: translate3d(-2px, 2px, 0) rotate(-0.3deg); filter: hue-rotate(-10deg) contrast(1.3); }
+  80%  { transform: translate3d(3px, 1px, 0) rotate(0.4deg);   filter: hue-rotate(35deg)  saturate(1.8); }
+}
+
+/* Phase 2 — the whole interface spirals into the singularity. */
+.kyn-void[data-phase="spiral"] .kyn-void__app {
+  animation: kyn-void-spiral 1.85s cubic-bezier(0.6, 0.02, 0.22, 1) forwards;
+}
+
+@keyframes kyn-void-spiral {
+  0% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+    filter: blur(0) saturate(1);
+  }
+  55% {
+    transform: scale(0.42) rotate(320deg);
+    opacity: 0.9;
+    filter: blur(1px) saturate(2.2) brightness(1.4);
+  }
+  100% {
+    transform: scale(0.01) rotate(760deg);
+    opacity: 0;
+    filter: blur(7px) saturate(3) brightness(2.6);
+  }
+}
+
+/* Individual panels peel off on a stagger so it shears instead of shrinking. */
+.kyn-void[data-phase="spiral"] .kyn-void__panel {
+  animation: kyn-void-peel 1.5s cubic-bezier(0.55, 0.03, 0.25, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.kyn-void__panel:nth-child(1) { animation-delay: 0.02s; --vx: -16%; --vy: -12%; --vr: -28deg; }
+.kyn-void__panel:nth-child(2) { animation-delay: 0.09s; --vx:  14%; --vy:  -8%; --vr:  24deg; }
+.kyn-void__panel:nth-child(3) { animation-delay: 0.16s; --vx: -12%; --vy:  10%; --vr:  30deg; }
+.kyn-void__panel:nth-child(4) { animation-delay: 0.23s; --vx:  11%; --vy:  14%; --vr: -26deg; }
+.kyn-void__panel:nth-child(5) { animation-delay: 0.30s; --vx:  -8%; --vy:  18%; --vr:  32deg; }
+
+@keyframes kyn-void-peel {
+  0%   { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
+  40%  { transform: translate3d(var(--vx), var(--vy), 0) rotate(var(--vr)); opacity: 0.85; }
+  100% { transform: translate3d(0, 0, 0) scale(0.05) rotate(calc(var(--vr) * -3)); opacity: 0; }
+}
+
+/* The mock chrome itself — recognisably the app, not a screenshot of it. */
+.kyn-void__panel {
+  border-radius: 16px;
+  border: 1px solid rgba(242, 244, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  backdrop-filter: blur(2px);
+}
+
+.kyn-void__bar {
+  height: 9px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(56, 224, 255, 0.55), rgba(139, 92, 246, 0.45));
+}
+
+.kyn-void__bar--short { width: 42%; }
+.kyn-void__bar--mid   { width: 66%; margin-top: 8px; opacity: 0.55; }
+.kyn-void__bar--wide  { width: 88%; margin-top: 8px; opacity: 0.35; }
+
+.kyn-void__tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.kyn-void__tile {
+  border-radius: 14px;
+  border: 1px solid rgba(242, 244, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 12px;
+}
+
+.kyn-void__tile b {
+  display: block;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.kyn-void__tile span {
+  font-size: 10px;
+  color: var(--void-dim);
+}
+
+.kyn-void__tabs {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(242, 244, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.kyn-void__tabs i {
+  display: block;
+  width: 26px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(242, 244, 255, 0.3);
+}
+
+/* ── The singularity ──────────────────────────────────────────────────────── */
+
+.kyn-void__hole {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.kyn-void__disk {
+  position: absolute;
+  width: 78vmin;
+  height: 78vmin;
+  border-radius: 50%;
+  /* The colourful sweep. Conic through the whole product palette. */
+  background: conic-gradient(
+    from 0deg,
+    var(--void-cyan),
+    var(--void-blue),
+    var(--void-violet),
+    var(--void-magenta),
+    var(--void-amber),
+    var(--void-cyan)
+  );
+  filter: blur(26px) saturate(1.6);
+  opacity: 0;
+  mask-image: radial-gradient(circle, transparent 26%, #000 34%, #000 62%, transparent 74%);
+  -webkit-mask-image: radial-gradient(circle, transparent 26%, #000 34%, #000 62%, transparent 74%);
+  animation: kyn-void-spin 3.4s linear infinite, kyn-void-disk-in 1.4s ease-out forwards;
+}
+
+.kyn-void__disk--inner {
+  width: 46vmin;
+  height: 46vmin;
+  filter: blur(12px) saturate(2);
+  animation: kyn-void-spin 1.6s linear infinite reverse, kyn-void-disk-in 1.4s ease-out 0.15s forwards;
+  mask-image: radial-gradient(circle, transparent 30%, #000 40%, #000 58%, transparent 70%);
+  -webkit-mask-image: radial-gradient(circle, transparent 30%, #000 40%, #000 58%, transparent 70%);
+}
+
+@keyframes kyn-void-spin {
+  to { rotate: 360deg; }
+}
+
+@keyframes kyn-void-disk-in {
+  from { opacity: 0; scale: 0.4; }
+  to   { opacity: 0.95; scale: 1; }
+}
+
+.kyn-void__horizon {
+  position: relative;
+  width: 21vmin;
+  height: 21vmin;
+  border-radius: 50%;
+  background: #000;
+  box-shadow:
+    0 0 0 1px rgba(56, 224, 255, 0.35),
+    0 0 30px 6px rgba(139, 92, 246, 0.35),
+    0 0 90px 24px rgba(255, 79, 163, 0.22),
+    inset 0 0 40px 10px rgba(0, 0, 0, 0.9);
+  animation: kyn-void-breathe 3.2s ease-in-out infinite;
+}
+
+@keyframes kyn-void-breathe {
+  0%, 100% { scale: 1; }
+  50%      { scale: 1.05; }
+}
+
+/* Light bending round the edge — one bright arc that orbits the horizon. */
+.kyn-void__lens {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0deg, var(--void-cyan) 24deg, transparent 60deg);
+  filter: blur(3px);
+  animation: kyn-void-spin 2.2s linear infinite;
+}
+
+/* ── Sparks pulled in from the edges ──────────────────────────────────────── */
+
+.kyn-void__sparks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.kyn-void__spark {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--spark-colour, var(--void-cyan));
+  box-shadow: 0 0 8px 2px var(--spark-colour, var(--void-cyan));
+  opacity: 0;
+  animation: kyn-void-spark var(--spark-duration, 1.6s) linear var(--spark-delay, 0s) infinite;
+}
+
+@keyframes kyn-void-spark {
+  0%   { opacity: 0; transform: translate3d(0, 0, 0) scale(1); }
+  12%  { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(var(--spark-dx), var(--spark-dy), 0) scale(0.1); }
+}
+
+/* ── The message ──────────────────────────────────────────────────────────── */
+
+.kyn-void__message {
+  position: relative;
+  z-index: 2;
+  width: min(92vw, 440px);
+  padding: 28px 24px 26px;
+  border-radius: 22px;
+  border: 1px solid rgba(242, 244, 255, 0.14);
+  background: rgba(6, 8, 18, 0.82);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  text-align: center;
+  animation: kyn-void-message-in 0.7s ease-out both;
+}
+
+@keyframes kyn-void-message-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+.kyn-void__title {
+  font-size: clamp(24px, 7vw, 34px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.kyn-void__title em {
+  font-style: normal;
+  background: linear-gradient(92deg, var(--void-cyan), var(--void-violet) 45%, var(--void-magenta));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.kyn-void__lede {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--void-dim);
+}
+
+.kyn-void__contact {
+  margin-top: 18px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(56, 224, 255, 0.3);
+  background: rgba(56, 224, 255, 0.08);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--void-bone);
+}
+
+.kyn-void__facts {
+  margin-top: 18px;
+  text-align: left;
+  border-top: 1px solid rgba(242, 244, 255, 0.12);
+  padding-top: 14px;
+}
+
+.kyn-void__fact {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 12px;
+}
+
+.kyn-void__fact dt { color: var(--void-dim); }
+.kyn-void__fact dd { font-weight: 600; text-align: right; }
+
+.kyn-void__signout {
+  margin-top: 20px;
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(242, 244, 255, 0.22);
+  background: transparent;
+  color: var(--void-bone);
+  font: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.kyn-void__signout:hover {
+  background: rgba(242, 244, 255, 0.08);
+  border-color: rgba(242, 244, 255, 0.4);
+}
+
+/*
+ * Reduced motion: the state must still be completely understandable, so the
+ * spin, shake and spiral all go and the message simply appears over a still
+ * singularity.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .kyn-void__app,
+  .kyn-void__panel,
+  .kyn-void__disk,
+  .kyn-void__disk--inner,
+  .kyn-void__lens,
+  .kyn-void__horizon,
+  .kyn-void__spark,
+  .kyn-void__message {
+    animation: none !important;
+  }
+  .kyn-void__disk,
+  .kyn-void__disk--inner { opacity: 0.8; }
+  .kyn-void__spark { opacity: 0; }
+  .kyn-void__app { opacity: 0; }
+}

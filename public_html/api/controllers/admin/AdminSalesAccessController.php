@@ -27,16 +27,62 @@ class AdminSalesAccessController
      */
     public function me(Request $request): void
     {
-        $user = $request->user ?? [];
+        $user   = $request->user ?? [];
+        $userId = isset($user['user_id']) ? (int)$user['user_id'] : 0;
+
+        // Deliberately does not call enforce(): a salesperson whose access was
+        // destroyed still has to load this to be shown what happened and who to
+        // ask. Every other sales endpoint refuses them with 423.
+        $lockout = $userId > 0 ? SalesLockout::active($userId) : null;
+
         Response::success([
-            'user_id'     => isset($user['user_id']) ? (int)$user['user_id'] : null,
+            'user_id'     => $userId ?: null,
             'name'        => $user['name']  ?? '',
             'email'       => $user['email'] ?? '',
             'staff_role'  => $user['staff_role'] ?? null,
             'is_admin'    => SalesPermissions::isAdmin($user),
             'permissions' => SalesPermissions::forUser($user),
             'server_time' => SalesChallenge::serverTime(),
+            'lockout'     => $lockout ? SalesLockout::format($lockout) : null,
         ]);
+    }
+
+    /**
+     * GET /admin/sales/lockouts
+     *
+     * Everyone currently locked out of the app by a missed challenge, so an
+     * administrator can see who is waiting on them.
+     */
+    public function lockouts(Request $request): void
+    {
+        $this->enforceAdmin($request);
+        Response::success(SalesLockout::allActive());
+    }
+
+    /**
+     * POST /admin/sales/users/{id}/restore-access
+     *
+     * Lifts a challenge lockout. The lockout row is kept and stamped with who
+     * lifted it — the history of what happened outlives the punishment.
+     */
+    public function restoreAccess(Request $request): void
+    {
+        $this->enforceAdmin($request);
+
+        $userId = (int)$request->param('id');
+        $target = $this->findAdmin($userId);
+
+        if (!SalesLockout::isLocked($userId)) {
+            Response::error('That user is not locked out', 409);
+        }
+
+        SalesLockout::clear($userId, isset($request->user['user_id']) ? (int)$request->user['user_id'] : null);
+        $this->audit($request, 'sales_access_restored', $userId, ['email' => $target['email'] ?? null]);
+
+        Response::success(
+            ['user_id' => $userId, 'name' => $target['name'] ?? null],
+            'App access restored'
+        );
     }
 
     /**
@@ -104,6 +150,7 @@ class AdminSalesAccessController
                 'is_admin'    => SalesPermissions::isAdmin($user),
                 'permissions' => SalesPermissions::forUser($user),
                 'granted'     => $this->grantedPermissions((int)$row['user_id']),
+                'lockout'     => ($l = SalesLockout::active((int)$row['user_id'])) ? SalesLockout::format($l) : null,
             ];
         }, $rows);
 

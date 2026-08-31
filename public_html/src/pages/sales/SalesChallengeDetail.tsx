@@ -26,7 +26,7 @@ export default function SalesChallengeDetail() {
   const { id } = useParams();
   const challengeId = Number(id);
   const navigate = useNavigate();
-  const { can } = useSalesAccess();
+  const { me, can } = useSalesAccess();
 
   const [challenge, setChallenge] = useState<ChallengeDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,6 +34,7 @@ export default function SalesChallengeDetail() {
   const [acting, setActing] = useState(false);
 
   const [completeOpen, setCompleteOpen] = useState(false);
+
   const [completionNotes, setCompletionNotes] = useState("");
 
   /** Plays once per confirmed expiry, so a re-fetch doesn't replay it. */
@@ -90,6 +91,8 @@ export default function SalesChallengeDetail() {
       setActing(false);
     }
   };
+
+  const isHolder = me?.user_id != null && challenge?.accepted_by === me.user_id;
 
   if (loading) {
     return (
@@ -191,18 +194,32 @@ export default function SalesChallengeDetail() {
       </div>
 
       <div data-destroy-group="6" className="border-t px-5 py-4">
-        {challenge.status === "available" && can("sales.challenges.accept") && (
-          <Button
-            className="h-12 w-full text-base"
-            disabled={acting || !challenge.is_actionable}
-            onClick={() => void runAction(() => salesChallengesApi.accept(challenge.id), "Challenge accepted")}
-          >
-            <Flag className="mr-2 h-4 w-4" />
-            Accept Challenge
-          </Button>
-        )}
+        {/*
+          The board is open to the whole team: anyone may read a challenge and
+          join the discussion on it. Accepting is restricted to the people it
+          was offered to — `can_accept` is the server's answer, and the server
+          refuses the request outright if it is asked anyway.
+        */}
+        {challenge.status === "available" &&
+          (challenge.can_accept ? (
+            <Button
+              className="h-12 w-full text-base"
+              disabled={acting || !challenge.is_actionable}
+              onClick={() => void runAction(() => salesChallengesApi.accept(challenge.id), "Challenge accepted")}
+            >
+              <Flag className="mr-2 h-4 w-4" />
+              Accept Challenge
+            </Button>
+          ) : (
+            <p className="rounded-xl border border-dashed bg-muted/30 px-4 py-3 text-center text-sm text-muted-foreground">
+              {challenge.assignees.length > 0
+                ? `Offered to ${challenge.assignees.map((a) => a.name ?? "someone").join(", ")} — you can follow it and comment below.`
+                : "You do not have permission to accept challenges. You can follow this one and comment below."}
+            </p>
+          ))}
 
-        {challenge.status === "accepted" && can("sales.challenges.accept") && (
+        {/* Only the person holding the challenge can move it along. */}
+        {challenge.status === "accepted" && isHolder && can("sales.challenges.accept") && (
           <Button
             className="h-12 w-full text-base"
             disabled={acting || !challenge.is_actionable}
@@ -213,6 +230,7 @@ export default function SalesChallengeDetail() {
         )}
 
         {(challenge.status === "accepted" || challenge.status === "in_progress") &&
+          isHolder &&
           can("sales.challenges.complete") && (
             <Button
               className="mt-2 h-12 w-full text-base"
@@ -223,6 +241,14 @@ export default function SalesChallengeDetail() {
               Mark Complete
             </Button>
           )}
+
+        {/* What is at stake, said plainly, while it can still be acted on. */}
+        {isHolder && (challenge.status === "accepted" || challenge.status === "in_progress") && (
+          <p className="mt-3 text-center text-xs text-[#c2410c]">
+            You are holding this challenge. If the deadline passes unfinished, your access to the
+            app is destroyed until an administrator restores it.
+          </p>
+        )}
 
         {challenge.status === "expired" && (
           <div className="space-y-3">

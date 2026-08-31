@@ -250,6 +250,7 @@ $featureSchemas = [
     'create_rbac.sql',
     'create_sales_module.sql',
     'create_sales_comments.sql',
+    'create_sales_lockouts.sql',
 ];
 foreach ($featureSchemas as $file) {
     $path = __DIR__ . '/' . $file;

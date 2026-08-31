@@ -31,7 +31,7 @@ class SalesChallenge
         $tenantId = Database::tenantId();
 
         $due = Database::fetchAll(
-            "SELECT id, status FROM sales_challenges
+            "SELECT id, title, status, accepted_by FROM sales_challenges
               WHERE tenant_id = ? AND deadline <= NOW() AND status IN ('available','accepted','in_progress')",
             [$tenantId]
         );
@@ -48,6 +48,26 @@ class SalesChallenge
 
         foreach ($due as $row) {
             self::logActivity((int)$row['id'], 'expired', null, 'Deadline reached (server time)');
+
+            // Taking a challenge and missing the deadline destroys that
+            // salesperson access to the app until an administrator restores it.
+            // A challenge nobody accepted simply expires — there is nobody to
+            // hold to it.
+            if (in_array($row['status'], ['accepted', 'in_progress'], true) && !empty($row['accepted_by'])) {
+                $locked = SalesLockout::lock(
+                    (int)$row['accepted_by'],
+                    (int)$row['id'],
+                    'Challenge missed: ' . (string)$row['title']
+                );
+                if ($locked) {
+                    self::logActivity(
+                        (int)$row['id'],
+                        'access_destroyed',
+                        null,
+                        'App access destroyed for the salesperson who accepted this challenge'
+                    );
+                }
+            }
         }
 
         return count($due);
@@ -74,15 +94,9 @@ class SalesChallenge
         $where  = ['c.tenant_id = ?'];
         $params = [Database::tenantId()];
 
-        if (!$isManager) {
-            $userId   = isset($viewer['user_id']) ? (int)$viewer['user_id'] : 0;
-            $where[]  = '(c.accepted_by = ? OR NOT EXISTS (SELECT 1 FROM sales_challenge_assignments a
-                            WHERE a.challenge_id = c.id AND a.tenant_id = c.tenant_id)
-                          OR EXISTS (SELECT 1 FROM sales_challenge_assignments a
-                            WHERE a.challenge_id = c.id AND a.tenant_id = c.tenant_id AND a.user_id = ?))';
-            $params[] = $userId;
-            $params[] = $userId;
-        }
+        // The board is deliberately team-wide: everyone sees every challenge and
+        // can follow the discussion on it. Who may ACCEPT one is a separate
+        // question, answered by isOfferedTo() at accept time.
 
         if ($status !== '' && in_array($status, self::STATUSES, true)) {
             $where[]  = 'c.status = ?';

@@ -269,6 +269,9 @@ export interface SalesChallengeDetail extends SalesChallenge {
   activity: ChallengeActivityEntry[];
   report: ChallengeReport;
   comments: SalesComment[];
+  /** The board is open to the team; only the people it was offered to may accept. */
+  is_offered_to_me: boolean;
+  can_accept: boolean;
 }
 
 export interface SalesSummary {
@@ -302,6 +305,20 @@ export interface SalesDashboard {
   challenges: { counts: ChallengeCounts; active: SalesChallenge[]; available: SalesChallenge[] };
 }
 
+/** Why a salesperson lost access to the app, and when. */
+export interface SalesLockoutInfo {
+  id: number;
+  user_id: number;
+  user_name?: string | null;
+  email?: string | null;
+  challenge_id: number | null;
+  challenge_title: string | null;
+  challenge_code?: string | null;
+  deadline?: string | null;
+  reason: string;
+  locked_at: string;
+}
+
 export interface SalesMe {
   user_id: number | null;
   name: string;
@@ -310,6 +327,8 @@ export interface SalesMe {
   is_admin: boolean;
   permissions: string[];
   server_time: string;
+  /** Set when a missed challenge destroyed this user's app access. */
+  lockout: SalesLockoutInfo | null;
 }
 
 export interface SalesAccessUser {
@@ -322,6 +341,7 @@ export interface SalesAccessUser {
   is_admin: boolean;
   permissions: string[];
   granted: string[];
+  lockout: SalesLockoutInfo | null;
 }
 
 export interface Pagination {

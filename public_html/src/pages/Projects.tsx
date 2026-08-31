@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { opsProjectsApi, opsClientsApi } from "@/lib/api/ops";
 import type { OpsProject, OpsClient } from "@/types/ops";
-import { FolderKanban, Plus, Eye, Search } from "lucide-react";
+import { FolderKanban, Plus, Pencil, Search } from "lucide-react";
 import { toast } from "sonner";
 
 const PROJECT_STAGES = [
@@ -34,6 +34,7 @@ const priorityStyles: Record<string, string> = {
 const EMPTY_PROJ = { name: "", client_id: 0, owner: "", quoted: 0, deadline: "", priority: "medium", health: "green", start_date: "" };
 
 export default function Projects() {
+  const navigate                    = useNavigate();
   const [items, setItems]           = useState<OpsProject[]>([]);
   const [clients, setClients]       = useState<OpsClient[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -169,9 +170,30 @@ export default function Projects() {
                   <tr><td colSpan={10} className="px-6 py-8 text-center text-muted-foreground text-sm">No projects found</td></tr>
                 )}
                 {!loading && filtered.map(p => (
-                  <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
+                  <tr
+                    key={p.id}
+                    onClick={() => navigate(`/projects/${p.id}`)}
+                    onKeyDown={e => { if (e.key === "Enter") navigate(`/projects/${p.id}`); }}
+                    tabIndex={0}
+                    role="link"
+                    title="Open this project"
+                    className="border-b cursor-pointer hover:bg-muted/30 focus:bg-muted/40 focus:outline-none transition-colors"
+                  >
                     <td className="py-3 px-4 font-medium text-card-foreground">{p.name}</td>
-                    <td className="py-3 px-4 text-card-foreground">{p.client_name ?? "—"}</td>
+                    {/* The customer this project is mapped to — their own record lives on Clients. */}
+                    <td className="py-3 px-4">
+                      {p.client_id ? (
+                        <Link
+                          to={`/clients/${p.client_id}`}
+                          onClick={e => e.stopPropagation()}
+                          className="text-primary hover:underline"
+                        >
+                          {p.client_name ?? "—"}
+                        </Link>
+                      ) : (
+                        <span className="text-card-foreground">{p.client_name ?? "—"}</span>
+                      )}
+                    </td>
                     <td className="py-3 px-4 text-xs text-card-foreground">{p.stage}</td>
                     <td className="py-3 px-4 text-card-foreground">{p.owner || "—"}</td>
                     <td className="py-3 px-4 text-xs text-card-foreground">{p.deadline ?? "—"}</td>
@@ -183,9 +205,16 @@ export default function Projects() {
                     </td>
                     <td className="py-3 px-4 text-card-foreground">₹{Number(p.quoted).toLocaleString("en-IN")}</td>
                     <td className="py-3 px-4 font-medium text-red-600">₹{Number(p.balance).toLocaleString("en-IN")}</td>
-                    <td className="py-3 px-4 flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(p)}><Search className="h-4 w-4" /></Button>
-                      <Link to={`/projects/${p.id}`}><Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button></Link>
+                    <td className="py-3 px-4">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Edit project"
+                        aria-label={`Edit ${p.name}`}
+                        onClick={e => { e.stopPropagation(); openEdit(p); }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                     </td>
                   </tr>
                 ))}

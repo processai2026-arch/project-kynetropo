@@ -61,11 +61,13 @@ class AdminSalesChallengeController
             Response::error('Challenge not found', 404);
         }
 
-        $userId    = isset($request->user['user_id']) ? (int)$request->user['user_id'] : 0;
-        $isManager = SalesPermissions::has($request->user, 'sales.challenges.manage');
-        if (!$isManager && !SalesChallenge::isOfferedTo($id, $userId) && $challenge['accepted_by'] !== $userId) {
-            Response::error('Challenge not found', 404);
-        }
+        // Anyone on the team may read a challenge and join the discussion on it.
+        // Accepting is the restricted act, and `can_accept` says who may.
+        $userId = isset($request->user['user_id']) ? (int)$request->user['user_id'] : 0;
+        $challenge['is_offered_to_me'] = SalesChallenge::isOfferedTo($id, $userId);
+        $challenge['can_accept'] = $challenge['is_offered_to_me']
+            && $challenge['status'] === 'available'
+            && SalesPermissions::has($request->user, 'sales.challenges.accept');
 
         $challenge['report']   = $this->report($challenge);
         $challenge['comments'] = SalesComment::forEntity('challenge', $id);

@@ -148,14 +148,12 @@ class AdminSalesCommentController
         }
 
         if ($entityType === 'challenge') {
+            // The challenge board is team-wide: anyone who can see challenges can
+            // follow the discussion on one, whether or not it was offered to them.
+            // Being allowed to ACCEPT it is a separate question, asked at accept
+            // time by SalesChallenge::isOfferedTo().
             SalesPermissions::enforce($request->user, 'sales.challenges.view');
-            $challenge = SalesChallenge::findRaw($entityId);
-            if (!$challenge) {
-                Response::error('Challenge not found', 404);
-            }
-            $userId = isset($request->user['user_id']) ? (int)$request->user['user_id'] : 0;
-            if (!SalesPermissions::has($request->user, 'sales.challenges.manage')
-                && !SalesChallenge::isOfferedTo($entityId, $userId)) {
+            if (!SalesChallenge::findRaw($entityId)) {
                 Response::error('Challenge not found', 404);
             }
             return [$entityType, $entityId, ['challenge_id' => $entityId]];

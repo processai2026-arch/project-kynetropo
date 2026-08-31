@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,9 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { opsClientsApi, opsPitchesApi } from "@/lib/api/ops";
-import type { OpsClient, OpsPitch } from "@/types/ops";
-import { Users, Plus, Search, Eye } from "lucide-react";
+import { opsClientsApi, opsPitchesApi, opsProjectsApi } from "@/lib/api/ops";
+import type { OpsClient, OpsPitch, OpsProject } from "@/types/ops";
+import { Users, Plus, Search, Pencil, FolderKanban } from "lucide-react";
 import { toast } from "sonner";
 
 const CLIENT_STAGES = [
@@ -31,7 +31,9 @@ const EMPTY = {
 };
 
 export default function Clients() {
+  const navigate                = useNavigate();
   const [items, setItems]       = useState<OpsClient[]>([]);
+  const [projects, setProjects] = useState<OpsProject[]>([]);
   const [pitches, setPitches]   = useState<OpsPitch[]>([]);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState("");
@@ -60,7 +62,16 @@ export default function Clients() {
 
   useEffect(() => {
     opsPitchesApi.list().then(r => setPitches((r as any).data ?? [])).catch(() => {});
+    // The projects a client is mapped to. Loaded once and grouped here, rather
+    // than folded into the client row on the server, so the two stay separate:
+    // this page is client information, Projects is project information.
+    opsProjectsApi.list().then(r => setProjects((r as any).data ?? [])).catch(() => {});
   }, []);
+
+  const projectsByClient = projects.reduce<Record<number, OpsProject[]>>((acc, pr) => {
+    (acc[pr.client_id] ??= []).push(pr);
+    return acc;
+  }, {});
 
   const owners = [...new Set(items.map(c => c.owner).filter(Boolean))];
   const set = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }));
@@ -145,7 +156,7 @@ export default function Clients() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  {["Name","Stage","Health","Balance Due","Next Follow-up","Owner","Days Since Contact",""].map(h => (
+                  {["Name","Contact","Stage","Health","Projects","Owner","Next Follow-up","Days Since Contact",""].map(h => (
                     <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
@@ -153,40 +164,75 @@ export default function Clients() {
               <tbody>
                 {loading && Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="border-b">
-                    {Array.from({ length: 8 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-20" /></td>)}
+                    {Array.from({ length: 9 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-20" /></td>)}
                   </tr>
                 ))}
                 {!loading && filtered.length === 0 && (
-                  <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground text-sm">No clients found</td></tr>
+                  <tr><td colSpan={9} className="px-6 py-8 text-center text-muted-foreground text-sm">No clients found</td></tr>
                 )}
-                {!loading && filtered.map(c => (
-                  <tr key={c.id} className="border-b hover:bg-muted/30 transition-colors">
-                    <td className="py-3 px-4">
-                      <div className="font-medium text-card-foreground">{c.name}</div>
-                      {c.project_name && <div className="text-xs text-muted-foreground">{c.project_name}</div>}
+                {!loading && filtered.map(c => {
+                  const mapped = projectsByClient[c.id] ?? [];
+                  return (
+                  <tr
+                    key={c.id}
+                    onClick={() => navigate(`/clients/${c.id}`)}
+                    onKeyDown={e => { if (e.key === "Enter") navigate(`/clients/${c.id}`); }}
+                    tabIndex={0}
+                    role="link"
+                    title="Open this client"
+                    className="border-b cursor-pointer hover:bg-muted/30 focus:bg-muted/40 focus:outline-none transition-colors"
+                  >
+                    <td className="py-3 px-4 font-medium text-card-foreground">{c.name}</td>
+                    <td className="py-3 px-4 text-xs text-card-foreground">
+                      {c.phone || "—"}
+                      {c.email && <div className="text-muted-foreground">{c.email}</div>}
                     </td>
                     <td className="py-3 px-4 text-xs text-card-foreground">{c.stage}</td>
                     <td className="py-3 px-4">
                       <Badge className={cn("border capitalize", healthStyles[c.health] ?? "bg-muted text-muted-foreground")}>{c.health}</Badge>
                     </td>
-                    <td className="py-3 px-4 text-card-foreground">
-                      {c.balance_due != null ? "₹" + Number(c.balance_due).toLocaleString("en-IN") : "—"}
+                    {/* The mapping to projects — the project detail lives on the Projects page. */}
+                    <td className="py-3 px-4 text-xs">
+                      {mapped.length === 0 ? (
+                        <span className="text-muted-foreground">No project</span>
+                      ) : (
+                        <div className="flex flex-col gap-0.5">
+                          {mapped.slice(0, 2).map(pr => (
+                            <Link
+                              key={pr.id}
+                              to={`/projects/${pr.id}`}
+                              onClick={e => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 text-primary hover:underline"
+                            >
+                              <FolderKanban className="h-3 w-3 shrink-0" />
+                              {pr.name}
+                            </Link>
+                          ))}
+                          {mapped.length > 2 && (
+                            <span className="text-muted-foreground">+{mapped.length - 2} more</span>
+                          )}
+                        </div>
+                      )}
                     </td>
-                    <td className="py-3 px-4 text-card-foreground">{c.next_followup ?? "—"}</td>
                     <td className="py-3 px-4 text-card-foreground">{c.owner || "—"}</td>
+                    <td className="py-3 px-4 text-card-foreground">{c.next_followup ?? "—"}</td>
                     <td className="py-3 px-4 text-card-foreground">
                       {c.days_since_contact != null ? `${c.days_since_contact}d ago` : "—"}
                     </td>
-                    <td className="py-3 px-4 flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(c)} title="Edit">
-                        <Search className="h-4 w-4" />
+                    <td className="py-3 px-4">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Edit client"
+                        aria-label={`Edit ${c.name}`}
+                        onClick={e => { e.stopPropagation(); openEdit(c); }}
+                      >
+                        <Pencil className="h-4 w-4" />
                       </Button>
-                      <Link to={`/clients/${c.id}`}>
-                        <Button variant="ghost" size="icon" title="View detail"><Eye className="h-4 w-4" /></Button>
-                      </Link>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

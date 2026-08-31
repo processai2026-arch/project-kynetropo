@@ -6,6 +6,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { useSalesNotifications } from "@/hooks/useSalesNotifications";
 import { SalesQuickAdd } from "@/components/sales/SalesQuickAdd";
+import { AppDestroyedGate } from "@/components/sales/challenge/AppDestroyedGate";
 
 /**
  * Mobile bottom-tab navigation for the sales module (spec §5).
@@ -78,10 +79,18 @@ export function SalesLayout({
 }) {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
-  const { can, loading } = useSalesAccess();
+  const { me, can, loading, lockout } = useSalesAccess();
 
   // Poll for follow-ups falling due, meetings starting and challenge deadlines.
-  useSalesNotifications(!loading && can("sales.dashboard.view"), (url) => navigate(url));
+  // A locked-out user is polling nothing: every endpoint refuses them anyway.
+  useSalesNotifications(!loading && !lockout && can("sales.dashboard.view"), (url) => navigate(url));
+
+  // Accepting a challenge and missing the deadline destroys this user's access.
+  // The server enforces it too (every sales endpoint answers them with 423);
+  // this is the part that tells them why.
+  if (lockout) {
+    return <AppDestroyedGate lockout={lockout} userName={me?.name} />;
+  }
 
   return (
     <div className={cn("space-y-5", isMobile && "pb-24")}>

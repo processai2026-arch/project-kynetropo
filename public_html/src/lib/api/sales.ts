@@ -15,6 +15,7 @@ import type {
   SalesFollowup,
   SalesLead,
   SalesLeadDetail,
+  SalesLockoutInfo,
   SalesMe,
   SalesMeeting,
 } from "@/types/sales";
@@ -65,6 +66,13 @@ export const salesAccessApi = {
     (await apiFetch<Envelope<{ user_id: number; staff_role: string; permissions: string[] }>>(
       `/admin/sales/users/${userId}/role`,
       { method: "PUT", body: JSON.stringify({ staff_role }) },
+    )).data,
+  lockouts: async (): Promise<SalesLockoutInfo[]> =>
+    (await apiFetch<Envelope<SalesLockoutInfo[]>>("/admin/sales/lockouts", { skipCache: true })).data,
+  restoreAccess: async (userId: number) =>
+    (await apiFetch<Envelope<{ user_id: number; name: string | null }>>(
+      `/admin/sales/users/${userId}/restore-access`,
+      { method: "POST" },
     )).data,
   setPassword: async (userId: number, password: string) =>
     (await apiFetch<Envelope<{ user_id: number; email: string | null }>>(
@@ -167,6 +175,30 @@ export type LeadFilters = {
   limit?: number;
 };
 
+/**
+ * What the conversion dialog collects. Everything is optional: leaving a field
+ * out keeps whatever the lead already knows, so a quick conversion still works.
+ */
+export interface ConvertLeadBody {
+  name?: string;
+  phone?: string;
+  email?: string;
+  source?: string;
+  owner?: string;
+  stage?: string;
+  health?: "green" | "yellow" | "red";
+  notes?: string;
+  /** Link to a customer that already exists instead of creating one. */
+  link_client_id?: number;
+  /** Insist on a new customer even when phone/email match an existing one. */
+  create_new?: boolean;
+  /** Naming a project opens it against the new customer in the same step. */
+  project_name?: string;
+  project_quoted?: number;
+  project_deadline?: string;
+  project_priority?: "low" | "medium" | "high" | "critical";
+}
+
 export const salesLeadsApi = {
   list: (filters: LeadFilters = {}) =>
     apiFetch<Paginated<SalesLead>>(`/admin/sales/leads${qs(filters)}`),
@@ -191,11 +223,13 @@ export const salesLeadsApi = {
       method: "POST",
       body: JSON.stringify({ notes }),
     })).data,
-  convert: async (id: number) =>
-    (await apiFetch<Envelope<{ lead_id: number; client_id: number; reused_existing_client: boolean }>>(
-      `/admin/sales/leads/${id}/convert`,
-      { method: "POST", body: JSON.stringify({}) },
-    )).data,
+  convert: async (id: number, body: ConvertLeadBody = {}) =>
+    (await apiFetch<Envelope<{
+      lead_id: number;
+      client_id: number;
+      project_id: number | null;
+      reused_existing_client: boolean;
+    }>>(`/admin/sales/leads/${id}/convert`, { method: "POST", body: JSON.stringify(body) })).data,
   /** Steps a lead back out of conversion or onboarding. */
   revert: async (id: number, reason?: string) =>
     (await apiFetch<Envelope<{ lead: SalesLead; kept_customer_id?: number | null }>>(

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, KeyRound, ShieldCheck, UserPlus } from "lucide-react";
+import { AlertTriangle, KeyRound, RotateCcw, ShieldCheck, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -153,6 +153,19 @@ export default function SalesAccessControl() {
     }
   };
 
+  const handleRestoreAccess = async (u: SalesAccessUser) => {
+    setSaving(true);
+    try {
+      await salesAccessApi.restoreAccess(u.user_id);
+      toast.success(`${u.name} can use the app again`);
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not restore access");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleResetPassword = async () => {
     if (!resetUser) return;
     if (resetPassword.length < 8) {
@@ -243,6 +256,31 @@ export default function SalesAccessControl() {
               )}
 
               {!u.is_active && <p className="mt-1 text-xs text-destructive">Account inactive</p>}
+
+              {/* A missed challenge destroyed this user's app access. Only an
+                  administrator can give it back, which is this button. */}
+              {u.lockout && (
+                <div className="mt-2 rounded-lg border border-destructive/30 bg-destructive/5 p-2">
+                  <p className="flex items-start gap-1.5 text-xs font-medium text-destructive">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    App destroyed — missed challenge
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {u.lockout.challenge_title ?? u.lockout.reason}
+                    {u.lockout.locked_at ? ` · ${u.lockout.locked_at}` : ""}
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2 h-8 w-full"
+                    disabled={saving}
+                    onClick={() => void handleRestoreAccess(u)}
+                  >
+                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                    Restore app access
+                  </Button>
+                </div>
+              )}
 
               <div className="mt-3 space-y-2">
                 <div className="flex items-center gap-2">

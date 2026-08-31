@@ -1209,6 +1209,7 @@ require_once ROOT_PATH . '/models/SalesFollowup.php';
 require_once ROOT_PATH . '/models/SalesMeeting.php';
 require_once ROOT_PATH . '/models/SalesChallenge.php';
 require_once ROOT_PATH . '/models/SalesComment.php';
+require_once ROOT_PATH . '/models/SalesLockout.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesDashboardController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesLeadController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesCallController.php';
@@ -1366,6 +1367,8 @@ $router->put('/admin/sales/users/{id}/permissions',      [AdminSalesAccessContro
 $router->put('/admin/sales/users/{id}/role',             [AdminSalesAccessController::class, 'setRole'],         'admin');
 $router->put('/admin/sales/users/{id}/active',           [AdminSalesAccessController::class, 'setActive'],       'admin');
 $router->put('/admin/sales/users/{id}/password',         [AdminSalesAccessController::class, 'setPassword'],     'admin');
+$router->get('/admin/sales/lockouts',                    [AdminSalesAccessController::class, 'lockouts'],        'admin');
+$router->post('/admin/sales/users/{id}/restore-access',  [AdminSalesAccessController::class, 'restoreAccess'],   'admin');
 
 $router->get('/admin/sales/assignable-users',            [AdminSalesAccessController::class, 'assignableUsers'], 'admin');
 

@@ -156,9 +156,34 @@ class SalesPermissions
         return in_array($permission, self::forUser($user), true);
     }
 
+    /**
+     * Aborts with 423 when the user lost a challenge and their app access was
+     * destroyed. Checked before the permission itself, so a locked-out user
+     * gets the real reason rather than a misleading "no permission".
+     *
+     * GET /admin/sales/me deliberately does NOT call this — the app has to be
+     * able to load enough to show the destruction screen.
+     */
+    public static function assertNotLocked(?array $user): void
+    {
+        $userId = isset($user['user_id']) ? (int)$user['user_id'] : 0;
+        if ($userId < 1) {
+            return;
+        }
+        $lockout = SalesLockout::active($userId);
+        if ($lockout === null) {
+            return;
+        }
+        Response::error(
+            'Your sales app access was destroyed after a missed challenge. Contact your Kynetropo administrator.',
+            423
+        );
+    }
+
     /** Aborts with 403 unless the user holds the permission. */
     public static function enforce(?array $user, string $permission): void
     {
+        self::assertNotLocked($user);
         if ($user === null || !self::has($user, $permission)) {
             self::auditDenied($user, $permission);
             Response::error('You do not have permission to perform this action', 403);
@@ -168,6 +193,7 @@ class SalesPermissions
     /** Aborts with 403 unless the user holds at least one of the permissions. */
     public static function enforceAny(?array $user, array $permissions): void
     {
+        self::assertNotLocked($user);
         if ($user === null) {
             Response::error('You do not have permission to perform this action', 403);
         }
