@@ -270,6 +270,19 @@ export default function SalesChallengeDetail() {
         </section>
       )}
 
+      {can("sales.comments.view") && (
+        <section className="space-y-3">
+          <h2 className="text-base font-semibold">Discussion</h2>
+          <div className="rounded-2xl border bg-card p-4 shadow-sm">
+            <CommentThread
+              entityType="challenge"
+              entityId={challenge.id}
+              initialComments={challenge.comments ?? []}
+            />
+          </div>
+        </section>
+      )}
+
       <Dialog open={completeOpen} onOpenChange={setCompleteOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

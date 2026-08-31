@@ -249,6 +249,7 @@ $featureSchemas = [
     'create_vendor_credits.sql',
     'create_rbac.sql',
     'create_sales_module.sql',
+    'create_sales_comments.sql',
 ];
 foreach ($featureSchemas as $file) {
     $path = __DIR__ . '/' . $file;

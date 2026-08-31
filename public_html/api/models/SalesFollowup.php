@@ -151,6 +151,9 @@ class SalesFollowup
 
         $rows = Database::fetchAll(
             "SELECT f.*, u.name AS assigned_to_name,
+                    (SELECT COUNT(*) FROM sales_comments sc
+                      WHERE sc.tenant_id = f.tenant_id AND sc.entity_type = 'followup'
+                        AND sc.entity_id = f.id AND sc.deleted_at IS NULL) AS comment_count,
                     l.name AS lead_name, l.company AS lead_company, l.phone AS lead_phone,
                     l.contact_person AS lead_contact_person, l.temperature AS lead_temperature,
                     l.last_outcome AS lead_last_outcome
@@ -229,6 +232,7 @@ class SalesFollowup
             'outcome_notes'       => $row['outcome_notes'],
             'completed_by'        => $row['completed_by'] !== null ? (int)$row['completed_by'] : null,
             'completed_at'        => $row['completed_at'],
+            'comment_count'       => isset($row['comment_count']) ? (int)$row['comment_count'] : 0,
             'created_at'          => $row['created_at'],
         ];
     }

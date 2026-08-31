@@ -1208,6 +1208,7 @@ require_once ROOT_PATH . '/models/SalesCall.php';
 require_once ROOT_PATH . '/models/SalesFollowup.php';
 require_once ROOT_PATH . '/models/SalesMeeting.php';
 require_once ROOT_PATH . '/models/SalesChallenge.php';
+require_once ROOT_PATH . '/models/SalesComment.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesDashboardController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesLeadController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesCallController.php';
@@ -1215,6 +1216,7 @@ require_once ROOT_PATH . '/controllers/admin/AdminSalesFollowupController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesMeetingController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesChallengeController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesAccessController.php';
+require_once ROOT_PATH . '/controllers/admin/AdminSalesCommentController.php';
 
 // ─── Kynetropo Ops — Dashboard ────────────────────────────────────────────────
 $router->get('/admin/ops/dashboard-stats',                   [AdminOpsDashboardController::class, 'stats'],          'admin');
@@ -1363,12 +1365,14 @@ $router->post('/admin/sales/users',                      [AdminSalesAccessContro
 $router->put('/admin/sales/users/{id}/permissions',      [AdminSalesAccessController::class, 'setPermissions'],  'admin');
 $router->put('/admin/sales/users/{id}/role',             [AdminSalesAccessController::class, 'setRole'],         'admin');
 $router->put('/admin/sales/users/{id}/active',           [AdminSalesAccessController::class, 'setActive'],       'admin');
+$router->put('/admin/sales/users/{id}/password',         [AdminSalesAccessController::class, 'setPassword'],     'admin');
 
 $router->get('/admin/sales/assignable-users',            [AdminSalesAccessController::class, 'assignableUsers'], 'admin');
 
 // Dashboard + activity
 $router->get('/admin/sales/dashboard',                   [AdminSalesDashboardController::class, 'index'],        'admin');
 $router->get('/admin/sales/activity',                    [AdminSalesDashboardController::class, 'activity'],     'admin');
+$router->get('/admin/sales/feed',                        [AdminSalesDashboardController::class, 'feed'],         'admin');
 $router->get('/admin/sales/notifications',               [AdminSalesDashboardController::class, 'notifications'],'admin');
 
 // Leads (static segments registered before {id})
@@ -1414,6 +1418,15 @@ $router->post('/admin/sales/challenges/{id}/complete',   [AdminSalesChallengeCon
 $router->post('/admin/sales/challenges/{id}/expire',     [AdminSalesChallengeController::class, 'expire'],       'admin');
 $router->post('/admin/sales/challenges/{id}/cancel',     [AdminSalesChallengeController::class, 'cancel'],       'admin');
 $router->delete('/admin/sales/challenges/{id}',          [AdminSalesChallengeController::class, 'destroy'],      'admin');
+
+// Comments — the discussion thread on a lead, call, follow-up, meeting or
+// challenge. Access follows the record: the controller re-resolves the entity
+// and applies the same lead scope before it reads or writes a thread.
+$router->get('/admin/sales/comments',                    [AdminSalesCommentController::class, 'index'],          'admin');
+$router->post('/admin/sales/comments',                   [AdminSalesCommentController::class, 'store'],          'admin');
+$router->post('/admin/sales/comments/{id}/restore',      [AdminSalesCommentController::class, 'restore'],        'admin');
+$router->put('/admin/sales/comments/{id}',               [AdminSalesCommentController::class, 'update'],         'admin');
+$router->delete('/admin/sales/comments/{id}',            [AdminSalesCommentController::class, 'destroy'],        'admin');
 
 // Dispatch
 $router->dispatch();

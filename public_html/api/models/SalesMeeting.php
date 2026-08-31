@@ -153,6 +153,9 @@ class SalesMeeting
 
         $rows = Database::fetchAll(
             "SELECT m.*, u.name AS assigned_to_name,
+                    (SELECT COUNT(*) FROM sales_comments sc
+                      WHERE sc.tenant_id = m.tenant_id AND sc.entity_type = 'meeting'
+                        AND sc.entity_id = m.id AND sc.deleted_at IS NULL) AS comment_count,
                     l.name AS lead_name, l.company AS lead_company, l.temperature AS lead_temperature
                FROM sales_meetings m
                JOIN sales_leads l ON l.id = m.lead_id AND l.tenant_id = m.tenant_id
@@ -228,6 +231,7 @@ class SalesMeeting
             'assigned_to'       => $row['assigned_to'] !== null ? (int)$row['assigned_to'] : null,
             'assigned_to_name'  => $row['assigned_to_name'] ?? null,
             'completed_at'      => $row['completed_at'],
+            'comment_count'     => isset($row['comment_count']) ? (int)$row['comment_count'] : 0,
             'created_at'        => $row['created_at'],
             'updated_at'        => $row['updated_at'],
         ];

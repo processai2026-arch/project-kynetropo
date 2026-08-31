@@ -8,6 +8,7 @@ declare(strict_types=1);
  *                                and upcoming meetings, lead temperature
  *                                summary, active challenges
  *   GET /admin/sales/activity  — recent lead activity across the pipeline
+ *   GET /admin/sales/feed      — one merged live feed: leads, challenges, comments
  *
  * Everything is scoped to what the requesting user is allowed to see.
  */
@@ -84,6 +85,108 @@ class AdminSalesDashboardController
 
         $scope = SalesPermissions::leadScope($request->user);
         Response::success(SalesActivity::recent((int)$request->query('limit', 50), $scope));
+    }
+
+    /**
+     * GET /admin/sales/feed
+     *
+     * One merged stream of everything happening in the module — lead activity,
+     * challenge activity and comments — newest first. This is what the desktop
+     * watches: a manager should not have to open three screens to see that a
+     * call was logged, a challenge was accepted and someone asked a question
+     * about a quotation.
+     *
+     * `since` (a server timestamp from a previous response) returns only what
+     * has happened since, so the desktop can poll cheaply. Lead-scoped users
+     * still only see their own leads; challenge events are team-wide.
+     */
+    public function feed(Request $request): void
+    {
+        SalesPermissions::enforce($request->user, 'sales.dashboard.view');
+
+        $limit    = max(1, min(200, (int)$request->query('limit', 60)));
+        $since    = (string)$request->query('since', '');
+        $tenantId = Database::tenantId();
+        $scope    = SalesPermissions::leadScope($request->user);
+        $sinceOk  = $since !== '' && preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $since) === 1;
+
+        // ── Lead activity (calls, follow-ups, meetings, conversions, comments)
+        $where  = 'a.tenant_id = ?';
+        $params = [$tenantId];
+        if ($scope['sql'] !== '') {
+            $where   .= ' AND l.assigned_to = ?';
+            $params[] = $scope['params'][0];
+        }
+        if ($sinceOk) {
+            $where   .= ' AND a.occurred_at > ?';
+            $params[] = $since;
+        }
+        $events = [];
+        foreach (Database::fetchAll(
+            "SELECT a.id, a.activity_type, a.title, a.description, a.actor_id, a.actor_name,
+                    a.occurred_at, a.lead_id, l.name AS lead_name, l.company AS lead_company
+               FROM sales_lead_activities a
+               JOIN sales_leads l ON l.id = a.lead_id AND l.tenant_id = a.tenant_id
+              WHERE $where
+              ORDER BY a.occurred_at DESC, a.id DESC
+              LIMIT $limit",
+            $params
+        ) as $r) {
+            $events[] = [
+                'key'         => 'lead_activity:' . $r['id'],
+                'source'      => 'lead',
+                'type'        => $r['activity_type'],
+                'title'       => $r['title'],
+                'description' => $r['description'],
+                'actor_id'    => $r['actor_id'] !== null ? (int)$r['actor_id'] : null,
+                'actor_name'  => $r['actor_name'],
+                'subject'     => $r['lead_company'] ?: $r['lead_name'],
+                'url'         => '/sales/leads/' . (int)$r['lead_id'],
+                'at'          => $r['occurred_at'],
+            ];
+        }
+
+        // ── Challenge activity — team-wide, so everyone sees the same board.
+        if (SalesPermissions::has($request->user, 'sales.challenges.view')) {
+            $cWhere  = 'ca.tenant_id = ?';
+            $cParams = [$tenantId];
+            if ($sinceOk) {
+                $cWhere   .= ' AND ca.created_at > ?';
+                $cParams[] = $since;
+            }
+            foreach (Database::fetchAll(
+                "SELECT ca.id, ca.action, ca.notes, ca.actor_id, ca.actor_name, ca.created_at,
+                        c.id AS challenge_id, c.title
+                   FROM sales_challenge_activity ca
+                   JOIN sales_challenges c ON c.id = ca.challenge_id AND c.tenant_id = ca.tenant_id
+                  WHERE $cWhere
+                  ORDER BY ca.created_at DESC, ca.id DESC
+                  LIMIT $limit",
+                $cParams
+            ) as $r) {
+                $events[] = [
+                    'key'         => 'challenge_activity:' . $r['id'],
+                    'source'      => 'challenge',
+                    'type'        => 'challenge_' . $r['action'],
+                    'title'       => 'Challenge ' . str_replace('_', ' ', (string)$r['action']),
+                    'description' => $r['notes'],
+                    'actor_id'    => $r['actor_id'] !== null ? (int)$r['actor_id'] : null,
+                    'actor_name'  => $r['actor_name'],
+                    'subject'     => $r['title'],
+                    'url'         => '/sales/challenges/' . (int)$r['challenge_id'],
+                    'at'          => $r['created_at'],
+                ];
+            }
+        }
+
+        // Merge the two streams by time; the DB gave each one ordered already.
+        usort($events, static fn(array $a, array $b) => [$b['at'], $b['key']] <=> [$a['at'], $a['key']]);
+        $events = array_slice($events, 0, $limit);
+
+        Response::success([
+            'server_time' => SalesChallenge::serverTime(),
+            'items'       => $events,
+        ]);
     }
 
     /**
@@ -235,6 +338,45 @@ class AdminSalesDashboardController
                         'at'       => $row['deadline'],
                     ];
                 }
+            }
+        }
+
+        // ── Comments someone else left on something you can see ─────────────
+        if (SalesPermissions::has($request->user, 'sales.comments.view')) {
+            $where  = "cm.tenant_id = ? AND cm.deleted_at IS NULL
+                       AND cm.created_at >= NOW() - INTERVAL 12 HOUR
+                       AND (cm.author_id IS NULL OR cm.author_id <> ?)";
+            $params = [$tenantId, $userId];
+            if ($scope['sql'] !== '') {
+                // Own leads, plus challenge threads (challenges are team-wide).
+                $where   .= ' AND (l.assigned_to = ? OR cm.challenge_id IS NOT NULL)';
+                $params[] = $userId;
+            }
+
+            foreach (Database::fetchAll(
+                "SELECT cm.id, cm.body, cm.author_name, cm.created_at, cm.lead_id, cm.challenge_id,
+                        l.name AS lead_name, l.company, ch.title AS challenge_title
+                   FROM sales_comments cm
+                   LEFT JOIN sales_leads l       ON l.id  = cm.lead_id      AND l.tenant_id  = cm.tenant_id
+                   LEFT JOIN sales_challenges ch ON ch.id = cm.challenge_id AND ch.tenant_id = cm.tenant_id
+                  WHERE $where
+                  ORDER BY cm.created_at DESC LIMIT 10",
+                $params
+            ) as $row) {
+                $on = $row['challenge_id']
+                    ? (string)$row['challenge_title']
+                    : (string)($row['company'] ?: $row['lead_name']);
+                $items[] = [
+                    'key'      => 'comment:' . $row['id'],
+                    'type'     => 'comment_added',
+                    'severity' => 'normal',
+                    'title'    => trim(($row['author_name'] ?: 'Someone') . ' commented on ' . $on),
+                    'body'     => mb_substr((string)$row['body'], 0, 140),
+                    'url'      => $row['challenge_id']
+                                  ? '/sales/challenges/' . (int)$row['challenge_id']
+                                  : '/sales/leads/' . (int)$row['lead_id'],
+                    'at'       => $row['created_at'],
+                ];
             }
         }
 

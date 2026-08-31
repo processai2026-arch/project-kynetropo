@@ -78,6 +78,44 @@ export interface SalesLeadDetail extends SalesLead {
   followups: SalesFollowup[];
   meetings: SalesMeeting[];
   timeline: SalesActivityEntry[];
+  comments: SalesComment[];
+  /** [entity_type][entity_id] -> comment count, so rows can show a badge. */
+  comment_counts: Partial<Record<CommentEntityType, Record<number, number>>>;
+}
+
+export type CommentEntityType = "lead" | "call" | "followup" | "meeting" | "challenge";
+
+export interface SalesComment {
+  id: number;
+  entity_type: CommentEntityType;
+  entity_id: number;
+  lead_id: number | null;
+  challenge_id: number | null;
+  lead_name?: string | null;
+  lead_company?: string | null;
+  challenge_title?: string | null;
+  /** null once deleted — the slot stays, the text does not. */
+  body: string | null;
+  author_id: number | null;
+  author_name: string;
+  created_at: string;
+  edited_at: string | null;
+  deleted: boolean;
+  deleted_at: string | null;
+}
+
+/** One entry in the merged live feed (lead activity + challenge activity). */
+export interface SalesFeedEvent {
+  key: string;
+  source: "lead" | "challenge";
+  type: string;
+  title: string;
+  description: string | null;
+  actor_id: number | null;
+  actor_name: string;
+  subject: string | null;
+  url: string;
+  at: string;
 }
 
 export interface SalesCall {
@@ -95,6 +133,7 @@ export interface SalesCall {
   notes: string | null;
   temperature_after: LeadTemperature | null;
   followup_id: number | null;
+  comment_count?: number;
   created_at: string;
 }
 
@@ -118,6 +157,7 @@ export interface SalesFollowup {
   outcome_notes: string | null;
   completed_by: number | null;
   completed_at: string | null;
+  comment_count?: number;
   created_at: string;
 }
 
@@ -145,6 +185,7 @@ export interface SalesMeeting {
   assigned_to: number | null;
   assigned_to_name: string | null;
   completed_at: string | null;
+  comment_count?: number;
   created_at: string;
   updated_at: string | null;
 }
@@ -227,6 +268,7 @@ export interface SalesChallengeDetail extends SalesChallenge {
   assignees: { user_id: number; name: string | null; email: string | null }[];
   activity: ChallengeActivityEntry[];
   report: ChallengeReport;
+  comments: SalesComment[];
 }
 
 export interface SalesSummary {

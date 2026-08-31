@@ -67,7 +67,8 @@ class AdminSalesChallengeController
             Response::error('Challenge not found', 404);
         }
 
-        $challenge['report'] = $this->report($challenge);
+        $challenge['report']   = $this->report($challenge);
+        $challenge['comments'] = SalesComment::forEntity('challenge', $id);
         Response::success($challenge);
     }
 

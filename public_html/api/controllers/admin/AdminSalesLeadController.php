@@ -55,6 +55,9 @@ class AdminSalesLeadController
         $lead['followups']  = SalesFollowup::forLead($id);
         $lead['meetings']   = SalesMeeting::forLead($id);
         $lead['timeline']   = SalesActivity::forLead($id);
+        // One grouped query instead of one per call/follow-up/meeting row.
+        $lead['comment_counts'] = SalesComment::countsForLead($id);
+        $lead['comments']       = SalesComment::forEntity('lead', $id);
 
         Response::success($lead);
     }

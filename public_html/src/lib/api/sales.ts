@@ -1,6 +1,7 @@
 import { apiFetch } from "@/lib/api/client";
 import type {
   ChallengeCounts,
+  CommentEntityType,
   FollowupBucket,
   Pagination,
   SalesAccessUser,
@@ -8,7 +9,9 @@ import type {
   SalesCall,
   SalesChallenge,
   SalesChallengeDetail,
+  SalesComment,
   SalesDashboard,
+  SalesFeedEvent,
   SalesFollowup,
   SalesLead,
   SalesLeadDetail,
@@ -63,6 +66,11 @@ export const salesAccessApi = {
       `/admin/sales/users/${userId}/role`,
       { method: "PUT", body: JSON.stringify({ staff_role }) },
     )).data,
+  setPassword: async (userId: number, password: string) =>
+    (await apiFetch<Envelope<{ user_id: number; email: string | null }>>(
+      `/admin/sales/users/${userId}/password`,
+      { method: "PUT", body: JSON.stringify({ password }) },
+    )).data,
   setActive: async (userId: number, is_active: boolean) =>
     (await apiFetch<Envelope<{ user_id: number; is_active: boolean }>>(
       `/admin/sales/users/${userId}/active`,
@@ -80,7 +88,8 @@ export interface SalesNotification {
     | "meeting_soon"
     | "challenge_available"
     | "challenge_ending"
-    | "challenge_expired";
+    | "challenge_expired"
+    | "comment_added";
   severity: "normal" | "urgent";
   title: string;
   body: string;
@@ -100,6 +109,44 @@ export const salesDashboardApi = {
     )).data,
   assignableUsers: async (): Promise<{ user_id: number; name: string }[]> =>
     (await apiFetch<Envelope<{ user_id: number; name: string }[]>>("/admin/sales/assignable-users")).data,
+  /**
+   * The merged live feed. Pass the previous response's `server_time` as `since`
+   * to fetch only what has happened since — that is what makes polling cheap
+   * enough to run continuously on the desktop.
+   */
+  feed: async (opts: { limit?: number; since?: string } = {}): Promise<{
+    server_time: string;
+    items: SalesFeedEvent[];
+  }> =>
+    (await apiFetch<Envelope<{ server_time: string; items: SalesFeedEvent[] }>>(
+      `/admin/sales/feed${qs({ limit: opts.limit, since: opts.since })}`,
+      { skipCache: true },
+    )).data,
+};
+
+// ─── Comments ─────────────────────────────────────────────────────────────────
+
+export const salesCommentsApi = {
+  list: async (entity_type: CommentEntityType, entity_id: number): Promise<SalesComment[]> =>
+    (await apiFetch<Envelope<{ items: SalesComment[] }>>(
+      `/admin/sales/comments${qs({ entity_type, entity_id })}`,
+      { skipCache: true },
+    )).data.items,
+  create: async (entity_type: CommentEntityType, entity_id: number, body: string): Promise<SalesComment | null> =>
+    (await apiFetch<Envelope<{ comment: SalesComment | null }>>("/admin/sales/comments", {
+      method: "POST",
+      body: JSON.stringify({ entity_type, entity_id, body }),
+    })).data.comment,
+  update: async (id: number, body: string): Promise<SalesComment | null> =>
+    (await apiFetch<Envelope<{ comment: SalesComment | null }>>(`/admin/sales/comments/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ body }),
+    })).data.comment,
+  remove: (id: number) => apiFetch<Envelope<{ id: number }>>(`/admin/sales/comments/${id}`, { method: "DELETE" }),
+  restore: async (id: number): Promise<SalesComment | null> =>
+    (await apiFetch<Envelope<{ comment: SalesComment | null }>>(`/admin/sales/comments/${id}/restore`, {
+      method: "POST",
+    })).data.comment,
 };
 
 // ─── Leads ────────────────────────────────────────────────────────────────────

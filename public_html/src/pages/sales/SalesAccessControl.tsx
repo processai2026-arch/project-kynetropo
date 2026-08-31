@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ShieldCheck, UserPlus } from "lucide-react";
+import { AlertTriangle, KeyRound, ShieldCheck, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -59,6 +59,8 @@ export default function SalesAccessControl() {
   const [saving, setSaving] = useState(false);
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [resetUser, setResetUser] = useState<SalesAccessUser | null>(null);
+  const [resetPassword, setResetPassword] = useState("");
   const [newUser, setNewUser] = useState(EMPTY_NEW_USER);
 
   const reload = () =>
@@ -151,6 +153,25 @@ export default function SalesAccessControl() {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!resetUser) return;
+    if (resetPassword.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+    setSaving(true);
+    try {
+      await salesAccessApi.setPassword(resetUser.user_id, resetPassword);
+      toast.success(`New password set for ${resetUser.name} — share it with them`);
+      setResetUser(null);
+      setResetPassword("");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not reset the password");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!accessLoading && !allowed) {
     return (
       <SalesLayout>
@@ -171,8 +192,8 @@ export default function SalesAccessControl() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Sales Access Control</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Create logins for your sales team and grant their permissions. Owners always hold
-            every sales permission.
+            Create the logins your team uses to sign in to the Kynetropo app — on a phone or on
+            the desktop — and grant their permissions. Owners always hold every sales permission.
           </p>
         </div>
         <Button className="h-10 shrink-0" onClick={() => setCreateOpen(true)}>
@@ -259,11 +280,66 @@ export default function SalesAccessControl() {
                 >
                   {u.is_admin ? "Owner — all permissions" : "Edit permissions"}
                 </Button>
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-9 w-full text-muted-foreground"
+                  disabled={u.user_id === me?.user_id}
+                  title={
+                    u.user_id === me?.user_id
+                      ? "Change your own password from account settings"
+                      : "Issue a new app password for this user"
+                  }
+                  onClick={() => {
+                    setResetUser(u);
+                    setResetPassword("");
+                  }}
+                >
+                  <KeyRound className="mr-1.5 h-3.5 w-3.5" />
+                  Reset app password
+                </Button>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Re-issue an app login when someone is locked out. */}
+      <Dialog open={resetUser !== null} onOpenChange={(o) => !o && setResetUser(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reset App Password</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              A new password for <span className="font-medium text-foreground">{resetUser?.name}</span>{" "}
+              ({resetUser?.email}). They sign in with it on the phone app and the desktop — share it
+              directly and ask them to change it.
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="rp-pass">New password *</Label>
+              <Input
+                id="rp-pass"
+                type="text"
+                autoComplete="new-password"
+                minLength={8}
+                value={resetPassword}
+                onChange={(e) => setResetPassword(e.target.value)}
+                placeholder="At least 8 characters"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setResetUser(null)}>
+                Cancel
+              </Button>
+              <Button disabled={saving} onClick={() => void handleResetPassword()}>
+                {saving ? "Saving…" : "Set password"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Create a login for a sales employee. */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

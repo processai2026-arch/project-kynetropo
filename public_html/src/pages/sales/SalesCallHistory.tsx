@@ -5,13 +5,17 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { salesCallsApi } from "@/lib/api/sales";
+import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { CommentButton, CommentThreadDialog } from "@/components/sales/CommentThread";
 import { TemperatureBadge, formatDate, formatTime, humanise } from "@/components/sales/SalesBits";
 import type { SalesCall } from "@/types/sales";
 
 /** Call history. Logging a call happens on the lead, where the context is. */
 export default function SalesCallHistory() {
+  const { can } = useSalesAccess();
   const [items, setItems] = useState<SalesCall[]>([]);
+  const [thread, setThread] = useState<{ id: number; title: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,13 +78,34 @@ export default function SalesCallHistory() {
               </div>
               <p className="mt-2 text-sm font-medium text-foreground">{humanise(c.outcome)}</p>
               {c.notes && <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{c.notes}</p>}
-              {c.called_by_name && (
-                <p className="mt-2 text-[11px] text-muted-foreground">Logged by {c.called_by_name}</p>
-              )}
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <p className="text-[11px] text-muted-foreground">
+                  {c.called_by_name ? `Logged by ${c.called_by_name}` : ""}
+                </p>
+                {can("sales.comments.view") && (
+                  <CommentButton
+                    count={c.comment_count ?? 0}
+                    onClick={() => setThread({ id: c.id, title: `Call — ${c.lead_company || c.lead_name}` })}
+                  />
+                )}
+              </div>
             </div>
           ))}
         </div>
       )}
+
+      <CommentThreadDialog
+        open={thread !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setThread(null);
+            load();
+          }
+        }}
+        title={thread?.title ?? "Comments"}
+        entityType="call"
+        entityId={thread?.id ?? 0}
+      />
     </SalesLayout>
   );
 }

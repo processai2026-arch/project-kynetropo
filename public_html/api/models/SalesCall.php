@@ -94,7 +94,10 @@ class SalesCall
         );
 
         $rows = Database::fetchAll(
-            "SELECT c.*, l.name AS lead_name, l.company AS lead_company, l.temperature AS lead_temperature
+            "SELECT c.*, l.name AS lead_name, l.company AS lead_company, l.temperature AS lead_temperature,
+                    (SELECT COUNT(*) FROM sales_comments sc
+                      WHERE sc.tenant_id = c.tenant_id AND sc.entity_type = 'call'
+                        AND sc.entity_id = c.id AND sc.deleted_at IS NULL) AS comment_count
                FROM sales_calls c
                JOIN sales_leads l ON l.id = c.lead_id AND l.tenant_id = c.tenant_id
               WHERE $whereClause
@@ -131,6 +134,7 @@ class SalesCall
             'notes'             => $row['notes'],
             'temperature_after' => $row['temperature_after'],
             'followup_id'       => $row['followup_id'] !== null ? (int)$row['followup_id'] : null,
+            'comment_count'     => isset($row['comment_count']) ? (int)$row['comment_count'] : 0,
             'created_at'        => $row['created_at'],
         ];
     }

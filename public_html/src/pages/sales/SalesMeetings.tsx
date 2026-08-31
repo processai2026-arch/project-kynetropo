@@ -6,7 +6,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { salesMeetingsApi } from "@/lib/api/sales";
+import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { CommentButton, CommentThreadDialog } from "@/components/sales/CommentThread";
 import { TemperatureBadge, formatDate, formatTime, humanise } from "@/components/sales/SalesBits";
 import type { SalesMeeting } from "@/types/sales";
 import { cn } from "@/lib/utils";
@@ -17,7 +19,9 @@ import { cn } from "@/lib/utils";
  * the calendar-style overview.
  */
 export default function SalesMeetings() {
+  const { can } = useSalesAccess();
   const [items, setItems] = useState<SalesMeeting[]>([]);
+  const [thread, setThread] = useState<SalesMeeting | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState("scheduled");
@@ -141,6 +145,12 @@ export default function SalesMeetings() {
                 </a>
               )}
 
+              {can("sales.comments.view") && (
+                <div className="mt-2">
+                  <CommentButton count={m.comment_count ?? 0} onClick={() => setThread(m)} />
+                </div>
+              )}
+
               {m.status === "completed" && m.outcome && (
                 <div className="mt-3 rounded-xl bg-muted/50 p-3 text-xs">
                   <p className="font-medium text-foreground">Outcome: {humanise(m.outcome)}</p>
@@ -152,6 +162,19 @@ export default function SalesMeetings() {
           ))}
         </div>
       )}
+
+      <CommentThreadDialog
+        open={thread !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setThread(null);
+            void load();
+          }
+        }}
+        title={thread?.title ?? "Comments"}
+        entityType="meeting"
+        entityId={thread?.id ?? 0}
+      />
     </SalesLayout>
   );
 }

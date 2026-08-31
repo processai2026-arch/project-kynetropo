@@ -12,6 +12,7 @@ import { salesFollowupsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { FollowupEditDialog } from "@/components/sales/FollowupEditDialog";
+import { CommentButton, CommentThreadDialog } from "@/components/sales/CommentThread";
 import { TemperatureBadge, formatDate, formatTime, humanise } from "@/components/sales/SalesBits";
 import type { FollowupBucket, SalesFollowup } from "@/types/sales";
 import { cn } from "@/lib/utils";
@@ -54,6 +55,7 @@ export default function SalesFollowUps() {
 
   const [completing, setCompleting] = useState<SalesFollowup | null>(null);
   const [editing, setEditing] = useState<SalesFollowup | null>(null);
+  const [thread, setThread] = useState<SalesFollowup | null>(null);
   const [completeForm, setCompleteForm] = useState({ outcome_notes: "", next_followup_date: "" });
   const [saving, setSaving] = useState(false);
 
@@ -191,6 +193,12 @@ export default function SalesFollowUps() {
 
               {f.purpose && <p className="mt-2 text-sm text-muted-foreground">{f.purpose}</p>}
 
+              {can("sales.comments.view") && (
+                <div className="mt-2">
+                  <CommentButton count={f.comment_count ?? 0} onClick={() => setThread(f)} />
+                </div>
+              )}
+
               {f.status === "completed" ? (
                 <div className="mt-3 flex items-center gap-1.5 text-xs text-emerald-700">
                   <CheckCircle2 className="h-3.5 w-3.5" />
@@ -230,6 +238,19 @@ export default function SalesFollowUps() {
           ))}
         </div>
       )}
+
+      <CommentThreadDialog
+        open={thread !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setThread(null);
+            void load();
+          }
+        }}
+        title={thread ? `Follow-up — ${thread.lead_company || thread.lead_name}` : "Comments"}
+        entityType="followup"
+        entityId={thread?.id ?? 0}
+      />
 
       <FollowupEditDialog
         followup={editing}

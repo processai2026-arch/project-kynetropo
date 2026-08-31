@@ -16,8 +16,9 @@ import { salesCallsApi, salesFollowupsApi, salesLeadsApi, salesMeetingsApi } fro
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { FollowupEditDialog } from "@/components/sales/FollowupEditDialog";
+import { CommentButton, CommentThread, CommentThreadDialog } from "@/components/sales/CommentThread";
 import { LeadStatusBadge, TemperatureBadge, formatDate, formatDateTime, formatTime, humanise } from "@/components/sales/SalesBits";
-import type { LeadTemperature, SalesFollowup, SalesLeadDetail as LeadDetail } from "@/types/sales";
+import type { CommentEntityType, LeadTemperature, SalesFollowup, SalesLeadDetail as LeadDetail } from "@/types/sales";
 import { cn } from "@/lib/utils";
 
 const CALL_OUTCOMES = [
@@ -56,6 +57,7 @@ export default function SalesLeadDetail() {
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [editingFollowup, setEditingFollowup] = useState<SalesFollowup | null>(null);
+  const [thread, setThread] = useState<{ type: CommentEntityType; id: number; title: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [outcomeMeetingId, setOutcomeMeetingId] = useState<number | null>(null);
 
@@ -467,6 +469,12 @@ export default function SalesLeadDetail() {
                 {f.purpose && <p className="truncate text-xs text-muted-foreground">{f.purpose}</p>}
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                {can("sales.comments.view") && (
+                  <CommentButton
+                    count={lead.comment_counts?.followup?.[f.id] ?? 0}
+                    onClick={() => setThread({ type: "followup", id: f.id, title: `Follow-up ${formatDate(f.due_date)}` })}
+                  />
+                )}
                 {can("sales.followups.create") && (
                   <Button
                     size="sm"
@@ -506,19 +514,27 @@ export default function SalesLeadDetail() {
                   </a>
                 )}
               </div>
-              {can("sales.meetings.edit") && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-9 shrink-0"
-                  onClick={() => {
-                    setOutcomeMeetingId(m.id);
-                    setDialog("meeting_outcome");
-                  }}
-                >
-                  Outcome
-                </Button>
-              )}
+              <div className="flex shrink-0 items-center gap-2">
+                {can("sales.comments.view") && (
+                  <CommentButton
+                    count={lead.comment_counts?.meeting?.[m.id] ?? 0}
+                    onClick={() => setThread({ type: "meeting", id: m.id, title: m.title })}
+                  />
+                )}
+                {can("sales.meetings.edit") && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9"
+                    onClick={() => {
+                      setOutcomeMeetingId(m.id);
+                      setDialog("meeting_outcome");
+                    }}
+                  >
+                    Outcome
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
         </section>
@@ -558,6 +574,16 @@ export default function SalesLeadDetail() {
           </ol>
         )}
       </section>
+
+      {/* Team discussion — anyone who can see the lead can talk about it here. */}
+      {can("sales.comments.view") && (
+        <section className="space-y-3">
+          <h2 className="text-base font-semibold">Discussion</h2>
+          <div className="rounded-2xl border bg-card p-4 shadow-sm">
+            <CommentThread entityType="lead" entityId={lead.id} initialComments={lead.comments ?? []} />
+          </div>
+        </section>
+      )}
 
       {/* ── Log Call ─────────────────────────────────────────────────────── */}
       <Dialog open={dialog === "call"} onOpenChange={(o) => !o && closeDialog()}>
@@ -946,6 +972,20 @@ export default function SalesLeadDetail() {
         followup={editingFollowup}
         onClose={() => setEditingFollowup(null)}
         onSaved={() => void load()}
+      />
+
+      <CommentThreadDialog
+        open={thread !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setThread(null);
+            // Refresh once on close, so the row badges pick up the new count.
+            void load();
+          }
+        }}
+        title={thread?.title ?? "Comments"}
+        entityType={thread?.type ?? "lead"}
+        entityId={thread?.id ?? 0}
       />
     </SalesLayout>
   );

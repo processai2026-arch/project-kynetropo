@@ -53,6 +53,10 @@ class SalesPermissions
             'sales.challenges.create',
             'sales.challenges.manage',
         ],
+        'Comments'   => [
+            'sales.comments.view',
+            'sales.comments.create',
+        ],
         'Reports'    => [
             'sales.reports.view',
         ],
@@ -80,9 +84,12 @@ class SalesPermissions
             'sales.challenges.view',
             'sales.challenges.accept',
             'sales.challenges.complete',
+            'sales.comments.view',
+            'sales.comments.create',
         ],
         // Read-only visibility for roles that need sales context but don't sell.
-        'accountant' => ['sales.dashboard.view', 'sales.leads.view', 'sales.leads.view_all', 'sales.reports.view'],
+        'accountant' => ['sales.dashboard.view', 'sales.leads.view', 'sales.leads.view_all', 'sales.reports.view',
+                         'sales.comments.view'],
         'hr'         => ['sales.dashboard.view'],
     ];
 

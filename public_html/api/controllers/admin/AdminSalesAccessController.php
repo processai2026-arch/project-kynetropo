@@ -245,6 +245,43 @@ class AdminSalesAccessController
     }
 
     /**
+     * PUT /admin/sales/users/{id}/password
+     * body: { password: string }
+     *
+     * Re-issues the app login for a sales user who has forgotten theirs or was
+     * never given one. Existing sessions are left alone — the new password
+     * simply becomes what they log in with next time.
+     *
+     * An admin cannot reset their own password here: doing it from a screen
+     * that manages other people is how the wrong account gets locked out. Their
+     * own password is changed from account settings.
+     */
+    public function setPassword(Request $request): void
+    {
+        $this->enforceAdmin($request);
+
+        $userId = (int)$request->param('id');
+        $target = $this->findAdmin($userId);
+
+        if ($userId === (int)($request->user['user_id'] ?? 0)) {
+            Response::error('Change your own password from account settings', 409);
+        }
+
+        $password = (string)$request->input('password', '');
+        if (strlen($password) < 8) {
+            Response::error('Password must be at least 8 characters', 422);
+        }
+
+        User::updatePassword($userId, $password);
+        $this->audit($request, 'sales_user_password_reset', $userId, ['email' => $target['email'] ?? null]);
+
+        Response::success(
+            ['user_id' => $userId, 'email' => $target['email'] ?? null],
+            'Password updated — share it with the user and ask them to change it'
+        );
+    }
+
+    /**
      * PUT /admin/sales/users/{id}/permissions
      * body: { permissions: string[] }
      */

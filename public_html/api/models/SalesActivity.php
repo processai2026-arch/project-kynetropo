@@ -25,6 +25,7 @@ class SalesActivity
         'meeting_completed',
         'lead_onboarding',
         'lead_converted',
+        'comment_added',
     ];
 
     public static function log(
