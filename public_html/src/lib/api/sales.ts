@@ -204,8 +204,11 @@ export const salesFollowupsApi = {
       method: "POST",
       body: JSON.stringify(body),
     })).data,
-  update: (id: number, body: { due_date?: string; due_time?: string; purpose?: string }) =>
-    apiFetch<Envelope<null>>(`/admin/sales/followups/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  update: async (id: number, body: { due_date?: string; due_time?: string; purpose?: string }) =>
+    (await apiFetch<Envelope<{ followup: SalesFollowup | null }>>(`/admin/sales/followups/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    })).data,
   complete: async (
     id: number,
     body: {

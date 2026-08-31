@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { CalendarClock, CheckCircle2, Phone } from "lucide-react";
+import { CalendarClock, CheckCircle2, Pencil, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { salesFollowupsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { FollowupEditDialog } from "@/components/sales/FollowupEditDialog";
 import { TemperatureBadge, formatDate, formatTime, humanise } from "@/components/sales/SalesBits";
 import type { FollowupBucket, SalesFollowup } from "@/types/sales";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,20 @@ const BUCKETS: { key: FollowupBucket; label: string }[] = [
   { key: "upcoming", label: "Upcoming" },
   { key: "completed", label: "Completed" },
 ];
+
+/**
+ * Which bucket a follow-up now belongs to after an edit. Only a hint for
+ * keeping the list steady — the server stays the authority on bucketing, so
+ * anything that no longer fits triggers a reload.
+ */
+function belongsToBucket(f: SalesFollowup, bucket: FollowupBucket): boolean {
+  if (f.status !== "pending") return bucket === "completed";
+  const today = new Date().toISOString().slice(0, 10);
+  if (bucket === "today") return f.due_date === today;
+  if (bucket === "overdue") return f.due_date < today;
+  if (bucket === "upcoming") return f.due_date > today;
+  return false;
+}
 
 export default function SalesFollowUps() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -38,6 +53,7 @@ export default function SalesFollowUps() {
   const [error, setError] = useState<string | null>(null);
 
   const [completing, setCompleting] = useState<SalesFollowup | null>(null);
+  const [editing, setEditing] = useState<SalesFollowup | null>(null);
   const [completeForm, setCompleteForm] = useState({ outcome_notes: "", next_followup_date: "" });
   const [saving, setSaving] = useState(false);
 
@@ -197,12 +213,37 @@ export default function SalesFollowUps() {
                       Complete
                     </Button>
                   )}
+                  {can("sales.followups.create") && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="col-span-2 h-9 text-muted-foreground"
+                      onClick={() => setEditing(f)}
+                    >
+                      <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                      Edit date, time or purpose
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
           ))}
         </div>
       )}
+
+      <FollowupEditDialog
+        followup={editing}
+        onClose={() => setEditing(null)}
+        onSaved={(updated) => {
+          // Patch in place when the row still belongs in this bucket; otherwise
+          // reload, because a reschedule can move it to Today, Overdue or Upcoming.
+          if (updated && belongsToBucket(updated, bucket)) {
+            setItems((prev) => prev.map((f) => (f.id === updated.id ? { ...f, ...updated } : f)));
+          } else {
+            void load();
+          }
+        }}
+      />
 
       <Dialog open={completing !== null} onOpenChange={(o) => !o && setCompleting(null)}>
         <DialogContent className="sm:max-w-md">

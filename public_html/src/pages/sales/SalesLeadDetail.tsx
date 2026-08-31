@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, Building2, CalendarClock, CalendarPlus, CheckCircle2, Mail,
-  Phone, Thermometer, Undo2, UserCheck,
+  Pencil, Phone, Thermometer, Undo2, UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,8 +15,9 @@ import { toast } from "sonner";
 import { salesCallsApi, salesFollowupsApi, salesLeadsApi, salesMeetingsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { FollowupEditDialog } from "@/components/sales/FollowupEditDialog";
 import { LeadStatusBadge, TemperatureBadge, formatDate, formatDateTime, formatTime, humanise } from "@/components/sales/SalesBits";
-import type { LeadTemperature, SalesLeadDetail as LeadDetail } from "@/types/sales";
+import type { LeadTemperature, SalesFollowup, SalesLeadDetail as LeadDetail } from "@/types/sales";
 import { cn } from "@/lib/utils";
 
 const CALL_OUTCOMES = [
@@ -54,6 +55,7 @@ export default function SalesLeadDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogKind>(null);
+  const [editingFollowup, setEditingFollowup] = useState<SalesFollowup | null>(null);
   const [saving, setSaving] = useState(false);
   const [outcomeMeetingId, setOutcomeMeetingId] = useState<number | null>(null);
 
@@ -464,11 +466,24 @@ export default function SalesLeadDetail() {
                 </p>
                 {f.purpose && <p className="truncate text-xs text-muted-foreground">{f.purpose}</p>}
               </div>
-              {can("sales.followups.complete") && (
-                <Button size="sm" variant="outline" className="h-9 shrink-0" onClick={() => void handleCompleteFollowup(f.id)}>
-                  Done
-                </Button>
-              )}
+              <div className="flex shrink-0 items-center gap-2">
+                {can("sales.followups.create") && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-9 px-2 text-muted-foreground"
+                    aria-label="Edit follow-up"
+                    onClick={() => setEditingFollowup(f)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {can("sales.followups.complete") && (
+                  <Button size="sm" variant="outline" className="h-9" onClick={() => void handleCompleteFollowup(f.id)}>
+                    Done
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
           {scheduledMeetings.map((m) => (
@@ -926,6 +941,12 @@ export default function SalesLeadDetail() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <FollowupEditDialog
+        followup={editingFollowup}
+        onClose={() => setEditingFollowup(null)}
+        onSaved={() => void load()}
+      />
     </SalesLayout>
   );
 }

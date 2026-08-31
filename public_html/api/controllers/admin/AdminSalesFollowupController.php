@@ -7,7 +7,7 @@ declare(strict_types=1);
  *
  *   GET    /admin/sales/followups                — bucketed list
  *   POST   /admin/sales/followups                — create
- *   PUT    /admin/sales/followups/{id}           — reschedule / edit
+ *   PUT    /admin/sales/followups/{id}           — reschedule / edit a pending follow-up
  *   POST   /admin/sales/followups/{id}/complete  — mark done (+ optional next one)
  *   POST   /admin/sales/followups/{id}/cancel    — cancel
  */
@@ -103,7 +103,7 @@ class AdminSalesFollowupController
             $data['due_time'] = $t ?: null;
         }
         if ($request->input('purpose') !== null) {
-            $data['purpose'] = $request->input('purpose');
+            $data['purpose'] = mb_substr((string)$request->input('purpose'), 0, 200);
         }
 
         if (!$data) {
@@ -111,9 +111,29 @@ class AdminSalesFollowupController
         }
 
         SalesFollowup::update($id, $data);
-        SalesLead::refreshSchedule((int)$row['lead_id']);
+        $leadId  = (int)$row['lead_id'];
+        SalesLead::refreshSchedule($leadId);
+        $updated = SalesFollowup::findRaw($id);
 
-        Response::success(null, 'Follow-up updated');
+        // An edit is part of the sales history: record what actually moved, so a
+        // rescheduled follow-up can never look like it was simply missed.
+        $changes = $this->describeChanges($row, $updated ?? $row);
+        if ($changes !== []) {
+            SalesActivity::log(
+                $leadId,
+                'followup_updated',
+                'Follow-up updated',
+                $request->user,
+                implode('; ', $changes),
+                'followup',
+                $id
+            );
+        }
+
+        Response::success(
+            ['followup' => $updated ? SalesFollowup::format($updated) : null],
+            'Follow-up updated'
+        );
     }
 
     public function complete(Request $request): void
@@ -202,6 +222,22 @@ class AdminSalesFollowupController
         if (!$lead || (int)($lead['assigned_to'] ?? 0) !== $userId) {
             Response::error('Follow-up not found', 404);
         }
+    }
+
+    /** Human-readable diff for the timeline entry. */
+    private function describeChanges(array $before, array $after): array
+    {
+        $changes = [];
+        $when = static function (array $r): string {
+            return (string)$r['due_date'] . ($r['due_time'] ? ' ' . substr((string)$r['due_time'], 0, 5) : '');
+        };
+        if ($when($before) !== $when($after)) {
+            $changes[] = 'Rescheduled from ' . $when($before) . ' to ' . $when($after);
+        }
+        if ((string)($before['purpose'] ?? '') !== (string)($after['purpose'] ?? '')) {
+            $changes[] = 'Purpose: ' . ((string)($after['purpose'] ?? '') !== '' ? $after['purpose'] : '(cleared)');
+        }
+        return $changes;
     }
 
     private function isValidDate(string $value): bool

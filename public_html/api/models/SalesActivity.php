@@ -17,6 +17,7 @@ class SalesActivity
         'lead_assigned',
         'call_logged',
         'followup_created',
+        'followup_updated',
         'followup_completed',
         'temperature_changed',
         'meeting_scheduled',
