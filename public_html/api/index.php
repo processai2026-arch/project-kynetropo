@@ -1359,7 +1359,10 @@ $router->get('/admin/ops/ai-chat/entities',                  [AdminOpsAiChatCont
 $router->get('/admin/sales/me',                          [AdminSalesAccessController::class, 'me'],              'admin');
 $router->get('/admin/sales/permissions',                 [AdminSalesAccessController::class, 'permissions'],     'admin');
 $router->get('/admin/sales/users',                       [AdminSalesAccessController::class, 'users'],           'admin');
+$router->post('/admin/sales/users',                      [AdminSalesAccessController::class, 'createUser'],      'admin');
 $router->put('/admin/sales/users/{id}/permissions',      [AdminSalesAccessController::class, 'setPermissions'],  'admin');
+$router->put('/admin/sales/users/{id}/role',             [AdminSalesAccessController::class, 'setRole'],         'admin');
+$router->put('/admin/sales/users/{id}/active',           [AdminSalesAccessController::class, 'setActive'],       'admin');
 
 // Dashboard + activity
 $router->get('/admin/sales/dashboard',                   [AdminSalesDashboardController::class, 'index'],        'admin');

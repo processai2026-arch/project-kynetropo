@@ -46,6 +46,28 @@ export const salesAccessApi = {
       `/admin/sales/users/${userId}/permissions`,
       { method: "PUT", body: JSON.stringify({ permissions }) },
     )).data,
+  createUser: async (body: {
+    name: string;
+    email: string;
+    phone: string;
+    password: string;
+    staff_role?: string;
+    permissions?: string[];
+  }) =>
+    (await apiFetch<Envelope<{ user_id: number; name: string; email: string; staff_role: string; permissions: string[] }>>(
+      "/admin/sales/users",
+      { method: "POST", body: JSON.stringify(body) },
+    )).data,
+  setRole: async (userId: number, staff_role: string) =>
+    (await apiFetch<Envelope<{ user_id: number; staff_role: string; permissions: string[] }>>(
+      `/admin/sales/users/${userId}/role`,
+      { method: "PUT", body: JSON.stringify({ staff_role }) },
+    )).data,
+  setActive: async (userId: number, is_active: boolean) =>
+    (await apiFetch<Envelope<{ user_id: number; is_active: boolean }>>(
+      `/admin/sales/users/${userId}/active`,
+      { method: "PUT", body: JSON.stringify({ is_active }) },
+    )).data,
 };
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────

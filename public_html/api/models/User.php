@@ -43,10 +43,49 @@ class User
         }
         $cols = array_keys($row);
         $ph   = implode(', ', array_fill(0, count($cols), '?'));
-        return Database::insert(
+        $newId = Database::insert(
             'INSERT INTO users (`' . implode('`, `', $cols) . '`) VALUES (' . $ph . ')',
             array_values($row)
         );
+
+        /*
+         * Some installations carry a `users` table whose AUTO_INCREMENT primary
+         * key is `id`, with `user_id` as a separate nullable column left over
+         * from an older schema — while every other query in the application
+         * (AuthMiddleware, Role, the whole admin surface) identifies a user by
+         * `user_id`. On those installations a freshly created account has
+         * user_id = NULL and can never log in: authentication looks it up by
+         * user_id and finds nothing.
+         *
+         * Stamp user_id to match the primary key so a new account is usable.
+         * Guarded by a column check, so installations where user_id IS the
+         * primary key are left completely untouched.
+         */
+        if (self::hasSeparateUserIdColumn()) {
+            Database::execute('UPDATE users SET user_id = id WHERE id = ? AND user_id IS NULL', [$newId]);
+        }
+
+        return $newId;
+    }
+
+    /**
+     * True when `user_id` exists alongside a separate `id` primary key — i.e.
+     * the legacy dual-column layout described in create().
+     */
+    public static function hasSeparateUserIdColumn(): bool
+    {
+        static $cached = null;
+        if ($cached !== null) {
+            return $cached;
+        }
+        try {
+            $hasId     = Database::fetch("SHOW COLUMNS FROM users LIKE 'id'") !== null;
+            $hasUserId = Database::fetch("SHOW COLUMNS FROM users LIKE 'user_id'") !== null;
+            $cached    = $hasId && $hasUserId;
+        } catch (Throwable $e) {
+            $cached = false;
+        }
+        return $cached;
     }
 
     /**

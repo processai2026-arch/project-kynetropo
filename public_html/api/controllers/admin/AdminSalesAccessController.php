@@ -7,7 +7,10 @@ declare(strict_types=1);
  *   GET  /admin/sales/me                       — the caller's own sales permissions
  *   GET  /admin/sales/users                    — sales users + their permissions (admin)
  *   GET  /admin/sales/permissions              — the permission catalogue (admin)
+ *   POST /admin/sales/users                    — create a sales user login (admin)
  *   PUT  /admin/sales/users/{id}/permissions   — set a user's sales permissions (admin)
+ *   PUT  /admin/sales/users/{id}/role          — set a user's staff role (admin)
+ *   PUT  /admin/sales/users/{id}/active        — enable/disable the login (admin)
  *
  * Permissions are stored in the EXISTING RBAC tables (roles/user_roles). Each
  * sales user gets one managed role named "Sales — {name}" holding exactly the
@@ -79,6 +82,140 @@ class AdminSalesAccessController
     }
 
     /**
+     * POST /admin/sales/users — create a login for a sales employee.
+     *
+     * Always stamps an explicit staff_role. That matters: AdminMiddleware treats
+     * an admin whose staff_role is NULL as an OWNER (a back-compat rule for
+     * accounts that predate the column), so a sales user created without one
+     * would silently receive full sales administration rights.
+     */
+    public function createUser(Request $request): void
+    {
+        $this->enforceAdmin($request);
+
+        $name  = trim((string)$request->input('name', ''));
+        $email = strtolower(trim((string)$request->input('email', '')));
+        $phone = preg_replace('/\D/', '', (string)$request->input('phone', ''));
+        $pass  = (string)$request->input('password', '');
+
+        if (mb_strlen($name) < 2) {
+            Response::error('Name is required', 422);
+        }
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            Response::error('A valid email address is required', 422);
+        }
+        if (strlen($phone) < 10) {
+            Response::error('A valid phone number is required (at least 10 digits)', 422);
+        }
+        if (strlen($pass) < 8) {
+            Response::error('Password must be at least 8 characters', 422);
+        }
+
+        $staffRole = AdminMiddleware::normalizeStaffRole($request->input('staff_role', 'sales'));
+        if ($staffRole === null) {
+            Response::error('Invalid role. Allowed: ' . implode(', ', AdminMiddleware::validStaffRoles()), 422);
+        }
+
+        if (!User::hasStaffRoleColumn()) {
+            Response::error('The staff_role migration has not been applied on this installation', 500);
+        }
+
+        try {
+            $userId = User::create([
+                'name'      => $name,
+                'email'     => $email,
+                'phone'     => $phone,
+                'user_type' => 'admin',
+                'password'  => $pass,
+            ]);
+        } catch (AppException $e) {
+            Response::error($e->getMessage(), $e->getCode() ?: 409);
+        }
+
+        Database::execute(
+            'UPDATE users SET staff_role = ? WHERE user_id = ? AND tenant_id = ?',
+            [$staffRole, $userId, Database::tenantId()]
+        );
+
+        // Optional starting permission set, so the account is usable immediately.
+        $requested = $request->input('permissions', []);
+        if (is_array($requested) && $requested) {
+            $this->writeManagedRole($userId, $name, array_values(array_intersect($requested, SalesPermissions::all())));
+        }
+
+        $this->audit($request, 'sales_user_created', $userId, ['email' => $email, 'staff_role' => $staffRole]);
+
+        Response::success([
+            'user_id'     => $userId,
+            'name'        => $name,
+            'email'       => $email,
+            'staff_role'  => $staffRole,
+            'permissions' => $this->effectiveForUser($userId),
+        ], 'Sales user created', 201);
+    }
+
+    /** PUT /admin/sales/users/{id}/role — change a user's staff role. */
+    public function setRole(Request $request): void
+    {
+        $this->enforceAdmin($request);
+
+        $userId = (int)$request->param('id');
+        $target = $this->findAdmin($userId);
+
+        // Guard against locking yourself out of access control.
+        if ($userId === (int)($request->user['user_id'] ?? 0)) {
+            Response::error('You cannot change your own role', 409);
+        }
+
+        $staffRole = AdminMiddleware::normalizeStaffRole($request->input('staff_role'));
+        if ($staffRole === null) {
+            Response::error('Invalid role. Allowed: ' . implode(', ', AdminMiddleware::validStaffRoles()), 422);
+        }
+        if (!User::hasStaffRoleColumn()) {
+            Response::error('The staff_role migration has not been applied on this installation', 500);
+        }
+
+        Database::execute(
+            'UPDATE users SET staff_role = ? WHERE user_id = ? AND tenant_id = ?',
+            [$staffRole, $userId, Database::tenantId()]
+        );
+
+        $this->audit($request, 'sales_user_role_changed', $userId, [
+            'from' => $target['staff_role'] ?? null,
+            'to'   => $staffRole,
+        ]);
+
+        Response::success([
+            'user_id'     => $userId,
+            'staff_role'  => $staffRole,
+            'permissions' => $this->effectiveForUser($userId),
+        ], 'Role updated');
+    }
+
+    /** PUT /admin/sales/users/{id}/active — enable or disable the login. */
+    public function setActive(Request $request): void
+    {
+        $this->enforceAdmin($request);
+
+        $userId = (int)$request->param('id');
+        $this->findAdmin($userId);
+
+        if ($userId === (int)($request->user['user_id'] ?? 0)) {
+            Response::error('You cannot deactivate your own account', 409);
+        }
+
+        $active = (bool)$request->input('is_active', true);
+        Database::execute(
+            'UPDATE users SET is_active = ? WHERE user_id = ? AND tenant_id = ?',
+            [$active ? 1 : 0, $userId, Database::tenantId()]
+        );
+
+        $this->audit($request, 'sales_user_active_changed', $userId, ['is_active' => $active]);
+
+        Response::success(['user_id' => $userId, 'is_active' => $active], $active ? 'Account enabled' : 'Account disabled');
+    }
+
+    /**
      * PUT /admin/sales/users/{id}/permissions
      * body: { permissions: string[] }
      */
@@ -87,13 +224,7 @@ class AdminSalesAccessController
         $this->enforceAdmin($request);
 
         $userId = (int)$request->param('id');
-        $target = Database::fetch(
-            "SELECT user_id, name FROM users WHERE user_id = ? AND tenant_id = ? AND user_type = 'admin' LIMIT 1",
-            [$userId, Database::tenantId()]
-        );
-        if (!$target) {
-            Response::error('User not found in this workspace', 404);
-        }
+        $target = $this->findAdmin($userId);
 
         $requested = $request->input('permissions', []);
         if (!is_array($requested)) {
@@ -102,38 +233,7 @@ class AdminSalesAccessController
 
         // Silently drop anything outside this module's catalogue.
         $permissions = array_values(array_intersect($requested, SalesPermissions::all()));
-
-        $roleName = self::MANAGED_ROLE_PREFIX . $target['name'] . ' #' . $userId;
-        $existing = Database::fetch(
-            'SELECT role_id FROM roles WHERE tenant_id = ? AND name = ? LIMIT 1',
-            [Database::tenantId(), $roleName]
-        );
-
-        if ($existing) {
-            $roleId = (int)$existing['role_id'];
-            Database::execute(
-                'UPDATE roles SET permissions = ?, description = ? WHERE role_id = ? AND tenant_id = ?',
-                [
-                    json_encode($permissions),
-                    'Sales module access managed from Admin → Access Control',
-                    $roleId,
-                    Database::tenantId(),
-                ]
-            );
-        } else {
-            $roleId = Database::insert('roles', [
-                'tenant_id'   => Database::tenantId(),
-                'name'        => $roleName,
-                'description' => 'Sales module access managed from Admin → Access Control',
-                'permissions' => json_encode($permissions),
-                'is_system'   => 0,
-            ]);
-        }
-
-        Database::execute(
-            'INSERT IGNORE INTO user_roles (tenant_id, user_id, role_id) VALUES (?, ?, ?)',
-            [Database::tenantId(), $userId, $roleId]
-        );
+        $roleId      = $this->writeManagedRole($userId, (string)$target['name'], $permissions);
 
         $this->audit($request, 'sales_permissions_updated', $userId, [
             'permissions' => $permissions,
@@ -148,6 +248,61 @@ class AdminSalesAccessController
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
+
+    /** Loads an admin user in this tenant, or aborts with 404. */
+    private function findAdmin(int $userId): array
+    {
+        $row = Database::fetch(
+            "SELECT user_id, name, email, is_active"
+            . (User::hasStaffRoleColumn() ? ', staff_role' : '') . "
+               FROM users WHERE user_id = ? AND tenant_id = ? AND user_type = 'admin' LIMIT 1",
+            [$userId, Database::tenantId()]
+        );
+        if (!$row) {
+            Response::error('User not found in this workspace', 404);
+        }
+        return $row;
+    }
+
+    /**
+     * Writes the user's sales permissions into ONE managed RBAC role and makes
+     * sure it is assigned. Shared by createUser() and setPermissions() so both
+     * paths produce exactly the same structure.
+     */
+    private function writeManagedRole(int $userId, string $name, array $permissions): int
+    {
+        $tenantId    = Database::tenantId();
+        $roleName    = self::MANAGED_ROLE_PREFIX . $name . ' #' . $userId;
+        $description = 'Sales module access managed from Admin → Access Control';
+
+        $existing = Database::fetch(
+            'SELECT role_id FROM roles WHERE tenant_id = ? AND name = ? LIMIT 1',
+            [$tenantId, $roleName]
+        );
+
+        if ($existing) {
+            $roleId = (int)$existing['role_id'];
+            Database::execute(
+                'UPDATE roles SET permissions = ?, description = ? WHERE role_id = ? AND tenant_id = ?',
+                [json_encode($permissions), $description, $roleId, $tenantId]
+            );
+        } else {
+            $roleId = Database::insert('roles', [
+                'tenant_id'   => $tenantId,
+                'name'        => $roleName,
+                'description' => $description,
+                'permissions' => json_encode($permissions),
+                'is_system'   => 0,
+            ]);
+        }
+
+        Database::execute(
+            'INSERT IGNORE INTO user_roles (tenant_id, user_id, role_id) VALUES (?, ?, ?)',
+            [$tenantId, $userId, $roleId]
+        );
+
+        return $roleId;
+    }
 
     /**
      * Only a sales administrator may read or change access control. The 'admin'

@@ -1,15 +1,40 @@
 import { useEffect, useMemo, useState } from "react";
-import { ShieldCheck } from "lucide-react";
+import { AlertTriangle, ShieldCheck, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { salesAccessApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import type { SalesAccessUser } from "@/types/sales";
+
+const STAFF_ROLES = ["sales", "owner", "accountant", "hr", "store_keeper"] as const;
+
+/** A sensible starting set for a new salesperson — no admin-only permissions. */
+const SALES_DEFAULT_PERMISSIONS = [
+  "sales.dashboard.view",
+  "sales.leads.view",
+  "sales.leads.create",
+  "sales.leads.edit",
+  "sales.calls.view",
+  "sales.calls.create",
+  "sales.followups.view",
+  "sales.followups.create",
+  "sales.followups.complete",
+  "sales.meetings.view",
+  "sales.meetings.create",
+  "sales.meetings.edit",
+  "sales.challenges.view",
+  "sales.challenges.accept",
+  "sales.challenges.complete",
+];
+
+const EMPTY_NEW_USER = { name: "", email: "", phone: "", password: "", staff_role: "sales" };
 
 /**
  * Admin → Access Control → Sales.
@@ -20,7 +45,7 @@ import type { SalesAccessUser } from "@/types/sales";
  * non-administrator calling this API directly is rejected.
  */
 export default function SalesAccessControl() {
-  const { isSalesAdmin, can, loading: accessLoading } = useSalesAccess();
+  const { me, isSalesAdmin, can, loading: accessLoading } = useSalesAccess();
   const allowed = isSalesAdmin || can("sales.challenges.manage");
 
   const [users, setUsers] = useState<SalesAccessUser[]>([]);
@@ -32,6 +57,15 @@ export default function SalesAccessControl() {
   const [editing, setEditing] = useState<SalesAccessUser | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newUser, setNewUser] = useState(EMPTY_NEW_USER);
+
+  const reload = () =>
+    salesAccessApi
+      .users()
+      .then(setUsers)
+      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Could not reload users"));
 
   useEffect(() => {
     if (accessLoading || !allowed) return;
@@ -56,6 +90,37 @@ export default function SalesAccessControl() {
       cancelled = true;
     };
   }, [accessLoading, allowed]);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await salesAccessApi.createUser({
+        ...newUser,
+        // A new salesperson starts with the standard set; an owner needs none,
+        // because owners hold every sales permission implicitly.
+        permissions: newUser.staff_role === "sales" ? SALES_DEFAULT_PERMISSIONS : [],
+      });
+      toast.success(`${newUser.name} can now sign in`);
+      setCreateOpen(false);
+      setNewUser(EMPTY_NEW_USER);
+      await reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not create the user");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRole = async (user: SalesAccessUser, role: string) => {
+    try {
+      await salesAccessApi.setRole(user.user_id, role);
+      toast.success(`${user.name} is now ${role}`);
+      await reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not change the role");
+    }
+  };
 
   const groups = useMemo(() => Object.entries(catalog), [catalog]);
 
@@ -102,11 +167,18 @@ export default function SalesAccessControl() {
 
   return (
     <SalesLayout>
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Sales Access Control</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Grant sales permissions per user. Owners always hold every sales permission.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Sales Access Control</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Create logins for your sales team and grant their permissions. Owners always hold
+            every sales permission.
+          </p>
+        </div>
+        <Button className="h-10 shrink-0" onClick={() => setCreateOpen(true)}>
+          <UserPlus className="mr-1.5 h-4 w-4" />
+          Add Sales User
+        </Button>
       </div>
 
       {loading || accessLoading ? (
@@ -139,22 +211,154 @@ export default function SalesAccessControl() {
                   : `${u.permissions.length} effective · ${u.granted.length} granted here`}
               </p>
 
+              {/* An admin with no staff_role is treated as an owner for
+                  backwards compatibility — surface that, it is easy to miss. */}
+              {u.staff_role === null && (
+                <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-50 p-2 text-xs text-amber-800">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  No role set, so this account is treated as an owner and holds every sales
+                  permission. Set a role below to restrict it.
+                </p>
+              )}
+
               {!u.is_active && <p className="mt-1 text-xs text-destructive">Account inactive</p>}
 
-              <Button
-                size="sm"
-                variant="outline"
-                className="mt-3 h-9 w-full"
-                disabled={u.is_admin}
-                title={u.is_admin ? "Owners always hold every sales permission" : undefined}
-                onClick={() => openEditor(u)}
-              >
-                {u.is_admin ? "Owner — all permissions" : "Edit permissions"}
-              </Button>
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label className="shrink-0 text-xs text-muted-foreground">Role</Label>
+                  <Select
+                    value={u.staff_role ?? ""}
+                    onValueChange={(v) => void handleRole(u, v)}
+                    disabled={u.user_id === me?.user_id}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Not set (owner)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STAFF_ROLES.map((r) => (
+                        <SelectItem key={r} value={r} className="capitalize">
+                          {r.replace(/_/g, " ")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {u.user_id === me?.user_id && (
+                  <p className="text-[11px] text-muted-foreground">
+                    You cannot change your own role.
+                  </p>
+                )}
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 w-full"
+                  disabled={u.is_admin}
+                  title={u.is_admin ? "Owners always hold every sales permission" : undefined}
+                  onClick={() => openEditor(u)}
+                >
+                  {u.is_admin ? "Owner — all permissions" : "Edit permissions"}
+                </Button>
+              </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Create a login for a sales employee. */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Sales User</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="nu-name">Full name *</Label>
+              <Input
+                id="nu-name"
+                value={newUser.name}
+                onChange={(e) => setNewUser((u) => ({ ...u, name: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="nu-email">Email *</Label>
+              <Input
+                id="nu-email"
+                type="email"
+                autoComplete="off"
+                value={newUser.email}
+                onChange={(e) => setNewUser((u) => ({ ...u, email: e.target.value }))}
+                required
+              />
+              <p className="text-[11px] text-muted-foreground">They sign in with this email.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="nu-phone">Phone *</Label>
+              <Input
+                id="nu-phone"
+                type="tel"
+                inputMode="tel"
+                value={newUser.phone}
+                onChange={(e) => setNewUser((u) => ({ ...u, phone: e.target.value }))}
+                required
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Login also accepts the phone number instead of the email.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="nu-pass">Temporary password *</Label>
+              <Input
+                id="nu-pass"
+                type="text"
+                autoComplete="new-password"
+                value={newUser.password}
+                onChange={(e) => setNewUser((u) => ({ ...u, password: e.target.value }))}
+                minLength={8}
+                required
+              />
+              <p className="text-[11px] text-muted-foreground">
+                At least 8 characters. Shown in plain text so you can pass it on — ask them to
+                change it after the first sign-in.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select
+                value={newUser.staff_role}
+                onValueChange={(v) => setNewUser((u) => ({ ...u, staff_role: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STAFF_ROLES.map((r) => (
+                    <SelectItem key={r} value={r} className="capitalize">
+                      {r.replace(/_/g, " ")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {newUser.staff_role === "sales"
+                  ? "Starts with the standard salesperson permissions — no lead assignment, conversion or challenge management. You can adjust them afterwards."
+                  : newUser.staff_role === "owner"
+                    ? "Owners hold every sales permission, including access control."
+                    : "Starts with no sales permissions; grant them after creating the account."}
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Creating…" : "Create User"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
