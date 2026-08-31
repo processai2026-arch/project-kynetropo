@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AlertTriangle, CalendarClock, CalendarDays, Flame, Phone, Trophy } from "lucide-react";
+import {
+  AlertTriangle, CalendarClock, CalendarDays, CalendarPlus, Flame, Phone,
+  TrendingUp, Trophy, UserPlus, Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { salesDashboardApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
+import { PageHeader } from "@/components/PageHeader";
+import { StatsRow } from "@/components/StatsRow";
+import { SectionCard } from "@/components/SectionCard";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { TemperatureBadge, formatDate, formatTime, humanise } from "@/components/sales/SalesBits";
 import type { SalesDashboard as Dashboard, SalesFollowup, SalesMeeting } from "@/types/sales";
@@ -137,6 +144,7 @@ function Section({
 
 export default function SalesDashboard() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { me, can, loading: accessLoading, hasNoAccess } = useSalesAccess();
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
@@ -209,38 +217,120 @@ export default function SalesDashboard() {
 
   return (
     <SalesLayout>
-      {/* Hero */}
-      <header>
-        <p className="text-sm text-muted-foreground">{greeting()}{firstName ? `, ${firstName}` : ""}</p>
-        <h1 className="text-2xl font-bold text-foreground">Today's Sales</h1>
-      </header>
+      {isMobile ? (
+        <>
+          {/* Phone: greeting, one compact metrics block, then the work itself. */}
+          <header>
+            <p className="text-sm text-muted-foreground">{greeting()}{firstName ? `, ${firstName}` : ""}</p>
+            <h1 className="text-2xl font-bold text-foreground">Today's Sales</h1>
+          </header>
 
-      <MetricRow
-        items={[
-          { label: "Follow-Ups Today", value: s.followups_today },
-          { label: "Overdue", value: s.followups_overdue, tone: "danger" },
-          { label: "Meetings Today", value: s.meetings_today },
-        ]}
-      />
+          <MetricRow
+            items={[
+              { label: "Follow-Ups Today", value: s.followups_today },
+              { label: "Overdue", value: s.followups_overdue, tone: "danger" },
+              { label: "Meetings Today", value: s.meetings_today },
+            ]}
+          />
+        </>
+      ) : (
+        <>
+          {/*
+           * Desktop uses the platform's own dashboard furniture — PageHeader,
+           * StatCard, SectionCard — so Sales looks like the rest of Kynetropo
+           * rather than a phone screen stretched wide.
+           */}
+          <PageHeader
+            title="Sales"
+            subtitle={`${greeting()}${firstName ? `, ${firstName}` : ""} — here is today's pipeline.`}
+            action={
+              <div className="rounded-xl border bg-card px-4 py-2 text-sm text-muted-foreground shadow-sm">
+                <CalendarDays className="mr-1.5 inline h-3.5 w-3.5" />
+                {new Date(data.server_time.replace(" ", "T")).toLocaleString("en-IN", {
+                  day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit",
+                })}
+              </div>
+            }
+          />
+
+          <StatsRow
+            stats={[
+              {
+                title: "Follow-Ups Today",
+                value: String(s.followups_today),
+                subtitle: s.followups_upcoming > 0 ? `${s.followups_upcoming} upcoming` : "nothing scheduled",
+                icon: CalendarClock,
+              },
+              {
+                title: "Overdue",
+                value: String(s.followups_overdue),
+                subtitle: s.followups_overdue > 0 ? "needs attention today" : "all caught up",
+                icon: AlertTriangle,
+                subtitleColor: s.followups_overdue > 0 ? "primary" : "muted",
+              },
+              {
+                title: "Meetings Today",
+                value: String(s.meetings_today),
+                subtitle: `${s.meetings_upcoming} upcoming`,
+                icon: CalendarPlus,
+              },
+              {
+                title: "Active Leads",
+                value: String(s.total_leads),
+                subtitle: `${s.converted} converted`,
+                icon: Users,
+              },
+            ]}
+          />
+
+          <SectionCard title="Quick Actions">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {[
+                { label: "Add New Lead", to: "/sales/leads?new=1", icon: UserPlus, permission: "sales.leads.create" },
+                { label: "Log a Call", to: "/sales/calls", icon: Phone, permission: "sales.calls.view" },
+                { label: "Follow-Ups", to: "/sales/followups", icon: CalendarClock, permission: "sales.followups.view" },
+                { label: "Schedule a Meeting", to: "/sales/meetings", icon: CalendarPlus, permission: "sales.meetings.view" },
+              ]
+                .filter((a) => can(a.permission))
+                .map((a) => (
+                  <Button key={a.label} variant="outline" className="h-12 justify-start" asChild>
+                    <Link to={a.to}>
+                      <a.icon className="mr-2 h-4 w-4 text-primary" />
+                      {a.label}
+                    </Link>
+                  </Button>
+                ))}
+            </div>
+          </SectionCard>
+        </>
+      )}
 
       {/* Lead temperature summary */}
       <div className="grid grid-cols-3 gap-3">
         {([
-          { label: "Hot", value: s.hot, cls: "text-red-600" },
-          { label: "Warm", value: s.warm, cls: "text-amber-600" },
-          { label: "Cold", value: s.cold, cls: "text-slate-500" },
+          { label: "Hot", value: s.hot, cls: "text-red-600", icon: Flame },
+          { label: "Warm", value: s.warm, cls: "text-amber-600", icon: TrendingUp },
+          { label: "Cold", value: s.cold, cls: "text-slate-500", icon: Users },
         ] as const).map((t) => (
           <Link
             key={t.label}
             to={`/sales/leads?temperature=${t.label.toLowerCase()}`}
-            className="rounded-2xl border bg-card p-4 text-center shadow-sm transition-colors hover:bg-muted/40"
+            className="rounded-2xl border bg-card p-4 text-center shadow-sm transition-colors hover:bg-muted/40 md:flex md:items-center md:justify-between md:p-5 md:text-left"
           >
-            <p className={cn("text-2xl font-bold tabular-nums", t.cls)}>{t.value}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{t.label} Leads</p>
+            <div>
+              <p className={cn("text-2xl font-bold tabular-nums", t.cls)}>{t.value}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{t.label} Leads</p>
+            </div>
+            <t.icon className={cn("hidden h-6 w-6 md:block", t.cls)} />
           </Link>
         ))}
       </div>
 
+      {/*
+       * The work itself. Two columns from md up so a manager sees the whole
+       * day without scrolling, one column on a phone.
+       */}
+      <div className="space-y-5 md:grid md:grid-cols-2 md:items-start md:gap-5 md:space-y-0">
       {/* Overdue first — it is the thing most likely to be missed. */}
       {data.followups.overdue.length > 0 && (
         <Section title="Overdue Follow-Ups" count={s.followups_overdue} action={{ label: "View all", to: "/sales/followups?bucket=overdue" }}>
@@ -334,10 +424,15 @@ export default function SalesDashboard() {
         </Section>
       )}
 
-      <div className="flex items-center justify-center gap-2 pt-2 text-xs text-muted-foreground">
-        <CalendarDays className="h-3.5 w-3.5" />
-        Server time {new Date(data.server_time.replace(" ", "T")).toLocaleString("en-IN")}
       </div>
+
+      {/* The desktop carries the server time in the header chip already. */}
+      {isMobile && (
+        <div className="flex items-center justify-center gap-2 pt-2 text-xs text-muted-foreground">
+          <CalendarDays className="h-3.5 w-3.5" />
+          Server time {new Date(data.server_time.replace(" ", "T")).toLocaleString("en-IN")}
+        </div>
+      )}
     </SalesLayout>
   );
 }
