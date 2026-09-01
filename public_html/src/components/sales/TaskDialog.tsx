@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { salesTasksApi } from "@/lib/api/sales";
-import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { useTeamMembers, namesakeHint } from "@/hooks/useTeamMembers";
 import type { SalesTask, SalesTaskDetail, TaskPriority } from "@/types/sales";
 
 /**
@@ -129,6 +129,10 @@ export function TaskDialog({
                 {people.map((p) => (
                   <SelectItem key={p.user_id} value={String(p.user_id)}>
                     {p.name}
+                    {/* Two accounts can carry the same name; the email says which. */}
+                    {namesakeHint(p) && (
+                      <span className="ml-1.5 text-xs text-muted-foreground">{namesakeHint(p)}</span>
+                    )}
                   </SelectItem>
                 ))}
               </SelectContent>

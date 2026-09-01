@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { salesLeadsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
-import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { useTeamMembers, namesakeHint } from "@/hooks/useTeamMembers";
 import { SourceSelect } from "@/components/sales/SalesBits";
 import type { LeadStatus, LeadTemperature, SalesLead } from "@/types/sales";
 
@@ -247,6 +247,9 @@ export function LeadFormDialog({
                       {people.map((p) => (
                         <SelectItem key={p.user_id} value={String(p.user_id)}>
                           {p.name}
+                          {namesakeHint(p) && (
+                            <span className="ml-1.5 text-xs text-muted-foreground">{namesakeHint(p)}</span>
+                          )}
                         </SelectItem>
                       ))}
                     </SelectContent>

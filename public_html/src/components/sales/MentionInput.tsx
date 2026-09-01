@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import type { TeamMember } from "@/hooks/useTeamMembers";
+import { namesakeHint, type TeamMember } from "@/hooks/useTeamMembers";
 import type { CommentMention } from "@/types/sales";
 
 /**
@@ -221,7 +221,15 @@ export function MentionInput({
                 <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-secondary text-[10px] font-semibold text-primary">
                   {person.name.charAt(0).toUpperCase()}
                 </span>
-                <span className="truncate">{person.name}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{person.name}</span>
+                  {/* Only when the name is shared — otherwise it is just noise. */}
+                  {namesakeHint(person) && (
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {namesakeHint(person)}
+                    </span>
+                  )}
+                </span>
               </button>
             </li>
           ))}

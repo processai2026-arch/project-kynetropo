@@ -95,6 +95,27 @@ export default function SalesChallengeDetail() {
 
   const isHolder = me?.user_id != null && challenge?.accepted_by === me.user_id;
 
+  /*
+   * Who it was offered to, written so the reader can tell it is not them.
+   *
+   * Two accounts on this team can carry the same name, and "Offered to Kaushik"
+   * shown to a Kaushik who cannot accept it reads as a bug. When the name on
+   * the offer is the reader's own, or is shared by another person on the offer,
+   * the email is added — it is the only part that differs.
+   */
+  const offeredTo = (challenge?.assignees ?? []).map((a) => {
+    const name = a.name ?? "someone";
+    const clashesWithMe =
+      me?.name != null &&
+      a.name != null &&
+      a.name.trim().toLowerCase() === me.name.trim().toLowerCase() &&
+      a.user_id !== me.user_id;
+    const clashesWithPeer = (challenge?.assignees ?? []).some(
+      (b) => b.user_id !== a.user_id && (b.name ?? "").trim().toLowerCase() === (a.name ?? "").trim().toLowerCase(),
+    );
+    return (clashesWithMe || clashesWithPeer) && a.email ? name + " (" + a.email + ")" : name;
+  });
+
   if (loading) {
     return (
       <SalesLayout>
@@ -218,8 +239,8 @@ export default function SalesChallengeDetail() {
             <p className="rounded-xl border border-dashed bg-muted/30 px-4 py-3 text-center text-sm text-muted-foreground">
               {challenge.i_created_it
                 ? "You set this challenge — someone else has to take it. You can follow it and comment below."
-                : challenge.assignees.length > 0
-                  ? `Offered to ${challenge.assignees.map((a) => a.name ?? "someone").join(", ")} — you can follow it and comment below.`
+                : offeredTo.length > 0
+                  ? `Offered to ${offeredTo.join(", ")} — you can follow it and comment below.`
                   : "You do not have permission to accept challenges. You can follow this one and comment below."}
             </p>
           ))}

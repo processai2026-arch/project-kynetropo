@@ -125,7 +125,7 @@ export const salesDashboardApi = {
       "/admin/sales/notifications",
       { skipCache: true },
     )).data,
-  assignableUsers: async (): Promise<{ user_id: number; name: string }[]> =>
+  assignableUsers: async (): Promise<{ user_id: number; name: string; email?: string }[]> =>
     (await apiFetch<Envelope<{ user_id: number; name: string }[]>>("/admin/sales/assignable-users")).data,
   /**
    * The merged live feed. Pass the previous response's `server_time` as `since`

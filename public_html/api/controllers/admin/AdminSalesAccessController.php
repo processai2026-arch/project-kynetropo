@@ -106,8 +106,12 @@ class AdminSalesAccessController
             'sales.comments.create',
         ]);
 
+        // The email comes back with the name because two accounts can answer
+        // to the same one. A picker showing "Kaushik" twice will eventually be
+        // pointed at the wrong account, and the person it was meant for never
+        // sees the challenge or the task at all.
         $rows = Database::fetchAll(
-            "SELECT user_id, name FROM users
+            "SELECT user_id, name, email FROM users
               WHERE tenant_id = ? AND user_type = 'admin' AND is_active = 1
               ORDER BY name ASC",
             [Database::tenantId()]
@@ -116,6 +120,7 @@ class AdminSalesAccessController
         Response::success(array_map(fn(array $r): array => [
             'user_id' => (int)$r['user_id'],
             'name'    => $r['name'],
+            'email'   => (string)($r['email'] ?? ''),
         ], $rows));
     }
 

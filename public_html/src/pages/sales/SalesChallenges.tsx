@@ -10,8 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { salesChallengesApi, salesDashboardApi } from "@/lib/api/sales";
+import { salesChallengesApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
+import { useTeamMembers, namesakeHint } from "@/hooks/useTeamMembers";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { ChallengeStatusBadge, formatDateTime } from "@/components/sales/SalesBits";
 import { ChallengeTimer } from "@/components/sales/ChallengeTimer";
@@ -41,16 +42,11 @@ export default function SalesChallenges() {
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", deadline: "", priority: "normal" });
   const [assignees, setAssignees] = useState<number[]>([]);
-  const [people, setPeople] = useState<{ user_id: number; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
-  // Who the challenge can be offered to.
-  useEffect(() => {
-    if (!formOpen || people.length) return;
-    salesDashboardApi.assignableUsers().then(setPeople).catch(() => {
-      /* Not fatal — an unassigned challenge is offered to everyone. */
-    });
-  }, [formOpen, people.length]);
+  // Who the challenge can be offered to. Shared with the task form and the @
+  // menu, so all three tell namesakes apart the same way.
+  const people = useTeamMembers(formOpen);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -286,7 +282,14 @@ export default function SalesChallenges() {
                           )
                         }
                       />
-                      <span className="text-sm">{p.name}</span>
+                      <span className="min-w-0">
+                        <span className="block text-sm">{p.name}</span>
+                        {/* Offering a challenge to the wrong namesake means the
+                            person it was meant for never sees it at all. */}
+                        {namesakeHint(p) && (
+                          <span className="block text-[11px] text-muted-foreground">{namesakeHint(p)}</span>
+                        )}
+                      </span>
                     </label>
                   ))}
                 </div>

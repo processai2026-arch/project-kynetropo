@@ -11,12 +11,12 @@ import { toast } from "sonner";
 import {
   salesCallsApi,
   salesChallengesApi,
-  salesDashboardApi,
   salesFollowupsApi,
   salesLeadsApi,
   salesMeetingsApi,
 } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
+import { useTeamMembers, namesakeHint } from "@/hooks/useTeamMembers";
 import { SourceSelect } from "@/components/sales/SalesBits";
 import type { SalesLead } from "@/types/sales";
 import { cn } from "@/lib/utils";
@@ -141,18 +141,9 @@ export function SalesQuickAdd({ onCreated }: { onCreated?: () => void }) {
   });
   const [chForm, setChForm] = useState({ title: "", description: "", deadline: "", priority: "normal" });
   const [assignees, setAssignees] = useState<number[]>([]);
-  const [people, setPeople] = useState<{ user_id: number; name: string }[]>([]);
 
   // Who a challenge can be offered to.
-  useEffect(() => {
-    if (action !== "challenge" || people.length) return;
-    salesDashboardApi
-      .assignableUsers()
-      .then(setPeople)
-      .catch(() => {
-        /* Not fatal — an unassigned challenge is offered to everyone. */
-      });
-  }, [action, people.length]);
+  const people = useTeamMembers(action === "challenge");
 
   const close = () => {
     setAction(null);
@@ -581,7 +572,12 @@ export function SalesQuickAdd({ onCreated }: { onCreated?: () => void }) {
                           )
                         }
                       />
-                      <span className="text-sm">{p.name}</span>
+                      <span className="min-w-0">
+                        <span className="block text-sm">{p.name}</span>
+                        {namesakeHint(p) && (
+                          <span className="block text-[11px] text-muted-foreground">{namesakeHint(p)}</span>
+                        )}
+                      </span>
                     </label>
                   ))}
                 </div>

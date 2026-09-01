@@ -317,7 +317,13 @@ export function CommentThread({
       )}
 
       {canComment && (
-        <form onSubmit={post} className="flex items-end gap-2">
+        /*
+         * The box gets the full width and the buttons sit under it.
+         * Side by side, a three-row textarea left the send button stranded
+         * against the right edge of the screen — where, on a phone, the sales
+         * quick-add button is also drawn.
+         */
+        <form onSubmit={post} className="space-y-2">
           <MentionInput
             rows={compact ? 2 : 3}
             maxLength={MAX_LENGTH}
@@ -325,13 +331,16 @@ export function CommentThread({
             people={people}
             onChange={setDraft}
             onSubmit={() => void post()}
-            placeholder="Add a comment — type @ to bring someone in"
-            className="min-h-[2.5rem]"
+            placeholder="Add a comment…"
+            className="min-h-[2.75rem] resize-y"
           />
-          <Button type="submit" size="sm" className="h-10 shrink-0" disabled={posting || !draft.trim()}>
-            <Send className="h-4 w-4" />
-            <span className="sr-only">Post comment</span>
-          </Button>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] text-muted-foreground">Type @ to bring someone in</p>
+            <Button type="submit" size="sm" className="h-9 shrink-0 px-4" disabled={posting || !draft.trim()}>
+              <Send className="mr-1.5 h-3.5 w-3.5" />
+              {posting ? "Posting…" : "Post"}
+            </Button>
+          </div>
         </form>
       )}
     </div>

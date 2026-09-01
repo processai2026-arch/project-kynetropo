@@ -4,6 +4,30 @@ import { salesDashboardApi } from "@/lib/api/sales";
 export interface TeamMember {
   user_id: number;
   name: string;
+  email: string;
+  /** Somebody else on the team answers to this same name. */
+  ambiguous: boolean;
+}
+
+/**
+ * Flags every name held by more than one account.
+ *
+ * Worked out once here rather than in each picker, so the challenge form, the
+ * task form and the @ menu all draw the same conclusion about who needs their
+ * email shown.
+ */
+function flagNamesakes(rows: { user_id: number; name: string; email: string }[]): TeamMember[] {
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    const key = r.name.trim().toLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return rows.map((r) => ({ ...r, ambiguous: (counts.get(r.name.trim().toLowerCase()) ?? 0) > 1 }));
+}
+
+/** The email, but only when the name alone does not identify the person. */
+export function namesakeHint(person: TeamMember): string | null {
+  return person.ambiguous && person.email ? person.email : null;
 }
 
 /**
@@ -26,7 +50,11 @@ export function loadTeamMembers(): Promise<TeamMember[]> {
     inflight = salesDashboardApi
       .assignableUsers()
       .then((rows) => {
-        cache = rows.map((r) => ({ user_id: r.user_id, name: r.name ?? "" })).filter((r) => r.name !== "");
+        cache = flagNamesakes(
+          rows
+            .map((r) => ({ user_id: r.user_id, name: r.name ?? "", email: r.email ?? "" }))
+            .filter((r) => r.name !== ""),
+        );
         return cache;
       })
       .catch(() => [])

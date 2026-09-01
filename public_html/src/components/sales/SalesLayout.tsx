@@ -94,7 +94,16 @@ export function SalesLayout({
   }
 
   return (
-    <div className={cn("space-y-5", isMobile && "pb-24")}>
+    <div
+      className="space-y-5"
+      /*
+       * Clears the bottom tab bar (3.5rem) AND the quick-add button floating
+       * above it (its top edge sits 8rem up), plus a gap. Anything less and the
+       * last control on a page — the Post button under a comment box, usually —
+       * ends up underneath a button that does something else entirely.
+       */
+      style={isMobile ? { paddingBottom: "calc(9.5rem + env(safe-area-inset-bottom))" } : undefined}
+    >
       {children}
       <SalesQuickAdd onCreated={onCreated} />
       <SalesBottomTabs />
