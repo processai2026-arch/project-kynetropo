@@ -99,6 +99,12 @@ $additions = [
     // Comments can now hang off a task, and carry mentions.
     ['sales_comments',  'task_id',        "INT UNSIGNED DEFAULT NULL"],
     ['sales_comments',  'mention_count',  "INT UNSIGNED NOT NULL DEFAULT 0"],
+
+    // Did the conversion CREATE this customer, or link to one that already
+    // existed? Undoing a conversion removes the customer it created, so this is
+    // the one fact the undo cannot afford to guess. Rows converted before this
+    // column existed read 0 and keep their customer.
+    ['sales_leads',     'converted_client_created', "TINYINT(1) NOT NULL DEFAULT 0"],
 ];
 
 foreach ($additions as [$table, $column, $definition]) {

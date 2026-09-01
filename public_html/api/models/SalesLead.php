@@ -242,13 +242,20 @@ class SalesLead
         );
     }
 
-    public static function markConverted(int $id, int $clientId, ?int $projectId): void
+    /**
+     * @param bool $createdClient true when the conversion created this customer,
+     *   false when it linked to one that already existed. Undo reads this to
+     *   decide whether the customer record is its to remove — the difference
+     *   between undoing your own work and deleting somebody else's.
+     */
+    public static function markConverted(int $id, int $clientId, ?int $projectId, bool $createdClient = false): void
     {
         Database::execute(
             "UPDATE sales_leads
-                SET status = 'converted', converted_client_id = ?, converted_project_id = ?, converted_at = NOW()
+                SET status = 'converted', converted_client_id = ?, converted_project_id = ?,
+                    converted_client_created = ?, converted_at = NOW()
               WHERE id = ? AND tenant_id = ?",
-            [$clientId, $projectId, $id, Database::tenantId()]
+            [$clientId, $projectId, $createdClient ? 1 : 0, $id, Database::tenantId()]
         );
     }
 

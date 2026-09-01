@@ -96,12 +96,34 @@ const COLLAPSED_ICON_CELL = [
  * white-space: nowrap — so "Access Control" would be cut mid-word after
  * "Acce". Normal wrapping lets line-clamp break at the space instead.
  *
- * One line with an ellipsis for the rest: at two lines the cells were tall
- * enough that a module of any size ran off the bottom of the rail. The full
- * name is on the tooltip, and expanding the rail shows it in full.
+ * Two lines, because one truncated every name in this app to noise — "Sales
+ * Dashboard" became "Sal...", "Access Control" became "Ac...", and three
+ * people-shaped glyphs above three identical stubs is not a menu. Names are
+ * shortened for the rail (see shortTitle) so two lines is genuinely enough,
+ * and anything still too long ends in an ellipsis with the full name on the
+ * tooltip.
  */
 const COLLAPSED_LABEL =
-  "w-full text-center text-[10px] font-medium leading-[1.15] line-clamp-1 !whitespace-normal";
+  "w-full text-center text-[10px] font-medium leading-[1.15] line-clamp-2 !whitespace-normal";
+
+/**
+ * What an item is called on the collapsed rail.
+ *
+ * The expanded name says which dashboard ("Sales Dashboard"); on the rail the
+ * module is already named above the group, so the qualifier is noise competing
+ * for the few characters that fit.
+ */
+const SHORT_TITLES: Record<string, string> = {
+  "Sales Dashboard": "Dashboard",
+  "Sales Meetings": "Meetings",
+  "Call History": "Calls",
+  "Team Activity": "Activity",
+  "Access Control": "Access",
+  "Pitches & Marketing": "Pitches",
+  "Bug Tracker": "Bugs",
+};
+
+const shortTitle = (title: string): string => SHORT_TITLES[title] ?? title;
 
 // Trims the group padding collapsed so each stacked cell gets the rail's full
 // width for its label, with a hair of space at the edges.
@@ -140,16 +162,20 @@ export function AppSidebar() {
         title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
         {collapsed ? (
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary font-bold text-primary-foreground">
-            K
-          </span>
+          // The mark, not a letter in a box. "K" is a placeholder that survived
+          // too long — the product has an icon, and this is where people look
+          // to know which app they are in.
+          // The wordmark, scaled to the rail rather than crushed into a
+          // square. There is no compact Kynetropo mark to use — favicon.svg is
+          // an ICO in disguise and icon-192 is this same wordmark padded onto a
+          // white tile, so both came out as an illegible smudge at 32px. Drawn
+          // at its own 4.7:1 ratio across the rail it is small but legible,
+          // which is the whole job: say which app this is.
+          <BrandLogo className="h-5 w-full max-w-[84px]" fallbackClassName="text-xs" />
         ) : (
-          <div className="min-w-0">
-            <BrandLogo className="h-6 max-w-[132px]" fallbackClassName="text-sm" />
-            <p className="mt-0.5 truncate text-[11px] text-sidebar-foreground/70">
-              {companyName || "Your workspace"}
-            </p>
-          </div>
+          // The wordmark already says Kynetropo; the line underneath said it a
+          // second time, in smaller type, directly below itself.
+          <BrandLogo className="h-6 max-w-[148px]" fallbackClassName="text-sm" />
         )}
       </button>
 
@@ -195,7 +221,7 @@ export function AppSidebar() {
 
         <div className="mx-3 my-2 h-px bg-sidebar-border" />
 
-        {activeSection && (
+        {activeSection && activeSection.items.some((i) => i.url !== "/settings") && (
           <SidebarGroup className={COLLAPSED_GROUP_PAD}>
             {!collapsed && (
               <SidebarGroupLabel className="px-3 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
@@ -204,7 +230,7 @@ export function AppSidebar() {
             )}
             <SidebarGroupContent>
               <SidebarMenu>
-                {activeSection.items.map((item) => {
+                {activeSection.items.filter((i) => i.url !== "/settings").map((item) => {
                   const active = location.pathname === item.url;
                   return (
                     <SidebarMenuItem key={item.title}>
@@ -225,7 +251,7 @@ export function AppSidebar() {
                             className={collapsed ? COLLAPSED_LABEL : "flex-1"}
                             title={collapsed ? item.title : undefined}
                           >
-                            {item.title}
+                            {collapsed ? shortTitle(item.title) : item.title}
                           </span>
                         </NavLink>
                       </SidebarMenuButton>

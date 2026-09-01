@@ -1,18 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { CalendarClock, Plus, Search, Users } from "lucide-react";
+import { CalendarClock, Pencil, Plus, Search, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { salesLeadsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
-import { LeadStatusBadge, SourceSelect, TemperatureBadge, formatDate, formatTime } from "@/components/sales/SalesBits";
+import { LeadStatusBadge, TemperatureBadge, formatDate, formatTime } from "@/components/sales/SalesBits";
+import { LeadFormDialog } from "@/components/sales/LeadFormDialog";
 import type { SalesLead } from "@/types/sales";
 
 const TEMPERATURES = ["hot", "warm", "cold"] as const;
@@ -21,18 +19,7 @@ const STATUSES = [
   "proposal", "onboarding", "converted", "lost",
 ] as const;
 
-const EMPTY_FORM = {
-  name: "",
-  company: "",
-  contact_person: "",
-  phone: "",
-  email: "",
-  source: "",
-  temperature: "warm",
-  notes: "",
-};
-
-function LeadCard({ lead }: { lead: SalesLead }) {
+function LeadCard({ lead, onEdit }: { lead: SalesLead; onEdit?: (lead: SalesLead) => void }) {
   return (
     <Link
       to={`/sales/leads/${lead.id}`}
@@ -46,7 +33,25 @@ function LeadCard({ lead }: { lead: SalesLead }) {
             {lead.phone ? ` · ${lead.phone}` : ""}
           </p>
         </div>
-        <TemperatureBadge value={lead.temperature} />
+        <div className="flex shrink-0 items-center gap-1">
+          <TemperatureBadge value={lead.temperature} />
+          {onEdit && (
+            // Inside a Link, so both defaults have to go: preventDefault stops
+            // the navigation, stopPropagation stops the card handling it too.
+            <button
+              type="button"
+              aria-label={`Edit ${lead.company || lead.name}`}
+              className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onEdit(lead);
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -88,8 +93,8 @@ export default function SalesLeads() {
   const [status, setStatus] = useState(searchParams.get("status") ?? "all");
 
   const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
+  // null = adding; a lead = editing that one. The dialog is the same either way.
+  const [editingLead, setEditingLead] = useState<SalesLead | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -124,35 +129,14 @@ export default function SalesLeads() {
     setSearchParams(next, { replace: true });
   }, [search, temperature, status, setSearchParams]);
 
-  const set = (k: keyof typeof EMPTY_FORM, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const openAdd = () => {
+    setEditingLead(null);
+    setFormOpen(true);
+  };
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (form.name.trim().length < 2) {
-      toast.error("Lead name is required");
-      return;
-    }
-    setSaving(true);
-    try {
-      await salesLeadsApi.create({
-        name: form.name.trim(),
-        company: form.company.trim(),
-        contact_person: form.contact_person.trim(),
-        phone: form.phone.trim(),
-        email: form.email.trim(),
-        source: form.source,
-        temperature: form.temperature as SalesLead["temperature"],
-        notes: form.notes || null,
-      });
-      toast.success("Lead created");
-      setFormOpen(false);
-      setForm(EMPTY_FORM);
-      void load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not create the lead");
-    } finally {
-      setSaving(false);
-    }
+  const openEdit = (lead: SalesLead) => {
+    setEditingLead(lead);
+    setFormOpen(true);
   };
 
   return (
@@ -160,7 +144,7 @@ export default function SalesLeads() {
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-foreground">Leads</h1>
         {can("sales.leads.create") && (
-          <Button onClick={() => setFormOpen(true)} size="sm" className="h-9">
+          <Button onClick={openAdd} size="sm" className="h-9">
             <Plus className="mr-1.5 h-4 w-4" />
             Add Lead
           </Button>
@@ -236,99 +220,33 @@ export default function SalesLeads() {
           <p className="text-xs text-muted-foreground">{items.length} lead{items.length === 1 ? "" : "s"}</p>
           <div className="space-y-3 md:grid md:grid-cols-2 md:gap-3 md:space-y-0 xl:grid-cols-3">
             {items.map((lead) => (
-              <LeadCard key={lead.id} lead={lead} />
+              <LeadCard
+                key={lead.id}
+                lead={lead}
+                onEdit={can("sales.leads.edit") ? openEdit : undefined}
+              />
             ))}
           </div>
         </>
       )}
 
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Add Lead</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="lead-name">Name *</Label>
-              <Input id="lead-name" value={form.name} onChange={(e) => set("name", e.target.value)} required />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="lead-company">Company</Label>
-                <Input id="lead-company" value={form.company} onChange={(e) => set("company", e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="lead-contact">Contact person</Label>
-                <Input
-                  id="lead-contact"
-                  value={form.contact_person}
-                  onChange={(e) => set("contact_person", e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="lead-phone">Phone</Label>
-                <Input
-                  id="lead-phone"
-                  type="tel"
-                  inputMode="tel"
-                  value={form.phone}
-                  onChange={(e) => set("phone", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="lead-email">Email</Label>
-                <Input
-                  id="lead-email"
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => set("email", e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="lead-source">Source</Label>
-                <SourceSelect id="lead-source" value={form.source} onChange={(v) => set("source", v)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Temperature</Label>
-                <Select value={form.temperature} onValueChange={(v) => set("temperature", v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TEMPERATURES.map((t) => (
-                      <SelectItem key={t} value={t} className="capitalize">
-                        {t}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="lead-notes">Notes</Label>
-              <Textarea
-                id="lead-notes"
-                rows={3}
-                value={form.notes}
-                onChange={(e) => set("notes", e.target.value)}
-                placeholder="Requirement, budget, timeline…"
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Saving…" : "Create Lead"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <LeadFormDialog
+        open={formOpen}
+        lead={editingLead}
+        onClose={() => {
+          setFormOpen(false);
+          setEditingLead(null);
+        }}
+        onSaved={(saved) => {
+          // Patch the row in place on an edit so the list does not jump; a new
+          // lead has to come from the server to land in the right filter.
+          if (editingLead) {
+            setItems((prev) => prev.map((l) => (l.id === saved.id ? { ...l, ...saved } : l)));
+          } else {
+            void load();
+          }
+        }}
+      />
     </SalesLayout>
   );
 }

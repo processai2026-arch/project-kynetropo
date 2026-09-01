@@ -23,6 +23,7 @@ import {
 } from "@/components/sales/FollowupEditDialog";
 import { CommentButton, CommentThread, CommentThreadDialog } from "@/components/sales/CommentThread";
 import { ConvertLeadDialog } from "@/components/sales/ConvertLeadDialog";
+import { LeadFormDialog } from "@/components/sales/LeadFormDialog";
 import { LeadStatusBadge, TemperatureBadge, formatDate, formatDateTime, formatTime, humanise } from "@/components/sales/SalesBits";
 import type { CommentEntityType, LeadTemperature, SalesFollowup, SalesLeadDetail as LeadDetail } from "@/types/sales";
 import { cn } from "@/lib/utils";
@@ -64,6 +65,7 @@ export default function SalesLeadDetail() {
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [editingFollowup, setEditingFollowup] = useState<SalesFollowup | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
   const [thread, setThread] = useState<{ type: CommentEntityType; id: number; title: string } | null>(null);
   const [convertOpen, setConvertOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -271,8 +273,9 @@ export default function SalesLeadDetail() {
         ? {
             title: "Undo this conversion?",
             description:
-              "The lead returns to onboarding.\nThe customer record stays in the project system — it is only unlinked.",
+              "The lead returns to onboarding.\nThe customer record this conversion created is removed from the CRM, along with the project it opened.\nIf that customer already existed, or has work attached to it now, it is kept and you will be told why.",
             confirmLabel: "Undo conversion",
+            destructive: true,
           }
         : {
             title: "Move this lead back out of onboarding?",
@@ -284,11 +287,22 @@ export default function SalesLeadDetail() {
     setSaving(true);
     try {
       const res = await salesLeadsApi.revert(leadId);
-      toast.success(
-        converted
-          ? `Conversion undone${res.kept_customer_id ? ` — customer #${res.kept_customer_id} was kept` : ""}`
-          : "Moved back to qualified",
-      );
+      if (!converted) {
+        toast.success("Moved back to qualified");
+      } else if (res.removed_client_id) {
+        toast.success(
+          `Conversion undone — customer #${res.removed_client_id}` +
+            (res.removed_project_id ? " and its project" : "") +
+            " removed from the CRM",
+        );
+      } else {
+        // Not an error: the record was deliberately kept, and the reason is the
+        // only useful thing to say about it.
+        toast.warning(
+          `Conversion undone — customer #${res.kept_customer_id} was kept` +
+            (res.kept_reason ? `: ${res.kept_reason}` : ""),
+        );
+      }
       void load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not revert the lead");
@@ -387,8 +401,9 @@ export default function SalesLeadDetail() {
             )}
             {can("sales.leads.convert") && (
               <p className="mt-2 text-xs text-emerald-700">
-                Converted by mistake? "Undo Convert" returns the lead to onboarding and keeps the
-                customer record.
+                Converted by mistake? "Undo Convert" returns the lead to onboarding and removes the
+                customer record it created — unless that customer already existed or has work
+                attached to it by now.
               </p>
             )}
           </div>
@@ -414,6 +429,12 @@ export default function SalesLeadDetail() {
             <Button className="h-11" variant="secondary" onClick={() => setDialog("followup")}>
               <CalendarClock className="mr-1.5 h-4 w-4" />
               Follow-Up
+            </Button>
+          )}
+          {can("sales.leads.edit") && (
+            <Button className="h-11" variant="outline" onClick={() => setEditOpen(true)}>
+              <Pencil className="mr-1.5 h-4 w-4" />
+              Edit Lead
             </Button>
           )}
           {can("sales.leads.edit") && (
@@ -973,6 +994,16 @@ export default function SalesLeadDetail() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <LeadFormDialog
+        open={editOpen}
+        lead={lead}
+        onClose={() => setEditOpen(false)}
+        // A full reload rather than a local patch: the header, the timeline and
+        // the schedule all read from this record, and the edit adds a timeline
+        // entry the page should show straight away.
+        onSaved={() => void load()}
+      />
 
       <FollowupEditDialog
         followup={editingFollowup}

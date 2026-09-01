@@ -131,7 +131,20 @@ class AdminSalesLeadController
             $data['email'] = $email;
         }
         if ($request->input('status') !== null) {
-            $data['status'] = $this->validStatus($request->input('status'));
+            $status = $this->validStatus($request->input('status'));
+            // Onboarding and conversion are not just a column value: they create
+            // the customer record, stamp converted_at and link the two systems
+            // together. Setting the word here would leave a lead that claims to
+            // be converted with nothing behind it, and "Undo Convert" would then
+            // have nothing to undo.
+            if (in_array($status, ['onboarding', 'converted'], true) && $status !== $raw['status']) {
+                Response::error(
+                    'Use Start Onboarding or Convert to move a lead there — setting the status alone '
+                    . 'would not create the customer record.',
+                    422
+                );
+            }
+            $data['status'] = $status;
         }
         if ($request->input('temperature') !== null) {
             $data['temperature'] = $this->validTemperature($request->input('temperature'));
@@ -158,7 +171,17 @@ class AdminSalesLeadController
                 'From ' . strtoupper((string)$raw['temperature'])
             );
         } else {
-            SalesActivity::log($id, 'lead_updated', 'Lead details updated', $request->user);
+            // "Lead details updated" on its own tells the next person nothing —
+            // not which field moved, not what it used to say. The diff is the
+            // part of the entry worth reading.
+            $changes = $this->describeChanges($raw, $data);
+            SalesActivity::log(
+                $id,
+                'lead_updated',
+                'Lead updated by ' . (string)($request->user['name'] ?? 'someone'),
+                $request->user,
+                implode('; ', $changes)
+            );
         }
 
         Response::success(SalesLead::find($id), 'Lead updated');
@@ -325,7 +348,7 @@ class AdminSalesLeadController
             ]);
         }
 
-        SalesLead::markConverted($id, $clientId, $projectId);
+        SalesLead::markConverted($id, $clientId, $projectId, $existing === null);
 
         SalesActivity::log(
             $id, 'lead_converted',
@@ -337,13 +360,16 @@ class AdminSalesLeadController
         );
 
         // Mirror onto the ops activity log so the project system's own timeline
-        // shows where this client came from.
+        // shows where this client came from. Creating and linking are logged
+        // differently: this entry used to say "created" even when the lead was
+        // pointed at a customer that had been there for months.
         Database::insert('ops_activity_log', [
             'tenant_id'   => $tenantId,
             'entity_type' => 'client',
             'entity_id'   => $clientId,
-            'action'      => 'created_from_sales_lead',
-            'description' => 'Converted from sales lead ' . $raw['lead_code'] . ' (' . $raw['name'] . ')',
+            'action'      => $existing === null ? 'created_from_sales_lead' : 'linked_to_sales_lead',
+            'description' => ($existing === null ? 'Converted from sales lead ' : 'Linked to sales lead ')
+                             . $raw['lead_code'] . ' (' . $raw['name'] . ')',
             'done_by'     => (string)($request->user['name'] ?? ''),
         ]);
 
@@ -386,10 +412,17 @@ class AdminSalesLeadController
      *   converted  -> onboarding   (the conversion link is cleared)
      *   onboarding -> qualified
      *
-     * Reverting a conversion UNLINKS the customer; it never deletes the
-     * ops_clients record, which by then may have projects, payments and history
-     * of its own hanging off it. The whole sales timeline is kept, and the
-     * reversal is appended to it rather than erasing what happened.
+     * Reverting a conversion also REMOVES the customer record the conversion
+     * created — an undo that leaves a phantom customer behind in the CRM is not
+     * an undo, and the next person has no way to tell it apart from a real one.
+     *
+     * It is removed only when it is genuinely this conversion's to remove:
+     * created by this conversion (not an existing customer it was linked to),
+     * claimed by no other lead, and with nothing attached since except the
+     * project the same conversion opened. Anything else is somebody's real
+     * work, so the record is kept and the response says exactly why.
+     *
+     * The sales timeline is never erased — the reversal is appended to it.
      */
     public function revertStatus(Request $request): void
     {
@@ -405,39 +438,86 @@ class AdminSalesLeadController
         $reason = trim((string)$request->input('reason', ''));
 
         if ($raw['status'] === 'converted' || !empty($raw['converted_client_id'])) {
-            $clientId = (int)$raw['converted_client_id'];
+            $tenantId  = Database::tenantId();
+            $clientId  = (int)$raw['converted_client_id'];
+            $projectId = (int)($raw['converted_project_id'] ?? 0);
+
+            // Decide BEFORE the lead is unlinked: the check asks whether any
+            // other lead claims this customer, and this lead still counts as one
+            // until the UPDATE below runs.
+            [$removable, $keepReason] = $this->conversionIsRemovable($raw, $clientId, $projectId);
 
             Database::execute(
                 "UPDATE sales_leads
                     SET status = 'onboarding', converted_client_id = NULL,
                         converted_project_id = NULL, converted_at = NULL
                   WHERE id = ? AND tenant_id = ?",
-                [$id, Database::tenantId()]
+                [$id, $tenantId]
             );
 
-            SalesActivity::log(
-                $id, 'lead_updated', 'Conversion reverted',
-                $request->user,
-                trim('Unlinked from customer record #' . $clientId
-                     . '. The customer record itself was kept. ' . $reason),
-                'ops_client', $clientId ?: null
-            );
+            $removedClient  = null;
+            $removedProject = null;
 
-            if ($clientId) {
+            if ($clientId && $removable) {
+                if ($projectId) {
+                    Database::execute(
+                        'DELETE FROM ops_projects WHERE id = ? AND tenant_id = ?',
+                        [$projectId, $tenantId]
+                    );
+                    $removedProject = $projectId;
+                }
+                Database::execute(
+                    'DELETE FROM ops_clients WHERE id = ? AND tenant_id = ?',
+                    [$clientId, $tenantId]
+                );
+                $removedClient = $clientId;
+
+                // The ops timeline keeps the entry even though the row is gone:
+                // "this customer existed and was removed" is the thing somebody
+                // looking for it later needs to find.
                 Database::insert('ops_activity_log', [
-                    'tenant_id'   => Database::tenantId(),
+                    'tenant_id'   => $tenantId,
+                    'entity_type' => 'client',
+                    'entity_id'   => $clientId,
+                    'action'      => 'sales_conversion_reverted',
+                    'description' => 'Sales lead ' . $raw['lead_code'] . ' undid its conversion; this customer record'
+                                     . ($removedProject ? ' and its project' : '') . ' was removed.',
+                    'done_by'     => (string)($request->user['name'] ?? ''),
+                ]);
+            } elseif ($clientId) {
+                Database::insert('ops_activity_log', [
+                    'tenant_id'   => $tenantId,
                     'entity_type' => 'client',
                     'entity_id'   => $clientId,
                     'action'      => 'sales_lead_unlinked',
-                    'description' => 'Sales lead ' . $raw['lead_code'] . ' reverted its conversion; this customer record was kept.',
+                    'description' => 'Sales lead ' . $raw['lead_code'] . ' undid its conversion; this customer record was kept ('
+                                     . $keepReason . ').',
                     'done_by'     => (string)($request->user['name'] ?? ''),
                 ]);
             }
 
+            SalesActivity::log(
+                $id, 'lead_updated', 'Conversion reverted',
+                $request->user,
+                trim(($removedClient
+                        ? 'Customer record #' . $clientId . ' was removed from the project system'
+                          . ($removedProject ? ' along with its project' : '') . '.'
+                        : 'Unlinked from customer record #' . $clientId . ', which was kept (' . $keepReason . ').')
+                     . ' ' . $reason),
+                'ops_client', $clientId ?: null
+            );
+
             Response::success([
-                'lead'             => SalesLead::find($id),
-                'kept_customer_id' => $clientId ?: null,
-            ], 'Conversion reverted — the customer record was kept in the project system');
+                'lead'               => SalesLead::find($id),
+                'removed_client_id'  => $removedClient,
+                'removed_project_id' => $removedProject,
+                // Only set when the record could NOT be removed — the client
+                // reads this to explain why something is still in the CRM.
+                'kept_customer_id'   => $removedClient === null ? ($clientId ?: null) : null,
+                'kept_reason'        => $removedClient === null && $clientId ? $keepReason : null,
+            ], $removedClient
+                ? 'Conversion undone — the customer record was removed from the project system'
+                : 'Conversion undone — the customer record was kept (' . $keepReason . ')');
         }
 
         if ($raw['status'] === 'onboarding') {
@@ -447,6 +527,93 @@ class AdminSalesLeadController
         }
 
         Response::error('This lead is not in onboarding or converted, so there is nothing to revert', 409);
+    }
+
+    /**
+     * May this conversion's customer record be removed along with it?
+     *
+     * Only when it is this conversion's to remove. Three separate ways it stops
+     * being that, each of which means someone else's work would be destroyed:
+     *
+     *   - the conversion LINKED to a customer that already existed;
+     *   - another lead has since converted onto the same customer;
+     *   - anything has been attached to it that this conversion did not create
+     *     — a second project, a meeting, a payment, an AMC, a document.
+     *
+     * Every count is wrapped: an ops table missing on an older install must not
+     * turn an undo into a 500, and "I could not check" is treated as "do not
+     * remove", which is the safe direction to be wrong in.
+     *
+     * @return array{0:bool,1:string} [removable, why not]
+     */
+    private function conversionIsRemovable(array $lead, int $clientId, int $projectId): array
+    {
+        if ($clientId < 1) {
+            return [false, 'there was no customer record'];
+        }
+        $leadId   = (int)$lead['id'];
+        $tenantId = Database::tenantId();
+
+        $count = static function (string $sql, array $params): ?int {
+            try {
+                return Database::count($sql, $params);
+            } catch (Throwable $e) {
+                error_log('[SalesLead] revert safety check failed: ' . $e->getMessage());
+                return null;
+            }
+        };
+
+        // Created here, or linked to a customer that was already there? Recorded
+        // on the lead at conversion time, because it is the one fact the undo
+        // cannot afford to guess: get it wrong and it deletes somebody else's
+        // customer. Conversions from before this column existed read 0, so they
+        // keep the record — the safe direction to be wrong in.
+        if ((int)($lead['converted_client_created'] ?? 0) !== 1) {
+            return [false, 'it already existed before this lead was converted'];
+        }
+
+        $otherLeads = $count(
+            'SELECT COUNT(*) AS cnt FROM sales_leads
+              WHERE tenant_id = ? AND converted_client_id = ? AND id <> ?',
+            [$tenantId, $clientId, $leadId]
+        );
+        if ($otherLeads === null) {
+            return [false, 'its other leads could not be checked'];
+        }
+        if ($otherLeads > 0) {
+            return [false, 'another lead is also converted onto it'];
+        }
+
+        // Projects: the one this conversion opened does not count against it.
+        $projects = $projectId > 0
+            ? $count('SELECT COUNT(*) AS cnt FROM ops_projects WHERE tenant_id = ? AND client_id = ? AND id <> ?',
+                     [$tenantId, $clientId, $projectId])
+            : $count('SELECT COUNT(*) AS cnt FROM ops_projects WHERE tenant_id = ? AND client_id = ?',
+                     [$tenantId, $clientId]);
+        if ($projects === null) {
+            return [false, 'its projects could not be checked'];
+        }
+        if ($projects > 0) {
+            return [false, 'it has projects of its own now'];
+        }
+
+        // Everything else that can hang off a customer. A missing table answers
+        // null and is skipped — it cannot hold rows it has nowhere to store.
+        $attached = [
+            'ops_meetings'           => 'meetings',
+            'ops_payments'           => 'payments',
+            'ops_amc_records'        => 'an AMC',
+            'ops_document_checklist' => 'documents',
+        ];
+        foreach ($attached as $table => $label) {
+            $rows = $count("SELECT COUNT(*) AS cnt FROM `$table` WHERE tenant_id = ? AND client_id = ?",
+                           [$tenantId, $clientId]);
+            if ($rows !== null && $rows > 0) {
+                return [false, 'it has ' . $label . ' attached'];
+            }
+        }
+
+        return [true, ''];
     }
 
     public function destroy(Request $request): void
@@ -476,6 +643,62 @@ class AdminSalesLeadController
             Response::error('Invalid temperature. Allowed: ' . implode(', ', SalesLead::TEMPERATURES), 422);
         }
         return $value;
+    }
+
+    /**
+     * Field-by-field diff for the lead timeline.
+     *
+     * Phone and email are shown in full because a wrong one is the single most
+     * expensive mistake on a lead — someone reviewing the timeline has to be
+     * able to see what it was changed FROM. Notes are reported as changed
+     * without quoting either version: they run to paragraphs, and pasting both
+     * into a timeline entry buries everything around it.
+     */
+    private function describeChanges(array $before, array $after): array
+    {
+        $labels = [
+            'name'           => 'Name',
+            'company'        => 'Company',
+            'contact_person' => 'Contact person',
+            'phone'          => 'Phone',
+            'email'          => 'Email',
+            'source'         => 'Source',
+            'status'         => 'Status',
+            'temperature'    => 'Temperature',
+        ];
+
+        $changes = [];
+        foreach ($labels as $col => $label) {
+            if (!array_key_exists($col, $after)) {
+                continue;
+            }
+            $from = trim((string)($before[$col] ?? ''));
+            $to   = trim((string)$after[$col]);
+            if ($from === $to) {
+                continue;
+            }
+            $changes[] = $from === ''
+                ? $label . ' set to ' . ($to !== '' ? $to : '(empty)')
+                : $label . ': ' . $from . ' -> ' . ($to !== '' ? $to : '(cleared)');
+        }
+
+        if (array_key_exists('notes', $after)
+            && trim((string)($before['notes'] ?? '')) !== trim((string)$after['notes'])) {
+            $changes[] = 'Notes edited';
+        }
+
+        if (array_key_exists('assigned_to', $after)
+            && (int)($before['assigned_to'] ?? 0) !== (int)($after['assigned_to'] ?? 0)) {
+            $name = $after['assigned_to']
+                ? (Database::fetch(
+                    'SELECT name FROM users WHERE user_id = ? AND tenant_id = ? LIMIT 1',
+                    [(int)$after['assigned_to'], Database::tenantId()]
+                  )['name'] ?? 'someone')
+                : null;
+            $changes[] = $name ? 'Assigned to ' . $name : 'Unassigned';
+        }
+
+        return $changes;
     }
 
     private function validStatus(mixed $value): string

@@ -250,9 +250,22 @@ export const salesLeadsApi = {
       project_id: number | null;
       reused_existing_client: boolean;
     }>>(`/admin/sales/leads/${id}/convert`, { method: "POST", body: JSON.stringify(body) })).data,
-  /** Steps a lead back out of conversion or onboarding. */
+  /**
+   * Steps a lead back out of conversion or onboarding.
+   *
+   * Undoing a conversion removes the customer record it created from the CRM.
+   * When it cannot — the customer already existed, or has real work attached
+   * now — `kept_customer_id` and `kept_reason` say so, and the UI repeats the
+   * reason rather than claiming a clean undo.
+   */
   revert: async (id: number, reason?: string) =>
-    (await apiFetch<Envelope<{ lead: SalesLead; kept_customer_id?: number | null }>>(
+    (await apiFetch<Envelope<{
+      lead: SalesLead;
+      removed_client_id?: number | null;
+      removed_project_id?: number | null;
+      kept_customer_id?: number | null;
+      kept_reason?: string | null;
+    }>>(
       `/admin/sales/leads/${id}/revert`,
       { method: "POST", body: JSON.stringify({ reason }) },
     )).data,

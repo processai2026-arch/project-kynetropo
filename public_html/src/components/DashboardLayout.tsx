@@ -70,7 +70,19 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <ChatContextProvider>
-      <SidebarProvider>
+      {/*
+        Collapsed is the default. The rail carries the icon AND its name, so
+        collapsed is still a readable menu rather than a memory test — and it
+        gives the page back roughly 150px, which is the difference between a
+        table fitting and not fitting on a laptop.
+
+        6.5rem, not the shadcn default of 3rem: a 48px rail can only hold a
+        glyph. This one holds a two-line label under it.
+      */}
+      <SidebarProvider
+        defaultOpen={false}
+        style={{ "--sidebar-width-icon": "6.5rem" } as React.CSSProperties}
+      >
         <DashboardLayoutContext.Provider value={{ modulesDialogOpen, setModulesDialogOpen }}>
           <div className="min-h-screen flex w-full">
             <AppSidebar />

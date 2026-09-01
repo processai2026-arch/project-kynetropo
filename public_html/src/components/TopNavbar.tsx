@@ -6,7 +6,6 @@ import {
   Bell, ChevronDown, LayoutGrid, LogOut, Maximize2, MessageSquare,
   Minimize2, Settings, ShoppingCart,
 } from "lucide-react";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -94,7 +93,6 @@ export function TopNavbar() {
           under 10% so the controls on top keep full contrast. */}
       <div className="flex h-14 items-center justify-between gap-2 bg-gradient-to-r from-primary/[0.09] via-primary/[0.03] to-transparent px-3 md:px-6">
         <div className="flex min-w-0 items-center gap-2 md:gap-3">
-          <SidebarTrigger className="shrink-0" />
 
           {/*
             The launcher says which module you are in and opens the picker. It
