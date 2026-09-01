@@ -73,6 +73,11 @@ export default {
           "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
+          // The active item's glyph sits one step brighter than its label:
+          // collapsed there is no label beside it, and a glyph at label weight
+          // disappears into the chip.
+          "primary-icon": "hsl(var(--sidebar-primary-icon))",
+          muted: "hsl(var(--sidebar-muted))",
         },
         status: {
           delivered: "hsl(var(--status-delivered))",
@@ -89,6 +94,9 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        // Nav items are squarer than cards on purpose: a rail of pill-shaped
+        // rows reads as a list of buttons rather than a menu.
+        nav: "0.625rem",
       },
       keyframes: {
         "accordion-down": {

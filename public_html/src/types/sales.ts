@@ -83,7 +83,13 @@ export interface SalesLeadDetail extends SalesLead {
   comment_counts: Partial<Record<CommentEntityType, Record<number, number>>>;
 }
 
-export type CommentEntityType = "lead" | "call" | "followup" | "meeting" | "challenge";
+export type CommentEntityType = "lead" | "call" | "followup" | "meeting" | "challenge" | "task";
+
+/** Somebody named in a comment with @. */
+export interface CommentMention {
+  user_id: number;
+  name: string;
+}
 
 export interface SalesComment {
   id: number;
@@ -91,6 +97,7 @@ export interface SalesComment {
   entity_id: number;
   lead_id: number | null;
   challenge_id: number | null;
+  task_id?: number | null;
   lead_name?: string | null;
   lead_company?: string | null;
   challenge_title?: string | null;
@@ -102,12 +109,14 @@ export interface SalesComment {
   edited_at: string | null;
   deleted: boolean;
   deleted_at: string | null;
+  /** Who was @mentioned — the client highlights these names in the body. */
+  mentions?: CommentMention[];
 }
 
 /** One entry in the merged live feed (lead activity + challenge activity). */
 export interface SalesFeedEvent {
   key: string;
-  source: "lead" | "challenge";
+  source: "lead" | "challenge" | "task";
   type: string;
   title: string;
   description: string | null;
@@ -158,6 +167,18 @@ export interface SalesFollowup {
   completed_by: number | null;
   completed_at: string | null;
   comment_count?: number;
+  created_by?: number | null;
+  /**
+   * The edit trail. A follow-up may only be edited by the person it belongs to,
+   * and every edit carries a reason the whole team can read — otherwise a moved
+   * follow-up is indistinguishable from a missed one.
+   */
+  edited_at?: string | null;
+  edited_by?: number | null;
+  edited_by_name?: string | null;
+  edit_reason?: string | null;
+  edit_count?: number;
+  owner_id?: number;
   created_at: string;
 }
 
@@ -236,6 +257,11 @@ export interface SalesChallenge {
   seconds_remaining: number;
   is_expired: boolean;
   is_actionable: boolean;
+  /** The board is team-wide; only the people it was offered to may accept. */
+  is_offered_to_me?: boolean;
+  /** Setting a challenge and taking it are opposite roles. */
+  i_created_it?: boolean;
+  can_accept?: boolean;
 }
 
 export interface ChallengeActivityEntry {
@@ -271,7 +297,81 @@ export interface SalesChallengeDetail extends SalesChallenge {
   comments: SalesComment[];
   /** The board is open to the team; only the people it was offered to may accept. */
   is_offered_to_me: boolean;
+  i_created_it: boolean;
   can_accept: boolean;
+}
+
+export type TaskStatus = "open" | "in_progress" | "completed" | "cancelled";
+export type TaskPriority = "low" | "normal" | "high" | "critical";
+export type TaskBucket = "mine" | "given" | "overdue" | "completed";
+
+export interface TaskActivityEntry {
+  id: number;
+  action: string;
+  notes: string | null;
+  actor_id: number | null;
+  actor_name: string;
+  created_at: string;
+}
+
+/**
+ * A job one person gave another.
+ *
+ * Two roles decide everything: the ASSIGNEE is the only one who can finish it,
+ * and the ASSIGNER is the one told when they do. The can_* flags are decided on
+ * the server and re-checked there — they only say which buttons to draw.
+ */
+export interface SalesTask {
+  id: number;
+  task_code: string | null;
+  title: string;
+  description: string | null;
+  assigned_to: number;
+  assigned_to_name: string;
+  assigned_by: number | null;
+  assigned_by_name: string;
+  lead_id: number | null;
+  lead_name?: string | null;
+  lead_company?: string | null;
+  due_date: string | null;
+  due_time: string | null;
+  priority: TaskPriority;
+  status: TaskStatus;
+  started_at: string | null;
+  completed_at: string | null;
+  completed_by: number | null;
+  completion_notes: string | null;
+  reviewed_at: string | null;
+  reviewed_by: number | null;
+  cancelled_at: string | null;
+  created_at: string;
+  updated_at: string | null;
+  comment_count: number;
+  is_overdue: boolean;
+  is_live: boolean;
+  is_assignee: boolean;
+  is_assigner: boolean;
+  can_start: boolean;
+  can_complete: boolean;
+  can_edit: boolean;
+  can_cancel: boolean;
+  can_restore: boolean;
+  can_reopen: boolean;
+  can_acknowledge: boolean;
+}
+
+export interface SalesTaskDetail extends SalesTask {
+  activity: TaskActivityEntry[];
+  comments: SalesComment[];
+}
+
+export interface TaskCounts {
+  mine: number;
+  given: number;
+  live: number;
+  overdue: number;
+  completed: number;
+  cancelled: number;
 }
 
 export interface SalesSummary {
@@ -286,6 +386,9 @@ export interface SalesSummary {
   meetings_today: number;
   meetings_upcoming: number;
   active_challenges: number;
+  tasks_mine: number;
+  tasks_given: number;
+  tasks_overdue: number;
 }
 
 export interface ChallengeCounts {
@@ -302,6 +405,7 @@ export interface SalesDashboard {
   followups: { today: SalesFollowup[]; overdue: SalesFollowup[]; upcoming: SalesFollowup[] };
   meetings: { today: SalesMeeting[]; upcoming: SalesMeeting[] };
   hot_leads: SalesLead[];
+  tasks: { counts: TaskCounts; mine: SalesTask[]; given: SalesTask[] };
   challenges: { counts: ChallengeCounts; active: SalesChallenge[]; available: SalesChallenge[] };
 }
 

@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ConfirmProvider } from "@/components/ConfirmDialog";
 import NotFound from "./pages/NotFound";
 
 // Core
@@ -48,6 +49,7 @@ const SalesChallengeDetail = lazy(() => import("./pages/sales/SalesChallengeDeta
 const SalesCallHistory     = lazy(() => import("./pages/sales/SalesCallHistory"));
 const SalesActivity        = lazy(() => import("./pages/sales/SalesActivity"));
 const SalesAccessControl   = lazy(() => import("./pages/sales/SalesAccessControl"));
+const SalesTasks           = lazy(() => import("./pages/sales/SalesTasks"));
 const SalesMore            = lazy(() => import("./pages/sales/SalesMore"));
 
 // System
@@ -117,6 +119,7 @@ function ProtectedRoutes() {
           <Route path="/sales/leads/:id"       element={<SalesLeadDetail />} />
           <Route path="/sales/followups"       element={<SalesFollowUps />} />
           <Route path="/sales/meetings"        element={<SalesMeetings />} />
+          <Route path="/sales/tasks"           element={<SalesTasks />} />
           <Route path="/sales/challenges"      element={<SalesChallenges />} />
           <Route path="/sales/challenges/:id"  element={<SalesChallengeDetail />} />
           <Route path="/sales/calls"           element={<SalesCallHistory />} />
@@ -150,14 +153,16 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <ErrorBoundary>
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                <Route path="/login"   element={<LoginRoute />} />
-                <Route path="/*"       element={<ProtectedRoutes />} />
-              </Routes>
-            </Suspense>
-          </ErrorBoundary>
+          <ConfirmProvider>
+            <ErrorBoundary>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                  <Route path="/login"   element={<LoginRoute />} />
+                  <Route path="/*"       element={<ProtectedRoutes />} />
+                </Routes>
+              </Suspense>
+            </ErrorBoundary>
+          </ConfirmProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

@@ -83,9 +83,19 @@ class AdminSalesFollowupController
             Response::error('Follow-up not found', 404);
         }
         $this->assertAccess($request, $row);
+        $this->assertIsOwner($request, $row);
 
         if ($row['status'] !== 'pending') {
             Response::error('Only a pending follow-up can be edited', 409);
+        }
+
+        // Every edit carries a reason, and the reason is shown to the team.
+        $reason = trim((string)$request->input('edit_reason', ''));
+        if (mb_strlen($reason) < 3) {
+            Response::error('Say why you are changing this follow-up — the team sees the reason', 422);
+        }
+        if (mb_strlen($reason) > 300) {
+            Response::error('Keep the reason under 300 characters', 422);
         }
 
         $data = [];
@@ -110,25 +120,24 @@ class AdminSalesFollowupController
             Response::error('Nothing to update', 400);
         }
 
-        SalesFollowup::update($id, $data);
+        SalesFollowup::edit($id, $data, $request->user, $reason);
         $leadId  = (int)$row['lead_id'];
         SalesLead::refreshSchedule($leadId);
         $updated = SalesFollowup::findRaw($id);
 
-        // An edit is part of the sales history: record what actually moved, so a
-        // rescheduled follow-up can never look like it was simply missed.
-        $changes = $this->describeChanges($row, $updated ?? $row);
-        if ($changes !== []) {
-            SalesActivity::log(
-                $leadId,
-                'followup_updated',
-                'Follow-up updated',
-                $request->user,
-                implode('; ', $changes),
-                'followup',
-                $id
-            );
-        }
+        // An edit is part of the sales history: record what actually moved and
+        // why, so a rescheduled follow-up can never look like it was missed.
+        $changes   = $this->describeChanges($row, $updated ?? $row);
+        $changes[] = 'Reason: ' . $reason;
+        SalesActivity::log(
+            $leadId,
+            'followup_updated',
+            'Follow-up edited by ' . (string)($request->user['name'] ?? 'someone'),
+            $request->user,
+            implode('; ', $changes),
+            'followup',
+            $id
+        );
 
         Response::success(
             ['followup' => $updated ? SalesFollowup::format($updated) : null],
@@ -222,6 +231,30 @@ class AdminSalesFollowupController
         if (!$lead || (int)($lead['assigned_to'] ?? 0) !== $userId) {
             Response::error('Follow-up not found', 404);
         }
+    }
+
+    /**
+     * Editing is the owner's alone.
+     *
+     * A follow-up is a promise one person made about one lead; someone else
+     * quietly moving the date is how a commitment goes missing without anyone
+     * noticing. Sales administrators are allowed through because somebody has
+     * to be able to fix a genuine mistake — and when they do, the edit trail
+     * names them, so it is a correction on the record rather than a silent one.
+     */
+    private function assertIsOwner(Request $request, array $followup): void
+    {
+        $userId = isset($request->user['user_id']) ? (int)$request->user['user_id'] : 0;
+        if (SalesFollowup::ownerId($followup) === $userId && $userId > 0) {
+            return;
+        }
+        if (SalesPermissions::isAdmin($request->user)) {
+            return;
+        }
+        Response::error(
+            'Only the person this follow-up belongs to can edit it. Add a comment instead.',
+            403
+        );
     }
 
     /** Human-readable diff for the timeline entry. */

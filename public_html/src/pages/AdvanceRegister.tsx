@@ -17,6 +17,7 @@ import {
 } from "@/lib/api/hr";
 import { exportToExcel, type ExportColumn } from "@/lib/exporters";
 import { ScrollableX } from "@/components/ui/scrollable-x";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -33,6 +34,7 @@ const emptyForm = (employeeId = ""): EmployeeAdvancePayload => ({
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : "Something went wrong";
 
 export default function AdvanceRegister() {
+  const confirm = useConfirm();
   const [month, setMonth] = useState(currentMonth());
   const [sortKey, setSortKey] = useState<string>("advanceDate");
   const [sortDir, setSortDir] = useState<"asc"|"desc">("desc");
@@ -130,7 +132,13 @@ export default function AdvanceRegister() {
   };
 
   const remove = async (advance: EmployeeAdvance) => {
-    if (!window.confirm(`Delete advance for ${advance.employeeName}?`)) return;
+    const ok = await confirm({
+      title: `Delete advance for ${advance.employeeName}?`,
+      description: "The advance is removed from this payroll month. This cannot be undone here.",
+      confirmLabel: "Delete advance",
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await employeeAdvancesApi.remove(advance.id);
       toast.success("Advance deleted");

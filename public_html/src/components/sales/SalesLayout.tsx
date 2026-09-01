@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Home, Users, CalendarClock, Trophy, MoreHorizontal } from "lucide-react";
+import { Home, Users, CalendarClock, ClipboardList, Trophy, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
@@ -20,6 +20,7 @@ const TABS = [
   { label: "Home",       to: "/sales",            icon: Home,          permission: "sales.dashboard.view" },
   { label: "Leads",      to: "/sales/leads",      icon: Users,         permission: "sales.leads.view" },
   { label: "Follow-Ups", to: "/sales/followups",  icon: CalendarClock, permission: "sales.followups.view" },
+  { label: "Tasks",      to: "/sales/tasks",      icon: ClipboardList, permission: "sales.tasks.view" },
   { label: "Challenges", to: "/sales/challenges", icon: Trophy,        permission: "sales.challenges.view" },
   { label: "More",       to: "/sales/more",       icon: MoreHorizontal, permission: null },
 ] as const;
@@ -37,7 +38,7 @@ export function SalesBottomTabs() {
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       aria-label="Sales navigation"
     >
-      <ul className="grid grid-cols-5">
+      <ul className="grid" style={{ gridTemplateColumns: `repeat(${visible.length}, minmax(0, 1fr))` }}>
         {visible.map((tab) => {
           // "/sales" must only match exactly, or every sales route lights it up.
           const active = tab.to === "/sales" ? pathname === "/sales" : pathname.startsWith(tab.to);
@@ -53,7 +54,7 @@ export function SalesBottomTabs() {
                 )}
               >
                 <tab.icon className={cn("h-5 w-5", active && "stroke-[2.5]")} />
-                <span className="leading-none">{tab.label}</span>
+                <span className="w-full truncate px-0.5 text-center leading-none">{tab.label}</span>
               </Link>
             </li>
           );

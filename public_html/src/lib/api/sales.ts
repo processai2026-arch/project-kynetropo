@@ -18,6 +18,11 @@ import type {
   SalesLockoutInfo,
   SalesMe,
   SalesMeeting,
+  SalesTask,
+  SalesTaskDetail,
+  TaskBucket,
+  TaskCounts,
+  TaskStatus,
 } from "@/types/sales";
 
 /** The API returns `{ success, message, data }`; paginated lists add `pagination`. */
@@ -97,6 +102,11 @@ export interface SalesNotification {
     | "challenge_available"
     | "challenge_ending"
     | "challenge_expired"
+    | "challenge_completed"
+    | "task_due"
+    | "task_overdue"
+    | "task_completed"
+    | "mention"
     | "comment_added";
   severity: "normal" | "urgent";
   title: string;
@@ -140,15 +150,25 @@ export const salesCommentsApi = {
       `/admin/sales/comments${qs({ entity_type, entity_id })}`,
       { skipCache: true },
     )).data.items,
-  create: async (entity_type: CommentEntityType, entity_id: number, body: string): Promise<SalesComment | null> =>
+  /**
+   * `mentions` carries the user ids the @ picker matched. The server re-checks
+   * every one of them — a mention is a notification, so it is never taken on
+   * the client's word alone.
+   */
+  create: async (
+    entity_type: CommentEntityType,
+    entity_id: number,
+    body: string,
+    mentions: number[] = [],
+  ): Promise<SalesComment | null> =>
     (await apiFetch<Envelope<{ comment: SalesComment | null }>>("/admin/sales/comments", {
       method: "POST",
-      body: JSON.stringify({ entity_type, entity_id, body }),
+      body: JSON.stringify({ entity_type, entity_id, body, mentions }),
     })).data.comment,
-  update: async (id: number, body: string): Promise<SalesComment | null> =>
+  update: async (id: number, body: string, mentions: number[] = []): Promise<SalesComment | null> =>
     (await apiFetch<Envelope<{ comment: SalesComment | null }>>(`/admin/sales/comments/${id}`, {
       method: "PUT",
-      body: JSON.stringify({ body }),
+      body: JSON.stringify({ body, mentions }),
     })).data.comment,
   remove: (id: number) => apiFetch<Envelope<{ id: number }>>(`/admin/sales/comments/${id}`, { method: "DELETE" }),
   restore: async (id: number): Promise<SalesComment | null> =>
@@ -285,7 +305,14 @@ export const salesFollowupsApi = {
       method: "POST",
       body: JSON.stringify(body),
     })).data,
-  update: async (id: number, body: { due_date?: string; due_time?: string; purpose?: string }) =>
+  /**
+   * Editing is the owner's alone, and `edit_reason` is required — the team is
+   * shown why a follow-up moved, so a reschedule can never pass for a miss.
+   */
+  update: async (
+    id: number,
+    body: { due_date?: string; due_time?: string; purpose?: string; edit_reason: string },
+  ) =>
     (await apiFetch<Envelope<{ followup: SalesFollowup | null }>>(`/admin/sales/followups/${id}`, {
       method: "PUT",
       body: JSON.stringify(body),
@@ -356,6 +383,67 @@ export const salesMeetingsApi = {
       { method: "POST", body: JSON.stringify(body) },
     )).data,
   cancel: (id: number) => apiFetch<Envelope<null>>(`/admin/sales/meetings/${id}/cancel`, { method: "POST" }),
+};
+
+// ─── Tasks ────────────────────────────────────────────────────────────────────
+
+export interface TaskListResult {
+  items: SalesTask[];
+  pagination: Pagination;
+  counts: TaskCounts;
+  can_manage: boolean;
+  me: number;
+}
+
+export interface TaskPayload {
+  title: string;
+  description?: string;
+  assigned_to: number;
+  due_date?: string;
+  due_time?: string;
+  priority?: string;
+  lead_id?: number | null;
+}
+
+export const salesTasksApi = {
+  list: async (
+    filters: { bucket?: TaskBucket | ""; status?: TaskStatus | ""; search?: string; lead_id?: number } = {},
+  ): Promise<TaskListResult> =>
+    (await apiFetch<Envelope<TaskListResult>>(`/admin/sales/tasks${qs(filters)}`, { skipCache: true })).data,
+  get: async (id: number): Promise<SalesTaskDetail> =>
+    (await apiFetch<Envelope<SalesTaskDetail>>(`/admin/sales/tasks/${id}`, { skipCache: true })).data,
+  create: async (body: TaskPayload): Promise<SalesTaskDetail> =>
+    (await apiFetch<Envelope<SalesTaskDetail>>("/admin/sales/tasks", {
+      method: "POST",
+      body: JSON.stringify(body),
+    })).data,
+  update: async (id: number, body: Partial<TaskPayload>): Promise<SalesTaskDetail> =>
+    (await apiFetch<Envelope<SalesTaskDetail>>(`/admin/sales/tasks/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    })).data,
+  start: async (id: number): Promise<SalesTaskDetail> =>
+    (await apiFetch<Envelope<SalesTaskDetail>>(`/admin/sales/tasks/${id}/start`, { method: "POST" })).data,
+  complete: async (id: number, completion_notes?: string): Promise<SalesTaskDetail> =>
+    (await apiFetch<Envelope<SalesTaskDetail>>(`/admin/sales/tasks/${id}/complete`, {
+      method: "POST",
+      body: JSON.stringify({ completion_notes }),
+    })).data,
+  /** The assigner hands it back — the reason is the message to the assignee. */
+  reopen: async (id: number, reason?: string): Promise<SalesTaskDetail> =>
+    (await apiFetch<Envelope<SalesTaskDetail>>(`/admin/sales/tasks/${id}/reopen`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    })).data,
+  acknowledge: async (id: number): Promise<SalesTaskDetail> =>
+    (await apiFetch<Envelope<SalesTaskDetail>>(`/admin/sales/tasks/${id}/acknowledge`, { method: "POST" })).data,
+  cancel: async (id: number, reason?: string): Promise<SalesTaskDetail> =>
+    (await apiFetch<Envelope<SalesTaskDetail>>(`/admin/sales/tasks/${id}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    })).data,
+  restore: async (id: number): Promise<SalesTaskDetail> =>
+    (await apiFetch<Envelope<SalesTaskDetail>>(`/admin/sales/tasks/${id}/restore`, { method: "POST" })).data,
 };
 
 // ─── Challenges ───────────────────────────────────────────────────────────────

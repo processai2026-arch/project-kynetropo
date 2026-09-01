@@ -14,9 +14,12 @@ declare(strict_types=1);
  */
 class SalesComment
 {
-    public const ENTITY_TYPES = ['lead', 'call', 'followup', 'meeting', 'challenge'];
+    public const ENTITY_TYPES = ['lead', 'call', 'followup', 'meeting', 'challenge', 'task'];
 
     public const MAX_LENGTH = 2000;
+
+    /** Nobody needs to summon the whole company into one thread. */
+    public const MAX_MENTIONS = 20;
 
     public static function create(array $data): int
     {
@@ -26,6 +29,7 @@ class SalesComment
             'entity_id'    => (int)$data['entity_id'],
             'lead_id'      => !empty($data['lead_id'])      ? (int)$data['lead_id']      : null,
             'challenge_id' => !empty($data['challenge_id']) ? (int)$data['challenge_id'] : null,
+            'task_id'      => !empty($data['task_id'])      ? (int)$data['task_id']      : null,
             'body'         => mb_substr(trim((string)$data['body']), 0, self::MAX_LENGTH),
             'author_id'    => !empty($data['author_id']) ? (int)$data['author_id'] : null,
             'author_name'  => mb_substr((string)($data['author_name'] ?? ''), 0, 200),
@@ -51,7 +55,81 @@ class SalesComment
               ORDER BY c.created_at ASC, c.id ASC',
             [Database::tenantId(), $entityType, $entityId]
         );
-        return array_map([self::class, 'format'], $rows);
+        if (!$rows) {
+            return [];
+        }
+
+        // One extra query for the whole thread rather than one per comment: a
+        // long discussion should not cost a query per line to render.
+        $mentions = self::mentionsFor(array_map(static fn(array $r): int => (int)$r['id'], $rows));
+
+        return array_map(
+            static fn(array $r): array => self::format($r, $mentions[(int)$r['id']] ?? []),
+            $rows
+        );
+    }
+
+    /**
+     * Who was @mentioned, per comment id.
+     *
+     * Mentions are rows, not something re-parsed out of the body: the body is
+     * free text the author can edit afterwards, and a person's name can change.
+     * Neither should be able to rewrite who was actually notified.
+     *
+     * @param  int[] $commentIds
+     * @return array<int, array<int, array{user_id:int,name:string}>>
+     */
+    public static function mentionsFor(array $commentIds): array
+    {
+        $ids = array_values(array_filter(array_map('intval', $commentIds), static fn(int $i): bool => $i > 0));
+        if (!$ids) {
+            return [];
+        }
+        $in   = implode(',', array_fill(0, count($ids), '?'));
+        $rows = Database::fetchAll(
+            "SELECT m.comment_id, m.user_id, COALESCE(u.name, m.user_name) AS name
+               FROM sales_comment_mentions m
+               LEFT JOIN users u ON u.user_id = m.user_id
+              WHERE m.tenant_id = ? AND m.comment_id IN ($in)",
+            [Database::tenantId(), ...$ids]
+        );
+        $out = [];
+        foreach ($rows as $r) {
+            $out[(int)$r['comment_id']][] = ['user_id' => (int)$r['user_id'], 'name' => (string)$r['name']];
+        }
+        return $out;
+    }
+
+    /**
+     * Records who a comment mentions. Replaces the set, so editing a comment to
+     * drop a name drops the mention with it.
+     *
+     * @param array<int, array{user_id:int,name:string}> $people
+     */
+    public static function setMentions(int $commentId, array $people): void
+    {
+        $tenantId = Database::tenantId();
+        Database::execute(
+            'DELETE FROM sales_comment_mentions WHERE tenant_id = ? AND comment_id = ?',
+            [$tenantId, $commentId]
+        );
+        $seen = [];
+        foreach (array_slice($people, 0, self::MAX_MENTIONS) as $person) {
+            $userId = (int)($person['user_id'] ?? 0);
+            if ($userId < 1 || isset($seen[$userId])) {
+                continue;
+            }
+            $seen[$userId] = true;
+            Database::execute(
+                'INSERT IGNORE INTO sales_comment_mentions (tenant_id, comment_id, user_id, user_name)
+                 VALUES (?, ?, ?, ?)',
+                [$tenantId, $commentId, $userId, mb_substr((string)($person['name'] ?? ''), 0, 200)]
+            );
+        }
+        Database::execute(
+            'UPDATE sales_comments SET mention_count = ? WHERE id = ? AND tenant_id = ?',
+            [count($seen), $commentId, $tenantId]
+        );
     }
 
     /**
@@ -145,7 +223,7 @@ class SalesComment
         return array_map([self::class, 'format'], $rows);
     }
 
-    public static function format(array $row): array
+    public static function format(array $row, array $mentions = []): array
     {
         $deleted = $row['deleted_at'] !== null;
         return [
@@ -154,6 +232,7 @@ class SalesComment
             'entity_id'       => (int)$row['entity_id'],
             'lead_id'         => $row['lead_id']      !== null ? (int)$row['lead_id']      : null,
             'challenge_id'    => $row['challenge_id'] !== null ? (int)$row['challenge_id'] : null,
+            'task_id'         => isset($row['task_id']) && $row['task_id'] !== null ? (int)$row['task_id'] : null,
             'lead_name'       => $row['lead_name']       ?? null,
             'lead_company'    => $row['lead_company']    ?? null,
             'challenge_title' => $row['challenge_title'] ?? null,
@@ -165,6 +244,9 @@ class SalesComment
             'edited_at'       => $row['edited_at'],
             'deleted'         => $deleted,
             'deleted_at'      => $row['deleted_at'],
+            // The names the client highlights in the body. Empty is the common
+            // case and costs nothing.
+            'mentions'        => $deleted ? [] : $mentions,
         ];
     }
 }

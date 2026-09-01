@@ -50,15 +50,22 @@ class AdminSalesCommentController
             Response::error('A comment is limited to ' . SalesComment::MAX_LENGTH . ' characters', 422);
         }
 
+        $mentions = $this->validMentions($request->input('mentions'), $request);
+
         $id = SalesComment::create([
             'entity_type'  => $entityType,
             'entity_id'    => $entityId,
             'lead_id'      => $context['lead_id']      ?? null,
             'challenge_id' => $context['challenge_id'] ?? null,
+            'task_id'      => $context['task_id']      ?? null,
             'body'         => $body,
             'author_id'    => isset($request->user['user_id']) ? (int)$request->user['user_id'] : null,
             'author_name'  => (string)($request->user['name'] ?? ''),
         ]);
+
+        if ($mentions) {
+            SalesComment::setMentions($id, $mentions);
+        }
 
         // Put the comment on the record's own history, so the lead timeline and
         // the challenge log read as one story rather than two parallel ones.
@@ -79,10 +86,16 @@ class AdminSalesCommentController
                 $request->user,
                 mb_substr($body, 0, 500)
             );
+        } elseif (!empty($context['task_id'])) {
+            SalesTask::logActivity(
+                (int)$context['task_id'],
+                'commented',
+                $request->user,
+                mb_substr($body, 0, 500)
+            );
         }
 
-        $row = SalesComment::findRaw($id);
-        Response::success(['comment' => $row ? SalesComment::format($row) : null], 'Comment added', 201);
+        Response::success(['comment' => $this->formatted($id)], 'Comment added', 201);
     }
 
     public function update(Request $request): void
@@ -97,9 +110,15 @@ class AdminSalesCommentController
         }
 
         SalesComment::update((int)$row['id'], $body);
-        $updated = SalesComment::findRaw((int)$row['id']);
 
-        Response::success(['comment' => $updated ? SalesComment::format($updated) : null], 'Comment updated');
+        // Mentions follow the text: editing a name out of a comment should take
+        // the mention with it, or the thread claims to have called someone in
+        // who is no longer named anywhere in it.
+        if ($request->input('mentions') !== null) {
+            SalesComment::setMentions((int)$row['id'], $this->validMentions($request->input('mentions'), $request));
+        }
+
+        Response::success(['comment' => $this->formatted((int)$row['id'])], 'Comment updated');
     }
 
     public function destroy(Request $request): void
@@ -126,9 +145,8 @@ class AdminSalesCommentController
         }
 
         SalesComment::restore((int)$row['id']);
-        $restored = SalesComment::findRaw((int)$row['id']);
 
-        Response::success(['comment' => $restored ? SalesComment::format($restored) : null], 'Comment restored');
+        Response::success(['comment' => $this->formatted((int)$row['id'])], 'Comment restored');
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -157,6 +175,27 @@ class AdminSalesCommentController
                 Response::error('Challenge not found', 404);
             }
             return [$entityType, $entityId, ['challenge_id' => $entityId]];
+        }
+
+        if ($entityType === 'task') {
+            // A task thread is readable by the two people it is actually
+            // between, plus anyone administering tasks. Everyone else gets the
+            // same 404 the task itself would give them.
+            SalesPermissions::enforce($request->user, 'sales.tasks.view');
+            $task = SalesTask::findRaw($entityId);
+            if (!$task) {
+                Response::error('Task not found', 404);
+            }
+            $userId = isset($request->user['user_id']) ? (int)$request->user['user_id'] : 0;
+            $mine   = (int)$task['assigned_to'] === $userId
+                      || ($task['assigned_by'] !== null && (int)$task['assigned_by'] === $userId);
+            if (!$mine && !SalesPermissions::has($request->user, 'sales.tasks.manage')) {
+                Response::error('Task not found', 404);
+            }
+            return [$entityType, $entityId, [
+                'task_id' => $entityId,
+                'lead_id' => !empty($task['lead_id']) ? (int)$task['lead_id'] : null,
+            ]];
         }
 
         $leadId = $entityType === 'lead' ? $entityId : $this->leadIdFor($entityType, $entityId);
@@ -224,7 +263,60 @@ class AdminSalesCommentController
             'followup'  => 'follow-up',
             'meeting'   => 'meeting',
             'challenge' => 'challenge',
+            'task'      => 'task',
         ];
         return $labels[$entityType] ?? 'record';
+    }
+
+    /** One comment, with the mentions the client needs to highlight it. */
+    private function formatted(int $id): ?array
+    {
+        $row = SalesComment::findRaw($id);
+        if (!$row) {
+            return null;
+        }
+        return SalesComment::format($row, SalesComment::mentionsFor([$id])[$id] ?? []);
+    }
+
+    /**
+     * Turns the client's @mention ids into real people.
+     *
+     * The ids are checked against the user table rather than trusted: a mention
+     * is a notification, and an unchecked one is a way to poke somebody who is
+     * not on this team. Unknown ids are dropped silently — the comment itself
+     * is still worth posting.
+     *
+     * @return array<int, array{user_id:int,name:string}>
+     */
+    private function validMentions(mixed $raw, Request $request): array
+    {
+        if (!is_array($raw) || $raw === []) {
+            return [];
+        }
+        $ids = [];
+        foreach (array_slice($raw, 0, SalesComment::MAX_MENTIONS) as $value) {
+            // Accept either a bare id or the {user_id, name} shape the picker
+            // holds on the client.
+            $id = is_array($value) ? (int)($value['user_id'] ?? 0) : (int)$value;
+            if ($id > 0) {
+                $ids[$id] = true;
+            }
+        }
+        // Mentioning yourself is not a notification, it is a typo.
+        unset($ids[isset($request->user['user_id']) ? (int)$request->user['user_id'] : 0]);
+        if (!$ids) {
+            return [];
+        }
+
+        $in   = implode(',', array_fill(0, count($ids), '?'));
+        $rows = Database::fetchAll(
+            "SELECT user_id, name FROM users
+              WHERE tenant_id = ? AND user_type = 'admin' AND is_active = 1 AND user_id IN ($in)",
+            [Database::tenantId(), ...array_keys($ids)]
+        );
+        return array_map(
+            static fn(array $r): array => ['user_id' => (int)$r['user_id'], 'name' => (string)$r['name']],
+            $rows
+        );
     }
 }

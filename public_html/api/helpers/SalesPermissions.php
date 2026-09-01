@@ -53,6 +53,12 @@ class SalesPermissions
             'sales.challenges.create',
             'sales.challenges.manage',
         ],
+        'Tasks'      => [
+            'sales.tasks.view',
+            'sales.tasks.create',
+            'sales.tasks.complete',
+            'sales.tasks.manage',
+        ],
         'Comments'   => [
             'sales.comments.view',
             'sales.comments.create',
@@ -84,6 +90,9 @@ class SalesPermissions
             'sales.challenges.view',
             'sales.challenges.accept',
             'sales.challenges.complete',
+            'sales.tasks.view',
+            'sales.tasks.create',
+            'sales.tasks.complete',
             'sales.comments.view',
             'sales.comments.create',
         ],
@@ -100,6 +109,7 @@ class SalesPermissions
         'sales.leads.convert',
         'sales.challenges.create',
         'sales.challenges.manage',
+        'sales.tasks.manage',
         'sales.reports.view',
     ];
 

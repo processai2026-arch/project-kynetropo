@@ -195,9 +195,22 @@ export default function SalesChallenges() {
                 )}
               </div>
 
-              {c.accepted_by_name && (
+              {c.accepted_by_name ? (
                 <p className="mt-2 text-[11px] text-muted-foreground">Accepted by {c.accepted_by_name}</p>
-              )}
+              ) : c.status === "available" ? (
+                // Everyone sees every challenge; only some can take one. Saying
+                // so on the card saves opening a challenge to find out it was
+                // never yours.
+                <p className="mt-2 text-[11px] font-medium">
+                  {c.can_accept ? (
+                    <span className="text-primary">Yours to take</span>
+                  ) : c.i_created_it ? (
+                    <span className="text-muted-foreground">You set this one</span>
+                  ) : (
+                    <span className="text-muted-foreground">Offered to someone else</span>
+                  )}
+                </p>
+              ) : null}
             </Link>
           ))}
         </div>

@@ -1209,6 +1209,7 @@ require_once ROOT_PATH . '/models/SalesFollowup.php';
 require_once ROOT_PATH . '/models/SalesMeeting.php';
 require_once ROOT_PATH . '/models/SalesChallenge.php';
 require_once ROOT_PATH . '/models/SalesComment.php';
+require_once ROOT_PATH . '/models/SalesTask.php';
 require_once ROOT_PATH . '/models/SalesLockout.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesDashboardController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesLeadController.php';
@@ -1216,8 +1217,10 @@ require_once ROOT_PATH . '/controllers/admin/AdminSalesCallController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesFollowupController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesMeetingController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesChallengeController.php';
+require_once ROOT_PATH . '/controllers/admin/AdminSalesTaskController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesAccessController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesCommentController.php';
+require_once ROOT_PATH . '/controllers/admin/AdminGlobalSearchController.php';
 
 // ─── Kynetropo Ops — Dashboard ────────────────────────────────────────────────
 $router->get('/admin/ops/dashboard-stats',                   [AdminOpsDashboardController::class, 'stats'],          'admin');
@@ -1422,7 +1425,20 @@ $router->post('/admin/sales/challenges/{id}/expire',     [AdminSalesChallengeCon
 $router->post('/admin/sales/challenges/{id}/cancel',     [AdminSalesChallengeController::class, 'cancel'],       'admin');
 $router->delete('/admin/sales/challenges/{id}',          [AdminSalesChallengeController::class, 'destroy'],      'admin');
 
-// Comments — the discussion thread on a lead, call, follow-up, meeting or
+// Tasks — assign work to one person and be told when it comes back. Static
+// segments would go before {id}; there are none, so plain order is enough.
+$router->get('/admin/sales/tasks',                       [AdminSalesTaskController::class, 'index'],             'admin');
+$router->post('/admin/sales/tasks',                      [AdminSalesTaskController::class, 'store'],             'admin');
+$router->get('/admin/sales/tasks/{id}',                  [AdminSalesTaskController::class, 'show'],              'admin');
+$router->put('/admin/sales/tasks/{id}',                  [AdminSalesTaskController::class, 'update'],            'admin');
+$router->post('/admin/sales/tasks/{id}/start',           [AdminSalesTaskController::class, 'start'],             'admin');
+$router->post('/admin/sales/tasks/{id}/complete',        [AdminSalesTaskController::class, 'complete'],          'admin');
+$router->post('/admin/sales/tasks/{id}/reopen',          [AdminSalesTaskController::class, 'reopen'],            'admin');
+$router->post('/admin/sales/tasks/{id}/acknowledge',     [AdminSalesTaskController::class, 'acknowledge'],       'admin');
+$router->post('/admin/sales/tasks/{id}/cancel',          [AdminSalesTaskController::class, 'cancel'],            'admin');
+$router->post('/admin/sales/tasks/{id}/restore',         [AdminSalesTaskController::class, 'restore'],           'admin');
+
+// Comments — the discussion thread on a lead, call, follow-up, meeting, task or
 // challenge. Access follows the record: the controller re-resolves the entity
 // and applies the same lead scope before it reads or writes a thread.
 $router->get('/admin/sales/comments',                    [AdminSalesCommentController::class, 'index'],          'admin');
@@ -1430,6 +1446,9 @@ $router->post('/admin/sales/comments',                   [AdminSalesCommentContr
 $router->post('/admin/sales/comments/{id}/restore',      [AdminSalesCommentController::class, 'restore'],        'admin');
 $router->put('/admin/sales/comments/{id}',               [AdminSalesCommentController::class, 'update'],         'admin');
 $router->delete('/admin/sales/comments/{id}',            [AdminSalesCommentController::class, 'destroy'],        'admin');
+
+// ─── Global search (the header Ctrl-K palette) ───────────────────────────────
+$router->get('/admin/search',                            [AdminGlobalSearchController::class, 'index'],          'admin');
 
 // Dispatch
 $router->dispatch();

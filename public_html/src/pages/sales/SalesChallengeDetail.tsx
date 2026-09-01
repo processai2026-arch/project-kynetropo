@@ -198,8 +198,11 @@ export default function SalesChallengeDetail() {
         {/*
           The board is open to the whole team: anyone may read a challenge and
           join the discussion on it. Accepting is restricted to the people it
-          was offered to — `can_accept` is the server's answer, and the server
-          refuses the request outright if it is asked anyway.
+          was offered to, and never to whoever set it — `can_accept` is the
+          server's answer, and the server refuses the request outright if it is
+          asked anyway. The three refusals say different things because they
+          are different situations, and "no" without a reason is what makes an
+          app feel broken.
         */}
         {challenge.status === "available" &&
           (challenge.can_accept ? (
@@ -213,9 +216,11 @@ export default function SalesChallengeDetail() {
             </Button>
           ) : (
             <p className="rounded-xl border border-dashed bg-muted/30 px-4 py-3 text-center text-sm text-muted-foreground">
-              {challenge.assignees.length > 0
-                ? `Offered to ${challenge.assignees.map((a) => a.name ?? "someone").join(", ")} — you can follow it and comment below.`
-                : "You do not have permission to accept challenges. You can follow this one and comment below."}
+              {challenge.i_created_it
+                ? "You set this challenge — someone else has to take it. You can follow it and comment below."
+                : challenge.assignees.length > 0
+                  ? `Offered to ${challenge.assignees.map((a) => a.name ?? "someone").join(", ")} — you can follow it and comment below.`
+                  : "You do not have permission to accept challenges. You can follow this one and comment below."}
             </p>
           ))}
 

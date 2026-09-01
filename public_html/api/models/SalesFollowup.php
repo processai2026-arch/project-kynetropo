@@ -45,11 +45,43 @@ class SalesFollowup
         );
     }
 
+    /**
+     * Applies an edit, and stamps who made it and why.
+     *
+     * The reason is not optional decoration: a follow-up that moves without one
+     * is indistinguishable from one that was simply missed, and the queue exists
+     * to make that difference visible to the whole team.
+     */
+    public static function edit(int $id, array $data, ?array $editor, string $reason): void
+    {
+        self::update($id, $data + [
+            'edited_at'      => date('Y-m-d H:i:s'),
+            'edited_by'      => isset($editor['user_id']) ? (int)$editor['user_id'] : null,
+            'edited_by_name' => mb_substr((string)($editor['name'] ?? ''), 0, 200),
+            'edit_reason'    => mb_substr($reason, 0, 300),
+        ]);
+        Database::execute(
+            'UPDATE sales_followups SET edit_count = edit_count + 1 WHERE id = ? AND tenant_id = ?',
+            [$id, Database::tenantId()]
+        );
+    }
+
+    /**
+     * Who this follow-up belongs to — the person it is assigned to, falling back
+     * to whoever created it when it was never assigned. Only they may edit it.
+     */
+    public static function ownerId(array $row): int
+    {
+        $assigned = (int)($row['assigned_to'] ?? 0);
+        return $assigned > 0 ? $assigned : (int)($row['created_by'] ?? 0);
+    }
+
     public static function update(int $id, array $data): void
     {
         $fields = [];
         $params = [];
-        foreach (['due_date', 'due_time', 'purpose', 'assigned_to', 'outcome_notes'] as $col) {
+        foreach (['due_date', 'due_time', 'purpose', 'assigned_to', 'outcome_notes',
+                  'edited_at', 'edited_by', 'edited_by_name', 'edit_reason'] as $col) {
             if (!array_key_exists($col, $data)) {
                 continue;
             }
@@ -233,6 +265,17 @@ class SalesFollowup
             'completed_by'        => $row['completed_by'] !== null ? (int)$row['completed_by'] : null,
             'completed_at'        => $row['completed_at'],
             'comment_count'       => isset($row['comment_count']) ? (int)$row['comment_count'] : 0,
+            'created_by'          => isset($row['created_by']) && $row['created_by'] !== null
+                                     ? (int)$row['created_by'] : null,
+            // The edit trail travels with the row: everyone who can see the
+            // follow-up sees that it moved, who moved it, and why.
+            'edited_at'           => $row['edited_at']      ?? null,
+            'edited_by'           => isset($row['edited_by']) && $row['edited_by'] !== null
+                                     ? (int)$row['edited_by'] : null,
+            'edited_by_name'      => ($row['edited_by_name'] ?? '') !== '' ? $row['edited_by_name'] : null,
+            'edit_reason'         => $row['edit_reason']    ?? null,
+            'edit_count'          => isset($row['edit_count']) ? (int)$row['edit_count'] : 0,
+            'owner_id'            => self::ownerId($row),
             'created_at'          => $row['created_at'],
         ];
     }

@@ -95,10 +95,15 @@ class AdminSalesAccessController
      */
     public function assignableUsers(Request $request): void
     {
+        // Assigning a challenge, giving someone a task and @mentioning a
+        // colleague all need the same thing: the names of the people on this
+        // team. It is a list of colleagues, not a privilege.
         SalesPermissions::enforceAny($request->user, [
             'sales.challenges.create',
             'sales.challenges.manage',
             'sales.leads.assign',
+            'sales.tasks.create',
+            'sales.comments.create',
         ]);
 
         $rows = Database::fetchAll(

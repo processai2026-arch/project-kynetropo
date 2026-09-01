@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Bell, CalendarDays, ChevronRight, History, Phone, Settings, ShieldCheck, Trophy, User } from "lucide-react";
+import { Bell, CalendarDays, ChevronRight, ClipboardList, History, Phone, Settings, ShieldCheck, Trophy, User } from "lucide-react";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -27,6 +27,7 @@ export default function SalesMore() {
     { to: "/sales/calls", label: "Call History", icon: Phone, show: can("sales.calls.view") },
     { to: "/sales/activity", label: "Team Activity", icon: History, show: can("sales.dashboard.view") },
     { to: "/sales/challenges", label: "Challenges", icon: Trophy, show: can("sales.challenges.view") },
+    { to: "/sales/tasks", label: "Tasks", icon: ClipboardList, show: can("sales.tasks.view") },
     // Access control is deliberately desktop-only — administering permissions
     // is not something to do from a phone, and it keeps the app to the five
     // things a salesperson actually needs.

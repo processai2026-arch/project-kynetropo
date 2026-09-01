@@ -15,7 +15,12 @@ import { toast } from "sonner";
 import { salesCallsApi, salesFollowupsApi, salesLeadsApi, salesMeetingsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
-import { FollowupEditDialog } from "@/components/sales/FollowupEditDialog";
+import { useConfirm } from "@/components/ConfirmDialog";
+import {
+  FollowupEditDialog,
+  FollowupEditNote,
+  canEditFollowup,
+} from "@/components/sales/FollowupEditDialog";
 import { CommentButton, CommentThread, CommentThreadDialog } from "@/components/sales/CommentThread";
 import { ConvertLeadDialog } from "@/components/sales/ConvertLeadDialog";
 import { LeadStatusBadge, TemperatureBadge, formatDate, formatDateTime, formatTime, humanise } from "@/components/sales/SalesBits";
@@ -51,7 +56,8 @@ export default function SalesLeadDetail() {
   const leadId = Number(id);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { can } = useSalesAccess();
+  const { can, me } = useSalesAccess();
+  const confirm = useConfirm();
 
   const [lead, setLead] = useState<LeadDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -256,10 +262,25 @@ export default function SalesLeadDetail() {
 
   const handleRevert = async () => {
     const converted = lead?.status === "converted";
-    const message = converted
-      ? "Undo this conversion? The lead returns to onboarding. The customer record stays in the project system — it is only unlinked."
-      : "Move this lead back out of onboarding?";
-    if (!window.confirm(message)) return;
+    // The browser's own confirm() puts the raw host name at the top
+    // ("project.kynetropo.com says"), cannot be styled, and blocks the main
+    // thread — on a phone it reads like a phishing prompt rather than part of
+    // the app.
+    const ok = await confirm(
+      converted
+        ? {
+            title: "Undo this conversion?",
+            description:
+              "The lead returns to onboarding.\nThe customer record stays in the project system — it is only unlinked.",
+            confirmLabel: "Undo conversion",
+          }
+        : {
+            title: "Move this lead back out of onboarding?",
+            description: "It returns to qualified. Nothing else about the lead changes.",
+            confirmLabel: "Move back",
+          },
+    );
+    if (!ok) return;
     setSaving(true);
     try {
       const res = await salesLeadsApi.revert(leadId);
@@ -451,6 +472,7 @@ export default function SalesLeadDetail() {
                   {f.due_time ? ` · ${formatTime(f.due_time)}` : ""}
                 </p>
                 {f.purpose && <p className="truncate text-xs text-muted-foreground">{f.purpose}</p>}
+                <FollowupEditNote followup={f} className="mt-1" />
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {can("sales.comments.view") && (
@@ -459,7 +481,7 @@ export default function SalesLeadDetail() {
                     onClick={() => setThread({ type: "followup", id: f.id, title: `Follow-up ${formatDate(f.due_date)}` })}
                   />
                 )}
-                {can("sales.followups.create") && (
+                {can("sales.followups.create") && canEditFollowup(f, me ?? null) && (
                   <Button
                     size="sm"
                     variant="ghost"

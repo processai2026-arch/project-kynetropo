@@ -46,6 +46,12 @@ class AdminSalesDashboardController
 
         $challengeCounts = SalesChallenge::counts($request->user, $isManager);
 
+        $userId     = isset($request->user['user_id']) ? (int)$request->user['user_id'] : 0;
+        $seeAllTask = SalesPermissions::has($request->user, 'sales.tasks.manage');
+        $taskCounts = SalesPermissions::has($request->user, 'sales.tasks.view')
+            ? SalesTask::counts($userId, $seeAllTask)
+            : ['mine' => 0, 'given' => 0, 'live' => 0, 'overdue' => 0, 'completed' => 0, 'cancelled' => 0];
+
         Response::success([
             'server_time' => SalesChallenge::serverTime(),
             'summary'     => [
@@ -60,6 +66,9 @@ class AdminSalesDashboardController
                 'meetings_today'    => $meetingCounts['today'],
                 'meetings_upcoming' => $meetingCounts['upcoming'],
                 'active_challenges' => $challengeCounts['accepted'] + $challengeCounts['in_progress'],
+                'tasks_mine'        => $taskCounts['mine'],
+                'tasks_given'       => $taskCounts['given'],
+                'tasks_overdue'     => $taskCounts['overdue'],
             ],
             'followups' => [
                 'today'    => SalesFollowup::all('today',    [], $scope, 1, 20)['rows'],
@@ -71,6 +80,15 @@ class AdminSalesDashboardController
                 'upcoming' => SalesMeeting::all(['status' => 'scheduled', 'date_from' => date('Y-m-d', strtotime('+1 day'))], $scope, 1, 20)['rows'],
             ],
             'hot_leads'  => SalesLead::all(['temperature' => 'hot'], $scope, 1, 10)['rows'],
+            'tasks'      => [
+                'counts' => $taskCounts,
+                // What I owe, then what I am waiting on — the only two task
+                // questions a dashboard is ever asked.
+                'mine'   => SalesPermissions::has($request->user, 'sales.tasks.view')
+                            ? SalesTask::all(['bucket' => 'mine'], $userId, $seeAllTask, 1, 10)['rows'] : [],
+                'given'  => SalesPermissions::has($request->user, 'sales.tasks.view')
+                            ? SalesTask::all(['bucket' => 'given'], $userId, $seeAllTask, 1, 10)['rows'] : [],
+            ],
             'challenges' => [
                 'counts' => $challengeCounts,
                 'active' => SalesChallenge::all('in_progress', $request->user, $isManager, 1, 5)['rows'],
@@ -179,7 +197,48 @@ class AdminSalesDashboardController
             }
         }
 
-        // Merge the two streams by time; the DB gave each one ordered already.
+        // ── Task activity — only the tasks this user gave or was given, unless
+        // they administer tasks. The feed must never become a way to read work
+        // between two other people.
+        if (SalesPermissions::has($request->user, 'sales.tasks.view')) {
+            $userId  = isset($request->user['user_id']) ? (int)$request->user['user_id'] : 0;
+            $tWhere  = 'ta.tenant_id = ?';
+            $tParams = [$tenantId];
+            if (!SalesPermissions::has($request->user, 'sales.tasks.manage')) {
+                $tWhere   .= ' AND (t.assigned_to = ? OR t.assigned_by = ?)';
+                $tParams[] = $userId;
+                $tParams[] = $userId;
+            }
+            if ($sinceOk) {
+                $tWhere   .= ' AND ta.created_at > ?';
+                $tParams[] = $since;
+            }
+            foreach (Database::fetchAll(
+                "SELECT ta.id, ta.action, ta.notes, ta.actor_id, ta.actor_name, ta.created_at,
+                        t.id AS task_id, t.title, t.assigned_to_name
+                   FROM sales_task_activity ta
+                   JOIN sales_tasks t ON t.id = ta.task_id AND t.tenant_id = ta.tenant_id
+                  WHERE $tWhere
+                  ORDER BY ta.created_at DESC, ta.id DESC
+                  LIMIT $limit",
+                $tParams
+            ) as $r) {
+                $events[] = [
+                    'key'         => 'task_activity:' . $r['id'],
+                    'source'      => 'task',
+                    'type'        => 'task_' . $r['action'],
+                    'title'       => 'Task ' . str_replace('_', ' ', (string)$r['action']),
+                    'description' => $r['notes'],
+                    'actor_id'    => $r['actor_id'] !== null ? (int)$r['actor_id'] : null,
+                    'actor_name'  => $r['actor_name'],
+                    'subject'     => $r['title'],
+                    'url'         => '/sales/tasks?task=' . (int)$r['task_id'],
+                    'at'          => $r['created_at'],
+                ];
+            }
+        }
+
+        // Merge the streams by time; the DB gave each one ordered already.
         usort($events, static fn(array $a, array $b) => [$b['at'], $b['key']] <=> [$a['at'], $a['key']]);
         $events = array_slice($events, 0, $limit);
 
@@ -339,6 +398,113 @@ class AdminSalesDashboardController
                     ];
                 }
             }
+        }
+
+        // ── Tasks: what I owe, and what has come back to me ─────────────────
+        if (SalesPermissions::has($request->user, 'sales.tasks.view')) {
+            // Mine to do: due today or already late. A task with no date is not
+            // an alert — it is a list item, and the list is one tap away.
+            foreach (Database::fetchAll(
+                "SELECT id, title, due_date, due_time, assigned_by_name
+                   FROM sales_tasks
+                  WHERE tenant_id = ? AND assigned_to = ? AND status IN ('open','in_progress')
+                    AND due_date IS NOT NULL AND due_date <= ?
+                  ORDER BY due_date ASC LIMIT 15",
+                [$tenantId, $userId, $today]
+            ) as $row) {
+                $late    = $row['due_date'] < $today;
+                $items[] = [
+                    'key'      => 'task:' . $row['id'] . ':' . ($late ? 'overdue' : 'today'),
+                    'type'     => $late ? 'task_overdue' : 'task_due',
+                    'severity' => $late ? 'urgent' : 'normal',
+                    'title'    => $late ? 'Task overdue' : 'Task due today',
+                    'body'     => trim((string)$row['title']
+                                  . ($row['assigned_by_name'] ? ' — from ' . $row['assigned_by_name'] : '')),
+                    'url'      => '/sales/tasks?task=' . (int)$row['id'],
+                    'at'       => $row['due_date'] . ' ' . ($row['due_time'] ?: '00:00:00'),
+                ];
+            }
+
+            // Given out and finished: the assigner is told, and keeps being told
+            // until they accept the work. That is the whole point of assigning
+            // it to somebody — the loop has to close.
+            foreach (Database::fetchAll(
+                "SELECT t.id, t.title, t.completed_at, COALESCE(u.name, t.assigned_to_name) AS who
+                   FROM sales_tasks t
+                   LEFT JOIN users u ON u.user_id = t.assigned_to
+                  WHERE t.tenant_id = ? AND t.assigned_by = ? AND t.status = 'completed'
+                    AND t.reviewed_at IS NULL
+                  ORDER BY t.completed_at DESC LIMIT 15",
+                [$tenantId, $userId]
+            ) as $row) {
+                $items[] = [
+                    'key'      => 'task:' . $row['id'] . ':completed',
+                    'type'     => 'task_completed',
+                    'severity' => 'normal',
+                    'title'    => trim(($row['who'] ?: 'Someone') . ' completed a task you assigned'),
+                    'body'     => (string)$row['title'],
+                    'url'      => '/sales/tasks?task=' . (int)$row['id'],
+                    'at'       => $row['completed_at'],
+                ];
+            }
+        }
+
+        // ── Challenges you set, finished by whoever took them ───────────────
+        if (SalesPermissions::has($request->user, 'sales.challenges.view')) {
+            foreach (Database::fetchAll(
+                "SELECT c.id, c.title, c.completed_at, u.name AS who
+                   FROM sales_challenges c
+                   LEFT JOIN users u ON u.user_id = c.completed_by
+                  WHERE c.tenant_id = ? AND c.created_by = ? AND c.status = 'completed'
+                    AND c.completed_at >= NOW() - INTERVAL 3 DAY
+                  ORDER BY c.completed_at DESC LIMIT 10",
+                [$tenantId, $userId]
+            ) as $row) {
+                $items[] = [
+                    'key'      => 'challenge:' . $row['id'] . ':completed',
+                    'type'     => 'challenge_completed',
+                    'severity' => 'normal',
+                    'title'    => trim(($row['who'] ?: 'Someone') . ' completed your challenge'),
+                    'body'     => (string)$row['title'],
+                    'url'      => '/sales/challenges/' . (int)$row['id'],
+                    'at'       => $row['completed_at'],
+                ];
+            }
+        }
+
+        // ── You were @mentioned ─────────────────────────────────────────────
+        // Deliberately NOT filtered by lead scope: being named is the point of
+        // a mention, and the thread it is in has already decided who may read
+        // it. The URL is the record, so the mention lands you where the
+        // conversation is rather than in a notification list.
+        foreach (Database::fetchAll(
+            "SELECT cm.id, cm.body, cm.author_name, cm.created_at, cm.entity_type, cm.entity_id,
+                    cm.lead_id, cm.challenge_id, cm.task_id
+               FROM sales_comment_mentions m
+               JOIN sales_comments cm ON cm.id = m.comment_id AND cm.tenant_id = m.tenant_id
+              WHERE m.tenant_id = ? AND m.user_id = ? AND cm.deleted_at IS NULL
+                AND cm.created_at >= NOW() - INTERVAL 3 DAY
+                AND (cm.author_id IS NULL OR cm.author_id <> ?)
+              ORDER BY cm.created_at DESC LIMIT 15",
+            [$tenantId, $userId, $userId]
+        ) as $row) {
+            $url = '/sales';
+            if (!empty($row['challenge_id'])) {
+                $url = '/sales/challenges/' . (int)$row['challenge_id'];
+            } elseif (!empty($row['task_id'])) {
+                $url = '/sales/tasks?task=' . (int)$row['task_id'];
+            } elseif (!empty($row['lead_id'])) {
+                $url = '/sales/leads/' . (int)$row['lead_id'];
+            }
+            $items[] = [
+                'key'      => 'mention:' . $row['id'],
+                'type'     => 'mention',
+                'severity' => 'urgent',
+                'title'    => trim(($row['author_name'] ?: 'Someone') . ' mentioned you'),
+                'body'     => mb_substr((string)$row['body'], 0, 140),
+                'url'      => $url,
+                'at'       => $row['created_at'],
+            ];
         }
 
         // ── Comments someone else left on something you can see ─────────────

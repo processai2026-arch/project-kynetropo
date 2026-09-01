@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageSquare, Pencil, RotateCcw, Send, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { salesCommentsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
+import { useTeamMembers, type TeamMember } from "@/hooks/useTeamMembers";
+import { CommentBody, MentionInput, mentionsIn } from "@/components/sales/MentionInput";
 import type { CommentEntityType, SalesComment } from "@/types/sales";
 import { cn } from "@/lib/utils";
 
@@ -47,11 +48,13 @@ function CommentRow({
   comment,
   canEdit,
   canDelete,
+  people,
   onChanged,
 }: {
   comment: SalesComment;
   canEdit: boolean;
   canDelete: boolean;
+  people: TeamMember[];
   onChanged: (updated: SalesComment | null, removedId?: number) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -66,7 +69,9 @@ function CommentRow({
     }
     setBusy(true);
     try {
-      onChanged(await salesCommentsApi.update(comment.id, text));
+      // Re-derived from the final text, so a name edited out of the comment
+      // stops being a mention.
+      onChanged(await salesCommentsApi.update(comment.id, text, mentionsIn(text, people)));
       setEditing(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update the comment");
@@ -130,7 +135,14 @@ function CommentRow({
 
         {editing ? (
           <div className="mt-1.5 space-y-2">
-            <Textarea rows={3} maxLength={MAX_LENGTH} value={draft} onChange={(e) => setDraft(e.target.value)} />
+            <MentionInput
+              rows={3}
+              maxLength={MAX_LENGTH}
+              value={draft}
+              people={people}
+              onChange={setDraft}
+              onSubmit={() => void save()}
+            />
             <div className="flex gap-2">
               <Button size="sm" className="h-8" disabled={busy} onClick={() => void save()}>
                 Save
@@ -149,7 +161,7 @@ function CommentRow({
             </div>
           </div>
         ) : (
-          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-muted-foreground">{comment.body}</p>
+          <CommentBody body={comment.body ?? ""} mentions={comment.mentions} />
         )}
 
         {!editing && (canEdit || canDelete) && (
@@ -201,6 +213,7 @@ export function CommentThread({
   onCountChange?: (count: number) => void;
 }) {
   const { me, can, isSalesAdmin } = useSalesAccess();
+  const people = useTeamMembers(can("sales.comments.create"));
   const [items, setItems] = useState<SalesComment[]>(initialComments ?? []);
   const [loading, setLoading] = useState(initialComments === undefined);
   const [draft, setDraft] = useState("");
@@ -239,13 +252,13 @@ export function CommentThread({
     };
   }, [entityType, entityId, initialComments, report]);
 
-  const post = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const post = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     const text = draft.trim();
     if (!text) return;
     setPosting(true);
     try {
-      const created = await salesCommentsApi.create(entityType, entityId, text);
+      const created = await salesCommentsApi.create(entityType, entityId, text, mentionsIn(text, people));
       if (created) {
         setItems((prev) => {
           const next = [...prev, created];
@@ -295,6 +308,7 @@ export function CommentThread({
               comment={c}
               canEdit={!c.deleted && myId !== null && c.author_id === myId && canComment}
               canDelete={!c.deleted ? myId !== null && (c.author_id === myId || isSalesAdmin) : isSalesAdmin}
+              people={people}
               onChanged={applyChange}
             />
           ))}
@@ -304,13 +318,15 @@ export function CommentThread({
 
       {canComment && (
         <form onSubmit={post} className="flex items-end gap-2">
-          <Textarea
+          <MentionInput
             rows={compact ? 2 : 3}
             maxLength={MAX_LENGTH}
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Add a comment for the team…"
-            className="min-h-[2.5rem] flex-1"
+            people={people}
+            onChange={setDraft}
+            onSubmit={() => void post()}
+            placeholder="Add a comment — type @ to bring someone in"
+            className="min-h-[2.5rem]"
           />
           <Button type="submit" size="sm" className="h-10 shrink-0" disabled={posting || !draft.trim()}>
             <Send className="h-4 w-4" />

@@ -72,6 +72,10 @@
     --sidebar-accent-foreground: 200 70% 36%;
     --sidebar-border: 204 35% 88%;
     --sidebar-ring: 200 70% 52%;
+    /* The active item's glyph, one step brighter than its label. */
+    --sidebar-primary-icon: 0 0% 100%;
+    /* Group headings on the rail — quieter than the items under them. */
+    --sidebar-muted: 215 16% 47%;
   }
 
   .dark {
@@ -106,6 +110,8 @@
     --sidebar-accent-foreground: 200 85% 72%;
     --sidebar-border: 217 28% 24%;
     --sidebar-ring: 200 70% 52%;
+    --sidebar-primary-icon: 0 0% 100%;
+    --sidebar-muted: 215 20% 65%;
   }
 }
 
@@ -128,3 +134,20 @@
 .eco-float-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(0,0,0,0.50);
 }
+
+/* ── Kit utilities (ported with the VB Solar / Real Estate CRM chrome) ────── */
+
+/* Figures that line up in columns should share a digit width. Without this,
+   proportional digits make a column of numbers ragged. */
+.eco-nums { font-variant-numeric: tabular-nums; }
+
+/* A scroller with no visible bar. On a 84px rail a gutter would take a tenth
+   of the width; the icons themselves show there is more, the way a phone list
+   does. */
+.eco-noscrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.eco-noscrollbar::-webkit-scrollbar { width: 0; height: 0; }
+
+/* The workspace tab strip: scrolls sideways, but the bar would sit on top of
+   the tabs in an 44px-tall row, so it is hidden and the arrow buttons drive it. */
+.eco-tabstrip { scrollbar-width: none; -ms-overflow-style: none; }
+.eco-tabstrip::-webkit-scrollbar { width: 0; height: 0; }

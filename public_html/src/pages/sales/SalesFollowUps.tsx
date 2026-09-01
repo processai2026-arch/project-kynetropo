@@ -11,7 +11,11 @@ import { toast } from "sonner";
 import { salesFollowupsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
-import { FollowupEditDialog } from "@/components/sales/FollowupEditDialog";
+import {
+  FollowupEditDialog,
+  FollowupEditNote,
+  canEditFollowup,
+} from "@/components/sales/FollowupEditDialog";
 import { CommentButton, CommentThreadDialog } from "@/components/sales/CommentThread";
 import { TemperatureBadge, formatDate, formatTime, humanise } from "@/components/sales/SalesBits";
 import type { FollowupBucket, SalesFollowup } from "@/types/sales";
@@ -40,7 +44,7 @@ function belongsToBucket(f: SalesFollowup, bucket: FollowupBucket): boolean {
 
 export default function SalesFollowUps() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { can } = useSalesAccess();
+  const { can, me } = useSalesAccess();
 
   const initial = (searchParams.get("bucket") as FollowupBucket) ?? "today";
   const [bucket, setBucket] = useState<FollowupBucket>(
@@ -193,6 +197,10 @@ export default function SalesFollowUps() {
 
               {f.purpose && <p className="mt-2 text-sm text-muted-foreground">{f.purpose}</p>}
 
+              {/* Everyone sees that it moved, who moved it and why — not only
+                  the person who owns it. */}
+              <FollowupEditNote followup={f} className="mt-2" />
+
               {can("sales.comments.view") && (
                 <div className="mt-2">
                   <CommentButton count={f.comment_count ?? 0} onClick={() => setThread(f)} />
@@ -221,7 +229,10 @@ export default function SalesFollowUps() {
                       Complete
                     </Button>
                   )}
-                  {can("sales.followups.create") && (
+                  {/* Editing belongs to the person the follow-up is on. The
+                      server refuses anyone else, so offering the button to
+                      them would only produce a 403. */}
+                  {can("sales.followups.create") && canEditFollowup(f, me ?? null) && (
                     <Button
                       size="sm"
                       variant="ghost"

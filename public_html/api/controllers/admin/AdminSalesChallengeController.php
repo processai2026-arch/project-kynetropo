@@ -42,7 +42,10 @@ class AdminSalesChallengeController
         );
 
         Response::success([
-            'items'       => $result['rows'],
+            // Decorated per row so the board can grey out what is not yours to
+            // take. The same rule is re-applied in accept() — this only decides
+            // which buttons are worth drawing.
+            'items'       => array_map(fn(array $c): array => $this->withAcceptance($c, $request), $result['rows']),
             'pagination'  => $result['pagination'],
             'counts'      => SalesChallenge::counts($request->user, $isManager),
             'server_time' => SalesChallenge::serverTime(),
@@ -63,11 +66,7 @@ class AdminSalesChallengeController
 
         // Anyone on the team may read a challenge and join the discussion on it.
         // Accepting is the restricted act, and `can_accept` says who may.
-        $userId = isset($request->user['user_id']) ? (int)$request->user['user_id'] : 0;
-        $challenge['is_offered_to_me'] = SalesChallenge::isOfferedTo($id, $userId);
-        $challenge['can_accept'] = $challenge['is_offered_to_me']
-            && $challenge['status'] === 'available'
-            && SalesPermissions::has($request->user, 'sales.challenges.accept');
+        $challenge = $this->withAcceptance($challenge, $request);
 
         $challenge['report']   = $this->report($challenge);
         $challenge['comments'] = SalesComment::forEntity('challenge', $id);
@@ -111,7 +110,7 @@ class AdminSalesChallengeController
 
         SalesChallenge::logActivity($id, 'created', $request->user, $title);
 
-        Response::success(SalesChallenge::find($id), 'Challenge created', 201);
+        Response::success($this->detail($id, $request), 'Challenge created', 201);
     }
 
     public function update(Request $request): void
@@ -164,7 +163,7 @@ class AdminSalesChallengeController
 
         SalesChallenge::logActivity($id, 'updated', $request->user);
 
-        Response::success(SalesChallenge::find($id), 'Challenge updated');
+        Response::success($this->detail($id, $request), 'Challenge updated');
     }
 
     // ── Lifecycle ───────────────────────────────────────────────────────────
@@ -181,6 +180,13 @@ class AdminSalesChallengeController
         }
 
         $userId = (int)$request->user['user_id'];
+
+        // Setting the challenge and taking it are opposite roles. Someone who
+        // could do both could hand themselves an easy target and claim it, and
+        // the whole board would stop meaning anything.
+        if ($raw['created_by'] !== null && (int)$raw['created_by'] === $userId) {
+            Response::error('You set this challenge — someone else has to take it', 403);
+        }
         if (!SalesChallenge::isOfferedTo($id, $userId)) {
             Response::error('This challenge was not offered to you', 403);
         }
@@ -199,7 +205,7 @@ class AdminSalesChallengeController
         }
 
         SalesChallenge::logActivity($id, 'accepted', $request->user);
-        Response::success(SalesChallenge::find($id), 'Challenge accepted');
+        Response::success($this->detail($id, $request), 'Challenge accepted');
     }
 
     public function start(Request $request): void
@@ -225,7 +231,7 @@ class AdminSalesChallengeController
         }
 
         SalesChallenge::logActivity($id, 'started', $request->user);
-        Response::success(SalesChallenge::find($id), 'Challenge in progress');
+        Response::success($this->detail($id, $request), 'Challenge in progress');
     }
 
     public function complete(Request $request): void
@@ -264,7 +270,7 @@ class AdminSalesChallengeController
         }
 
         SalesChallenge::logActivity($id, 'completed', $request->user, $notes);
-        Response::success(SalesChallenge::find($id), 'Challenge completed');
+        Response::success($this->detail($id, $request), 'Challenge completed');
     }
 
     /** POST /admin/sales/challenges/{id}/expire — only valid past the deadline. */
@@ -278,14 +284,14 @@ class AdminSalesChallengeController
             Response::error('Challenge not found', 404);
         }
         if ($raw['status'] === 'expired') {
-            Response::success(SalesChallenge::find($id), 'Challenge already expired');
+            Response::success($this->detail($id, $request), 'Challenge already expired');
         }
         if (!SalesChallenge::expire($id)) {
             Response::error('This challenge has not reached its deadline yet', 409);
         }
 
         SalesChallenge::logActivity($id, 'expired', $request->user, 'Expired by administrator after deadline');
-        Response::success(SalesChallenge::find($id), 'Challenge expired');
+        Response::success($this->detail($id, $request), 'Challenge expired');
     }
 
     public function cancel(Request $request): void
@@ -301,7 +307,7 @@ class AdminSalesChallengeController
         }
 
         SalesChallenge::logActivity($id, 'cancelled', $request->user);
-        Response::success(SalesChallenge::find($id), 'Challenge cancelled');
+        Response::success($this->detail($id, $request), 'Challenge cancelled');
     }
 
     /** Completed and expired challenges stay in history — deletion is refused. */
@@ -312,6 +318,37 @@ class AdminSalesChallengeController
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
+
+    /** One challenge, with the acceptance flags every response carries. */
+    private function detail(int $id, Request $request): ?array
+    {
+        $challenge = SalesChallenge::find($id);
+        return $challenge ? $this->withAcceptance($challenge, $request) : null;
+    }
+
+    /**
+     * Who may accept this challenge, answered on the server so the board and
+     * the detail page cannot disagree.
+     *
+     * Three separate conditions, kept separate because they fail for different
+     * reasons and the UI says something different for each: it was offered to
+     * someone else, you set it yourself, or you do not hold the permission.
+     */
+    private function withAcceptance(array $challenge, Request $request): array
+    {
+        $userId  = isset($request->user['user_id']) ? (int)$request->user['user_id'] : 0;
+        $offered = SalesChallenge::isOfferedTo((int)$challenge['id'], $userId);
+        $isMine  = $challenge['created_by'] !== null && (int)$challenge['created_by'] === $userId;
+
+        $challenge['is_offered_to_me'] = $offered;
+        $challenge['i_created_it']     = $isMine;
+        $challenge['can_accept']       = $offered
+            && !$isMine
+            && $challenge['status'] === 'available'
+            && SalesPermissions::has($request->user, 'sales.challenges.accept');
+
+        return $challenge;
+    }
 
     /**
      * The destroyed-state report (spec §35). Only fields the backend actually

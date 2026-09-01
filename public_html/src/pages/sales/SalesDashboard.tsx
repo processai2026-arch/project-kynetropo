@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  AlertTriangle, CalendarClock, CalendarDays, CalendarPlus, Flame, Phone,
-  TrendingUp, Trophy, UserPlus, Users,
+  AlertTriangle, CalendarClock, CalendarDays, CalendarPlus, ClipboardList, Clock,
+  Flame, Phone, TrendingUp, Trophy, UserPlus, Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -364,6 +364,57 @@ export default function SalesDashboard() {
             ))}
             {data.meetings.upcoming.slice(0, 4).map((m) => (
               <MeetingRow key={`u-${m.id}`} item={m} />
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/*
+        Tasks answer two questions and the section is split the same way: what
+        you owe, and what you are waiting on. The second half is the one that
+        gets forgotten — a task you handed out disappears from your day unless
+        something puts it back in front of you.
+      */}
+      {can("sales.tasks.view") && (data.tasks.mine.length > 0 || data.tasks.given.length > 0) && (
+        <Section
+          title="Tasks"
+          count={data.tasks.counts.mine}
+          action={{ label: "View all", to: "/sales/tasks" }}
+        >
+          <div className="space-y-2">
+            {data.tasks.mine.slice(0, 4).map((t) => (
+              <Link
+                key={`m-${t.id}`}
+                to={`/sales/tasks?task=${t.id}`}
+                className="flex items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3 shadow-sm transition-colors hover:bg-muted/40"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-card-foreground">{t.title}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    From {t.assigned_by_name || "—"}
+                    {t.due_date ? ` · due ${formatDate(t.due_date)}` : ""}
+                  </p>
+                </div>
+                <ClipboardList
+                  className={cn("h-4 w-4 shrink-0", t.is_overdue ? "text-destructive" : "text-primary")}
+                />
+              </Link>
+            ))}
+            {data.tasks.given.slice(0, 3).map((t) => (
+              <Link
+                key={`g-${t.id}`}
+                to={`/sales/tasks?task=${t.id}`}
+                className="flex items-center justify-between gap-3 rounded-xl border border-dashed bg-card/60 px-4 py-3 transition-colors hover:bg-muted/40"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-card-foreground">{t.title}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    Waiting on {t.assigned_to_name}
+                    {t.due_date ? ` · due ${formatDate(t.due_date)}` : ""}
+                  </p>
+                </div>
+                <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </Link>
             ))}
           </div>
         </Section>
