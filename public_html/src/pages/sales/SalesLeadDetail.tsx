@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { salesCallsApi, salesFollowupsApi, salesLeadsApi, salesMeetingsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { LogCallDialog } from "@/components/sales/LogCallDialog";
 import { useConfirm } from "@/components/ConfirmDialog";
 import {
   FollowupEditDialog,
@@ -27,11 +28,6 @@ import { LeadFormDialog } from "@/components/sales/LeadFormDialog";
 import { LeadStatusBadge, TemperatureBadge, formatDate, formatDateTime, formatTime, humanise } from "@/components/sales/SalesBits";
 import type { CommentEntityType, LeadTemperature, SalesFollowup, SalesLeadDetail as LeadDetail } from "@/types/sales";
 import { cn } from "@/lib/utils";
-
-const CALL_OUTCOMES = [
-  "interested", "follow_up_required", "meeting_required", "proposal_required",
-  "not_interested", "no_response", "call_back_later", "converted", "other",
-] as const;
 
 const MEETING_OUTCOMES = ["positive", "neutral", "negative", "rescheduled", "no_show", "other"] as const;
 
@@ -70,17 +66,6 @@ export default function SalesLeadDetail() {
   const [convertOpen, setConvertOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [outcomeMeetingId, setOutcomeMeetingId] = useState<number | null>(null);
-
-  const [callForm, setCallForm] = useState({
-    call_date: today(),
-    call_time: new Date().toTimeString().slice(0, 5),
-    duration_minutes: "",
-    outcome: "interested",
-    notes: "",
-    temperature_after: "",
-    next_followup_date: "",
-    next_followup_time: "",
-  });
 
   const [meetingForm, setMeetingForm] = useState({
     title: "",
@@ -140,32 +125,6 @@ export default function SalesLeadDetail() {
   }, [searchParams, lead, can, setSearchParams]);
 
   const closeDialog = () => setDialog(null);
-
-  const handleLogCall = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await salesCallsApi.log({
-        lead_id: leadId,
-        call_date: callForm.call_date,
-        call_time: callForm.call_time || undefined,
-        duration_minutes: callForm.duration_minutes ? Number(callForm.duration_minutes) : 0,
-        outcome: callForm.outcome,
-        notes: callForm.notes || undefined,
-        temperature_after: callForm.temperature_after || undefined,
-        next_followup_date: callForm.next_followup_date || undefined,
-        next_followup_time: callForm.next_followup_time || undefined,
-      });
-      toast.success("Call logged");
-      closeDialog();
-      setCallForm((f) => ({ ...f, notes: "", duration_minutes: "", next_followup_date: "", next_followup_time: "" }));
-      void load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not log the call");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleScheduleMeeting = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -620,121 +579,12 @@ export default function SalesLeadDetail() {
       )}
 
       {/* ── Log Call ─────────────────────────────────────────────────────── */}
-      <Dialog open={dialog === "call"} onOpenChange={(o) => !o && closeDialog()}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Log Call</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleLogCall} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="c-date">Date</Label>
-                <Input
-                  id="c-date"
-                  type="date"
-                  value={callForm.call_date}
-                  onChange={(e) => setCallForm((f) => ({ ...f, call_date: e.target.value }))}
-                  required
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="c-time">Time</Label>
-                <Input
-                  id="c-time"
-                  type="time"
-                  value={callForm.call_time}
-                  onChange={(e) => setCallForm((f) => ({ ...f, call_time: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="c-duration">Duration (min)</Label>
-                <Input
-                  id="c-duration"
-                  type="number"
-                  min={0}
-                  max={1440}
-                  inputMode="numeric"
-                  value={callForm.duration_minutes}
-                  onChange={(e) => setCallForm((f) => ({ ...f, duration_minutes: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Outcome</Label>
-                <Select value={callForm.outcome} onValueChange={(v) => setCallForm((f) => ({ ...f, outcome: v }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CALL_OUTCOMES.map((o) => (
-                      <SelectItem key={o} value={o}>
-                        {humanise(o)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="c-notes">Notes — what was discussed?</Label>
-              <Textarea
-                id="c-notes"
-                rows={4}
-                placeholder="Requirement, budget, timeline, objections, next action…"
-                value={callForm.notes}
-                onChange={(e) => setCallForm((f) => ({ ...f, notes: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Update temperature (optional)</Label>
-              <Select
-                value={callForm.temperature_after || "unchanged"}
-                onValueChange={(v) => setCallForm((f) => ({ ...f, temperature_after: v === "unchanged" ? "" : v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unchanged">Leave unchanged</SelectItem>
-                  <SelectItem value="hot">Hot</SelectItem>
-                  <SelectItem value="warm">Warm</SelectItem>
-                  <SelectItem value="cold">Cold</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-3 rounded-xl bg-muted/50 p-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="c-next">Next follow-up</Label>
-                <Input
-                  id="c-next"
-                  type="date"
-                  min={today()}
-                  value={callForm.next_followup_date}
-                  onChange={(e) => setCallForm((f) => ({ ...f, next_followup_date: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="c-next-time">Time (optional)</Label>
-                <Input
-                  id="c-next-time"
-                  type="time"
-                  value={callForm.next_followup_time}
-                  onChange={(e) => setCallForm((f) => ({ ...f, next_followup_time: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={closeDialog}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Saving…" : "Save Call"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <LogCallDialog
+        open={dialog === "call"}
+        lead={lead}
+        onClose={closeDialog}
+        onLogged={() => void load()}
+      />
 
       {/* ── Schedule Meeting ─────────────────────────────────────────────── */}
       <Dialog open={dialog === "meeting"} onOpenChange={(o) => !o && closeDialog()}>

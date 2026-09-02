@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { salesFollowupsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { LogCallDialog } from "@/components/sales/LogCallDialog";
 import {
   FollowupEditDialog,
   FollowupEditNote,
@@ -42,6 +43,15 @@ function belongsToBucket(f: SalesFollowup, bucket: FollowupBucket): boolean {
   return false;
 }
 
+/**
+ * Today, from the local clock — not toISOString(), which is UTC and names
+ * yesterday for anyone east of Greenwich working in the evening.
+ */
+function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function SalesFollowUps() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { can, me } = useSalesAccess();
@@ -58,9 +68,15 @@ export default function SalesFollowUps() {
   const [error, setError] = useState<string | null>(null);
 
   const [completing, setCompleting] = useState<SalesFollowup | null>(null);
+  /** The follow-up whose call is being logged, without leaving this page. */
+  const [callingOn, setCallingOn] = useState<SalesFollowup | null>(null);
   const [editing, setEditing] = useState<SalesFollowup | null>(null);
   const [thread, setThread] = useState<SalesFollowup | null>(null);
-  const [completeForm, setCompleteForm] = useState({ outcome_notes: "", next_followup_date: "" });
+  const [completeForm, setCompleteForm] = useState({
+    outcome_notes: "",
+    next_followup_date: "",
+    next_followup_time: "",
+  });
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -95,10 +111,15 @@ export default function SalesFollowUps() {
       await salesFollowupsApi.complete(completing.id, {
         outcome_notes: completeForm.outcome_notes || undefined,
         next_followup_date: completeForm.next_followup_date || undefined,
+        next_followup_time: completeForm.next_followup_time || undefined,
       });
-      toast.success("Follow-up completed");
+      toast.success(
+        completeForm.next_followup_date
+          ? "Follow-up completed, and the next one is scheduled"
+          : "Follow-up completed",
+      );
       setCompleting(null);
-      setCompleteForm({ outcome_notes: "", next_followup_date: "" });
+      setCompleteForm({ outcome_notes: "", next_followup_date: "", next_followup_time: "" });
       void load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not complete the follow-up");
@@ -216,11 +237,20 @@ export default function SalesFollowUps() {
               ) : (
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   {can("sales.calls.create") && (
-                    <Button size="sm" variant="secondary" className="h-9" asChild>
-                      <Link to={`/sales/leads/${f.lead_id}?action=call`}>
-                        <Phone className="mr-1.5 h-3.5 w-3.5" />
-                        Log Call
-                      </Link>
+                    /*
+                      Opens here rather than navigating to the lead. Working a
+                      list of follow-ups means logging one call after another,
+                      and being thrown onto a lead page after each one meant
+                      finding your way back before the next.
+                    */
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-9"
+                      onClick={() => setCallingOn(f)}
+                    >
+                      <Phone className="mr-1.5 h-3.5 w-3.5" />
+                      Log Call
                     </Button>
                   )}
                   {can("sales.followups.complete") && (
@@ -277,6 +307,17 @@ export default function SalesFollowUps() {
         }}
       />
 
+      <LogCallDialog
+        open={callingOn !== null}
+        lead={
+          callingOn
+            ? { id: callingOn.lead_id, name: callingOn.lead_name, company: callingOn.lead_company }
+            : null
+        }
+        onClose={() => setCallingOn(null)}
+        onLogged={() => void load()}
+      />
+
       <Dialog open={completing !== null} onOpenChange={(o) => !o && setCompleting(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -294,14 +335,29 @@ export default function SalesFollowUps() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="fu-next">Schedule the next follow-up (optional)</Label>
-              <Input
-                id="fu-next"
-                type="date"
-                min={new Date().toISOString().slice(0, 10)}
-                value={completeForm.next_followup_date}
-                onChange={(e) => setCompleteForm((f) => ({ ...f, next_followup_date: e.target.value }))}
-              />
+              <Label>Schedule the next follow-up (optional)</Label>
+              {/*
+                A date on its own says "some time that day", which is no use to
+                whoever picks it up — the server has always accepted a time, the
+                form just never asked for one.
+              */}
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  id="fu-next"
+                  type="date"
+                  aria-label="Next follow-up date"
+                  min={localToday()}
+                  value={completeForm.next_followup_date}
+                  onChange={(e) => setCompleteForm((f) => ({ ...f, next_followup_date: e.target.value }))}
+                />
+                <Input
+                  id="fu-next-time"
+                  type="time"
+                  aria-label="Next follow-up time"
+                  value={completeForm.next_followup_time}
+                  onChange={(e) => setCompleteForm((f) => ({ ...f, next_followup_time: e.target.value }))}
+                />
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setCompleting(null)}>
