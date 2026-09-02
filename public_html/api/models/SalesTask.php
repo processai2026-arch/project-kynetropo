@@ -26,11 +26,17 @@ class SalesTask
     // ── Reads ───────────────────────────────────────────────────────────────
 
     /**
-     * @param array $filters status, assigned_to, assigned_by, lead_id, bucket, search
-     * @param bool  $seeAll  true for sales administrators; otherwise the list is
-     *                       limited to tasks the user gave or was given
+     * @param array    $filters      status, assigned_to, assigned_by, lead_id, bucket, search
+     * @param int      $userId       whose "mine" and "given" buckets these are
+     * @param int|null $onlyForUser  restricts the whole list to one person's
+     *   tasks — used when reading a colleague's board, where showing the team's
+     *   would answer a question nobody asked
+     *
+     * The board itself is team-wide: work everyone can see is work nobody has
+     * to ask about. Who may act on a task is a separate question, answered per
+     * task by the controller and re-checked in the SQL of each action.
      */
-    public static function all(array $filters, int $userId, bool $seeAll, int $page = 1, int $limit = 100): array
+    public static function all(array $filters, int $userId, ?int $onlyForUser = null, int $page = 1, int $limit = 100): array
     {
         $page  = max(1, $page);
         $limit = min(300, max(1, $limit));
@@ -39,10 +45,10 @@ class SalesTask
         $where  = ['t.tenant_id = ?'];
         $params = [Database::tenantId()];
 
-        if (!$seeAll) {
+        if ($onlyForUser !== null) {
             $where[]  = '(t.assigned_to = ? OR t.assigned_by = ?)';
-            $params[] = $userId;
-            $params[] = $userId;
+            $params[] = $onlyForUser;
+            $params[] = $onlyForUser;
         }
 
         $status = (string)($filters['status'] ?? '');
@@ -61,6 +67,10 @@ class SalesTask
             case 'given':
                 $where[]  = "t.assigned_by = ? AND t.status IN ('open','in_progress')";
                 $params[] = $userId;
+                break;
+            case 'team':
+                // Everything still outstanding, whoever it belongs to.
+                $where[] = "t.status IN ('open','in_progress')";
                 break;
             case 'overdue':
                 $where[]  = "t.status IN ('open','in_progress') AND t.due_date IS NOT NULL AND t.due_date < ?";
@@ -124,15 +134,15 @@ class SalesTask
     }
 
     /** Badge counts for the tabs. Same scoping rule as all(). */
-    public static function counts(int $userId, bool $seeAll): array
+    public static function counts(int $userId, ?int $onlyForUser = null): array
     {
         $today  = date('Y-m-d');
         $params = [$today, Database::tenantId()];
         $extra  = '';
-        if (!$seeAll) {
+        if ($onlyForUser !== null) {
             $extra    = ' AND (t.assigned_to = ? OR t.assigned_by = ?)';
-            $params[] = $userId;
-            $params[] = $userId;
+            $params[] = $onlyForUser;
+            $params[] = $onlyForUser;
         }
 
         $row = Database::fetch(
@@ -161,6 +171,9 @@ class SalesTask
         return [
             'mine'      => $mine,
             'given'     => $given,
+            // The Everyone tab and "live" ask the same question of the same
+            // rows; one column answers both.
+            'team'      => (int)($row['live']      ?? 0),
             'live'      => (int)($row['live']      ?? 0),
             'overdue'   => (int)($row['overdue']   ?? 0),
             'completed' => (int)($row['completed'] ?? 0),

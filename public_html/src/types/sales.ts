@@ -308,7 +308,7 @@ export interface SalesChallengeDetail extends SalesChallenge {
 
 export type TaskStatus = "open" | "in_progress" | "completed" | "cancelled";
 export type TaskPriority = "low" | "normal" | "high" | "critical";
-export type TaskBucket = "mine" | "given" | "overdue" | "completed";
+export type TaskBucket = "mine" | "given" | "team" | "overdue" | "completed";
 
 export interface TaskActivityEntry {
   id: number;
@@ -373,6 +373,8 @@ export interface SalesTaskDetail extends SalesTask {
 export interface TaskCounts {
   mine: number;
   given: number;
+  /** Everything still outstanding across the team. */
+  team: number;
   live: number;
   overdue: number;
   completed: number;

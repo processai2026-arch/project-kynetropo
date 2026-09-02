@@ -34,6 +34,10 @@ import { cn } from "@/lib/utils";
 const TABS: { key: TaskBucket; label: string }[] = [
   { key: "mine", label: "My tasks" },
   { key: "given", label: "I assigned" },
+  // The whole team's outstanding work. Readable by everyone, because work
+  // nobody can see is work everyone has to ask about; the buttons on a task
+  // still belong to the two people it is between.
+  { key: "team", label: "Everyone" },
   { key: "overdue", label: "Overdue" },
   { key: "completed", label: "Done" },
 ];
@@ -84,7 +88,7 @@ export default function SalesTasks() {
   );
   const [items, setItems] = useState<SalesTask[]>([]);
   const [counts, setCounts] = useState<TaskCounts>({
-    mine: 0, given: 0, live: 0, overdue: 0, completed: 0, cancelled: 0,
+    mine: 0, given: 0, team: 0, live: 0, overdue: 0, completed: 0, cancelled: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -333,9 +337,11 @@ export default function SalesTasks() {
               ? "Nothing on your plate."
               : bucket === "given"
                 ? "You have not given anyone a task yet."
-                : bucket === "overdue"
-                  ? "Nothing overdue — well done."
-                  : "Nothing completed yet."}
+                : bucket === "team"
+                  ? "Nobody on the team has anything outstanding."
+                  : bucket === "overdue"
+                    ? "Nothing overdue — well done."
+                    : "Nothing completed yet."}
           </p>
         </div>
       ) : (

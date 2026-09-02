@@ -178,18 +178,13 @@ class AdminSalesCommentController
         }
 
         if ($entityType === 'task') {
-            // A task thread is readable by the two people it is actually
-            // between, plus anyone administering tasks. Everyone else gets the
-            // same 404 the task itself would give them.
+            // The task board is team-wide, and so is the discussion on it: a
+            // colleague who can help is worth more on the thread than kept off
+            // it. Doing anything to the task — finishing it, handing it back —
+            // is still only for the two people it is between.
             SalesPermissions::enforce($request->user, 'sales.tasks.view');
             $task = SalesTask::findRaw($entityId);
             if (!$task) {
-                Response::error('Task not found', 404);
-            }
-            $userId = isset($request->user['user_id']) ? (int)$request->user['user_id'] : 0;
-            $mine   = (int)$task['assigned_to'] === $userId
-                      || ($task['assigned_by'] !== null && (int)$task['assigned_by'] === $userId);
-            if (!$mine && !SalesPermissions::has($request->user, 'sales.tasks.manage')) {
                 Response::error('Task not found', 404);
             }
             return [$entityType, $entityId, [

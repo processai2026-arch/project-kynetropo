@@ -28,8 +28,6 @@ class AdminSalesTaskController
         SalesPermissions::enforce($request->user, 'sales.tasks.view');
 
         $userId = $this->userId($request);
-        // A manager viewing one colleague wants that colleague's board, not
-        // everybody's.
         $seeAll = !SalesViewAs::active() && SalesPermissions::has($request->user, 'sales.tasks.manage');
 
         $status = (string)$request->query('status', '');
@@ -37,8 +35,8 @@ class AdminSalesTaskController
             Response::error('Invalid status filter', 422);
         }
         $bucket = (string)$request->query('bucket', '');
-        if ($bucket !== '' && !in_array($bucket, ['mine', 'given', 'overdue', 'completed'], true)) {
-            Response::error('Invalid bucket. Allowed: mine, given, overdue, completed', 422);
+        if ($bucket !== '' && !in_array($bucket, ['mine', 'given', 'team', 'overdue', 'completed'], true)) {
+            Response::error('Invalid bucket. Allowed: mine, given, team, overdue, completed', 422);
         }
 
         $result = SalesTask::all(
@@ -51,7 +49,9 @@ class AdminSalesTaskController
                 'search'      => trim((string)$request->query('search', '')),
             ],
             $userId,
-            $seeAll,
+            // Only a colleague's view narrows the board; otherwise the team
+            // sees the team's work.
+            SalesViewAs::userId(),
             (int)$request->query('page', 1),
             (int)$request->query('limit', 200)
         );
@@ -59,7 +59,7 @@ class AdminSalesTaskController
         Response::success([
             'items'      => array_map(fn(array $t) => $this->withCapabilities($t, $request), $result['rows']),
             'pagination' => $result['pagination'],
-            'counts'     => SalesTask::counts($userId, $seeAll),
+            'counts'     => SalesTask::counts($userId, SalesViewAs::userId()),
             'can_manage' => $seeAll,
             'me'         => $userId,
         ]);
@@ -354,12 +354,14 @@ class AdminSalesTaskController
     }
 
     /** The task must be one the caller gave, was given, or administers. */
+    /**
+     * Every task is readable by anyone who can see tasks at all — the board is
+     * the team's. The exception is a colleague's view, where the detail page
+     * has to agree with the list about whose board is on screen.
+     */
     private function assertVisible(Request $request, array $task): void
     {
-        // An administrator sees every task — except while looking at one
-        // colleague, where the detail page must agree with the list about
-        // whose board this is.
-        if (!SalesViewAs::active() && SalesPermissions::has($request->user, 'sales.tasks.manage')) {
+        if (!SalesViewAs::active()) {
             return;
         }
         $userId = $this->userId($request);
@@ -369,8 +371,6 @@ class AdminSalesTaskController
         if ($task['assigned_by'] !== null && (int)$task['assigned_by'] === $userId) {
             return;
         }
-        // 404 rather than 403 — do not confirm that a task exists to someone
-        // with nothing to do with it.
         Response::error('Task not found', 404);
     }
 

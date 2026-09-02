@@ -52,9 +52,8 @@ class AdminSalesDashboardController
         $challengeCounts = SalesChallenge::counts($subject, $isManager);
 
         $userId     = SalesViewAs::subjectId($request->user);
-        $seeAllTask = $viewing === null && SalesPermissions::has($request->user, 'sales.tasks.manage');
         $taskCounts = SalesPermissions::has($request->user, 'sales.tasks.view')
-            ? SalesTask::counts($userId, $seeAllTask)
+            ? SalesTask::counts($userId, SalesViewAs::userId())
             : ['mine' => 0, 'given' => 0, 'live' => 0, 'overdue' => 0, 'completed' => 0, 'cancelled' => 0];
 
         Response::success([
@@ -90,9 +89,9 @@ class AdminSalesDashboardController
                 // What I owe, then what I am waiting on — the only two task
                 // questions a dashboard is ever asked.
                 'mine'   => SalesPermissions::has($request->user, 'sales.tasks.view')
-                            ? SalesTask::all(['bucket' => 'mine'], $userId, $seeAllTask, 1, 10)['rows'] : [],
+                            ? SalesTask::all(['bucket' => 'mine'], $userId, SalesViewAs::userId(), 1, 10)['rows'] : [],
                 'given'  => SalesPermissions::has($request->user, 'sales.tasks.view')
-                            ? SalesTask::all(['bucket' => 'given'], $userId, $seeAllTask, 1, 10)['rows'] : [],
+                            ? SalesTask::all(['bucket' => 'given'], $userId, SalesViewAs::userId(), 1, 10)['rows'] : [],
             ],
             'challenges' => [
                 'counts' => $challengeCounts,
