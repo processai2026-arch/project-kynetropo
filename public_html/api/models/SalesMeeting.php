@@ -32,6 +32,80 @@ class SalesMeeting
         ]);
     }
 
+    /**
+     * Records who from our team is going. Replaces the set, so removing a name
+     * removes the meeting from their diary too.
+     *
+     * @param array<int, array{user_id:int,name:string}> $people
+     */
+    public static function setParticipants(int $meetingId, array $people): void
+    {
+        $tenantId = Database::tenantId();
+        $wanted   = [];
+        foreach (array_slice($people, 0, 30) as $person) {
+            $userId = (int)($person['user_id'] ?? 0);
+            if ($userId > 0 && !isset($wanted[$userId])) {
+                $wanted[$userId] = mb_substr((string)($person['name'] ?? ''), 0, 200);
+            }
+        }
+
+        $existing = [];
+        foreach (Database::fetchAll(
+            'SELECT user_id FROM sales_meeting_participants WHERE tenant_id = ? AND meeting_id = ?',
+            [$tenantId, $meetingId]
+        ) as $row) {
+            $existing[(int)$row['user_id']] = true;
+        }
+
+        foreach (array_keys($existing) as $userId) {
+            if (!isset($wanted[$userId])) {
+                Database::execute(
+                    'DELETE FROM sales_meeting_participants
+                      WHERE tenant_id = ? AND meeting_id = ? AND user_id = ?',
+                    [$tenantId, $meetingId, $userId]
+                );
+            }
+        }
+        foreach ($wanted as $userId => $name) {
+            if (isset($existing[$userId])) {
+                continue;
+            }
+            Database::execute(
+                'INSERT IGNORE INTO sales_meeting_participants (tenant_id, meeting_id, user_id, user_name)
+                 VALUES (?, ?, ?, ?)',
+                [$tenantId, $meetingId, $userId, $name]
+            );
+        }
+    }
+
+    /**
+     * Who is going, per meeting id.
+     *
+     * @param  int[] $meetingIds
+     * @return array<int, array<int, array{user_id:int,name:string}>>
+     */
+    public static function participantsFor(array $meetingIds): array
+    {
+        $ids = array_values(array_filter(array_map('intval', $meetingIds), static fn(int $i): bool => $i > 0));
+        if (!$ids) {
+            return [];
+        }
+        $in   = implode(',', array_fill(0, count($ids), '?'));
+        $rows = Database::fetchAll(
+            "SELECT p.meeting_id, p.user_id, COALESCE(u.name, p.user_name) AS name
+               FROM sales_meeting_participants p
+               LEFT JOIN users u ON u.user_id = p.user_id
+              WHERE p.tenant_id = ? AND p.meeting_id IN ($in)
+              ORDER BY p.id",
+            [Database::tenantId(), ...$ids]
+        );
+        $out = [];
+        foreach ($rows as $r) {
+            $out[(int)$r['meeting_id']][] = ['user_id' => (int)$r['user_id'], 'name' => (string)$r['name']];
+        }
+        return $out;
+    }
+
     public static function findRaw(int $id): ?array
     {
         return Database::fetch(
@@ -105,7 +179,20 @@ class SalesMeeting
               ORDER BY m.meeting_date DESC, (m.meeting_time IS NULL), m.meeting_time DESC, m.id DESC',
             [Database::tenantId(), $leadId]
         );
-        return array_map([self::class, 'format'], $rows);
+        return self::formatMany($rows);
+    }
+
+    /** Formats rows with their participants loaded in one extra query. */
+    private static function formatMany(array $rows): array
+    {
+        if (!$rows) {
+            return [];
+        }
+        $people = self::participantsFor(array_map(static fn(array $r): int => (int)$r['id'], $rows));
+        return array_map(
+            static fn(array $r): array => self::format($r, $people[(int)$r['id']] ?? []),
+            $rows
+        );
     }
 
     public static function all(array $filters, array $scope, int $page = 1, int $limit = 100): array
@@ -117,7 +204,14 @@ class SalesMeeting
         $params = [Database::tenantId()];
 
         if ($scope['sql'] !== '') {
-            $where[]  = '(l.assigned_to = ? OR m.assigned_to = ?)';
+            // Being named on a meeting puts it in your diary. Without this a
+            // meeting someone else booked, that you are the one attending, was
+            // invisible to you and counted only for them.
+            $where[]  = '(l.assigned_to = ? OR m.assigned_to = ?
+                          OR EXISTS (SELECT 1 FROM sales_meeting_participants mp
+                                      WHERE mp.tenant_id = m.tenant_id
+                                        AND mp.meeting_id = m.id AND mp.user_id = ?))';
+            $params[] = $scope['params'][0];
             $params[] = $scope['params'][0];
             $params[] = $scope['params'][0];
         }
@@ -167,7 +261,7 @@ class SalesMeeting
         );
 
         return [
-            'rows'       => array_map([self::class, 'format'], $rows),
+            'rows'       => self::formatMany($rows),
             'pagination' => [
                 'page'        => $page,
                 'limit'       => $limit,
@@ -184,7 +278,11 @@ class SalesMeeting
         $extra  = '';
 
         if ($scope['sql'] !== '') {
-            $extra    = ' AND (l.assigned_to = ? OR m.assigned_to = ?)';
+            $extra    = ' AND (l.assigned_to = ? OR m.assigned_to = ?
+                        OR EXISTS (SELECT 1 FROM sales_meeting_participants mp
+                                    WHERE mp.tenant_id = m.tenant_id
+                                      AND mp.meeting_id = m.id AND mp.user_id = ?))';
+            $params[] = $scope['params'][0];
             $params[] = $scope['params'][0];
             $params[] = $scope['params'][0];
         }
@@ -205,7 +303,8 @@ class SalesMeeting
         ];
     }
 
-    public static function format(array $row): array
+    /** @param array<int, array{user_id:int,name:string}> $participants */
+    public static function format(array $row, array $participants = []): array
     {
         return [
             'id'                => (int)$row['id'],
@@ -220,6 +319,9 @@ class SalesMeeting
             'place'             => $row['place'],
             'meeting_link'      => $row['meeting_link'],
             'participants'      => $row['participants'],
+            // Colleagues who are going. Passed in by the caller so a list costs
+            // one query for the page rather than one per meeting.
+            'participant_users' => $participants,
             'notes'             => $row['notes'],
             'status'            => $row['status'],
             'outcome'           => $row['outcome'],

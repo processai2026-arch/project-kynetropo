@@ -22,7 +22,9 @@ class AdminSalesFollowupController
             Response::error('Invalid bucket. Allowed: ' . implode(', ', SalesFollowup::BUCKETS), 422);
         }
 
-        $scope  = SalesPermissions::leadScope($request->user);
+        // Your queue, not the team's. Seeing a colleague's is what the view-as
+        // switcher is for; a mixed list is one nobody can work down.
+        $scope  = SalesPermissions::ownScope($request->user);
         $result = SalesFollowup::all($bucket, [
             'lead_id'     => $request->query('lead_id'),
             'assigned_to' => $request->query('assigned_to'),

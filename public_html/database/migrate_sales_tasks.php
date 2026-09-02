@@ -136,6 +136,30 @@ foreach ($additions as [$table, $column, $definition]) {
     fwrite(STDOUT, "[tasks] added   $table.$column\n");
 }
 
+// Who from our team is going to a meeting.
+//
+// A separate table rather than a column, for the same reason challenge
+// assignments are: the question asked of it is "which meetings is this person
+// down for", and that wants an index on the user, not a LIKE over a CSV.
+// The existing free-text `participants` stays for people outside the company.
+if (!$tableExists($pdo, 'sales_meeting_participants')) {
+    $pdo->exec(
+        'CREATE TABLE sales_meeting_participants (
+           id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+           tenant_id  INT UNSIGNED NOT NULL DEFAULT 1,
+           meeting_id INT UNSIGNED NOT NULL,
+           user_id    INT UNSIGNED NOT NULL,
+           user_name  VARCHAR(200) NOT NULL DEFAULT "",
+           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+           UNIQUE KEY uq_smp (meeting_id, user_id),
+           INDEX idx_smp_user (tenant_id, user_id, meeting_id)
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+    );
+    fwrite(STDOUT, "[tasks] created sales_meeting_participants\n");
+} else {
+    fwrite(STDOUT, "[tasks] ok      sales_meeting_participants\n");
+}
+
 // One index for the task comment threads; ignored when it already exists.
 if ($tableExists($pdo, 'sales_comments')) {
     $q = $pdo->prepare(

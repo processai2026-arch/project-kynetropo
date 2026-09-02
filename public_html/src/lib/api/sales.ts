@@ -403,6 +403,8 @@ export interface ScheduleMeetingPayload {
   place?: string;
   meeting_link?: string;
   participants?: string;
+  /** Colleagues going, by user id. Omit on an edit to leave the list alone. */
+  participant_ids?: number[];
   notes?: string;
 }
 

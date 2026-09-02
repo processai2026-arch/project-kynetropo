@@ -17,7 +17,10 @@ class AdminSalesMeetingController
     {
         SalesPermissions::enforce($request->user, 'sales.meetings.view');
 
-        $scope  = SalesPermissions::leadScope($request->user);
+        // Your diary: meetings on your leads, assigned to you, or that you
+        // have been named on. A shared list of everybody's meetings is not a
+        // diary, and "Meetings Today" counted from it means nothing.
+        $scope  = SalesPermissions::ownScope($request->user);
         $result = SalesMeeting::all([
             'status'       => $request->query('status'),
             'meeting_type' => $request->query('meeting_type'),
@@ -44,7 +47,7 @@ class AdminSalesMeetingController
         }
         $this->assertAccess($request, $row);
 
-        Response::success(SalesMeeting::format($row));
+        Response::success($this->formatted($id));
     }
 
     public function store(Request $request): void
@@ -88,7 +91,9 @@ class AdminSalesMeetingController
         }
         SalesLead::refreshSchedule($leadId);
 
-        Response::success(SalesMeeting::format(SalesMeeting::findRaw($id) ?? []), 'Meeting scheduled', 201);
+        SalesMeeting::setParticipants($id, $this->validParticipants($request->input('participant_ids')));
+
+        Response::success($this->formatted($id), 'Meeting scheduled', 201);
     }
 
     public function update(Request $request): void
@@ -112,7 +117,13 @@ class AdminSalesMeetingController
         SalesActivity::log((int)$row['lead_id'], 'meeting_updated', 'Meeting updated', $request->user, '', 'meeting', $id);
         SalesLead::refreshSchedule((int)$row['lead_id']);
 
-        Response::success(SalesMeeting::format(SalesMeeting::findRaw($id) ?? []), 'Meeting updated');
+        // Only when the caller said something about it: an edit that leaves the
+        // field out should not quietly empty the guest list.
+        if ($request->input('participant_ids') !== null) {
+            SalesMeeting::setParticipants($id, $this->validParticipants($request->input('participant_ids')));
+        }
+
+        Response::success($this->formatted($id), 'Meeting updated');
     }
 
     public function complete(Request $request): void
@@ -269,6 +280,53 @@ class AdminSalesMeetingController
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
+
+    /** One meeting with its guest list, in the shape the client expects. */
+    private function formatted(int $id): array
+    {
+        $row = SalesMeeting::findRaw($id);
+        if (!$row) {
+            return [];
+        }
+        return SalesMeeting::format($row, SalesMeeting::participantsFor([$id])[$id] ?? []);
+    }
+
+    /**
+     * Turns the ids the client sent into real colleagues.
+     *
+     * Checked against the user table rather than trusted: being on a meeting
+     * puts it in someone's diary, and an unchecked id is a way to put a meeting
+     * in the diary of somebody who is not on this team.
+     *
+     * @return array<int, array{user_id:int,name:string}>
+     */
+    private function validParticipants(mixed $raw): array
+    {
+        if (!is_array($raw) || $raw === []) {
+            return [];
+        }
+        $ids = [];
+        foreach (array_slice($raw, 0, 30) as $value) {
+            $id = is_array($value) ? (int)($value['user_id'] ?? 0) : (int)$value;
+            if ($id > 0) {
+                $ids[$id] = true;
+            }
+        }
+        if (!$ids) {
+            return [];
+        }
+
+        $in   = implode(',', array_fill(0, count($ids), '?'));
+        $rows = Database::fetchAll(
+            "SELECT user_id, name FROM users
+              WHERE tenant_id = ? AND user_type = 'admin' AND is_active = 1 AND user_id IN ($in)",
+            [Database::tenantId(), ...array_keys($ids)]
+        );
+        return array_map(
+            static fn(array $r): array => ['user_id' => (int)$r['user_id'], 'name' => (string)$r['name']],
+            $rows
+        );
+    }
 
     /**
      * Validates the schedule payload. A physical meeting needs a place; a

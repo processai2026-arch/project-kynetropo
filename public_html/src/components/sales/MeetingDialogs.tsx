@@ -6,7 +6,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
 import { salesMeetingsApi } from "@/lib/api/sales";
+import { useTeamMembers, namesakeHint } from "@/hooks/useTeamMembers";
 import { humanise } from "@/components/sales/SalesBits";
 import type { SalesMeeting } from "@/types/sales";
 
@@ -76,7 +78,9 @@ export function MeetingFormDialog({
 }) {
   const editing = meeting != null;
   const [form, setForm] = useState(BLANK_MEETING);
+  const [going, setGoing] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
+  const people = useTeamMembers(open);
 
   // Reset every time the dialog opens. Without this the form kept whatever was
   // typed last time, so scheduling a second meeting on the same lead started
@@ -97,6 +101,7 @@ export function MeetingFormDialog({
           }
         : { ...BLANK_MEETING },
     );
+    setGoing((meeting?.participant_users ?? []).map((p) => p.user_id));
   }, [open, meeting]);
 
   const set = (k: keyof typeof BLANK_MEETING, v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -113,6 +118,7 @@ export function MeetingFormDialog({
         place: form.meeting_type === "physical" ? form.place : undefined,
         meeting_link: form.meeting_type === "virtual" ? form.meeting_link : undefined,
         participants: form.participants || undefined,
+        participant_ids: going,
         notes: form.notes || undefined,
       };
       if (editing && meeting) {
@@ -211,11 +217,56 @@ export function MeetingFormDialog({
             </div>
           )}
 
+          {/*
+            Naming a colleague here puts the meeting in their diary — it shows
+            on their dashboard and in their Meetings list. Without it a meeting
+            booked by one person for another was invisible to the person
+            actually attending.
+          */}
           <div className="space-y-1.5">
-            <Label htmlFor="m-participants">Participants</Label>
+            <Label>Who from our team is going</Label>
+            {people.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Loading people…</p>
+            ) : (
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl border p-2">
+                {people.map((p) => (
+                  <label
+                    key={p.user_id}
+                    className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted"
+                  >
+                    <Checkbox
+                      checked={going.includes(p.user_id)}
+                      onCheckedChange={() =>
+                        setGoing((g) =>
+                          g.includes(p.user_id) ? g.filter((x) => x !== p.user_id) : [...g, p.user_id],
+                        )
+                      }
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm">{p.name}</span>
+                      {/* Two people with the same name means one of them gets a
+                          meeting they know nothing about. */}
+                      {namesakeHint(p) && (
+                        <span className="block text-[11px] text-muted-foreground">{namesakeHint(p)}</span>
+                      )}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              {going.length === 0
+                ? "Nobody added — it stays with whoever owns the lead."
+                : `It will show on ${going.length} ${going.length === 1 ? "person's" : "people's"} dashboard.`}
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="m-participants">Anyone else attending</Label>
             <Input
               id="m-participants"
               value={form.participants}
+              placeholder="People from their side"
               onChange={(e) => set("participants", e.target.value)}
             />
           </div>

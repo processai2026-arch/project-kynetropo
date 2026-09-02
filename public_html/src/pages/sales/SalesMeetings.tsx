@@ -163,6 +163,12 @@ export default function SalesMeetings() {
                 <MeetingLink href={m.meeting_link} className="mt-2 text-sm" />
               )}
 
+              {(m.participant_users?.length ?? 0) > 0 && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Going: {m.participant_users!.map((p) => p.name).join(", ")}
+                </p>
+              )}
+
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {can("sales.comments.view") && (
                   <CommentButton count={m.comment_count ?? 0} onClick={() => setThread(m)} />

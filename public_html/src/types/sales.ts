@@ -203,7 +203,10 @@ export interface SalesMeeting {
   meeting_time: string | null;
   place: string;
   meeting_link: string;
+  /** Free text, for people outside the company. */
   participants: string | null;
+  /** Colleagues who are going. The meeting shows on each of their dashboards. */
+  participant_users?: CommentMention[];
   notes: string | null;
   status: MeetingStatus;
   outcome: string;

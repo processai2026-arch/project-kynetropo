@@ -19,7 +19,10 @@ class AdminSalesDashboardController
         SalesPermissions::enforce($request->user, 'sales.dashboard.view');
         SalesChallenge::sweepExpired();
 
-        $scope    = SalesPermissions::leadScope($request->user);
+        // Deliberately the "mine" scope, not the "may look at" one: this screen
+        // is a to-do list, and a to-do list of other people's work is not one.
+        // The Leads page stays open to the whole team, with its owner filter.
+        $scope    = SalesPermissions::ownScope($request->user);
         $tenantId = Database::tenantId();
 
         // Viewing a colleague answers every question as them: a manager's
@@ -268,7 +271,10 @@ class AdminSalesDashboardController
         SalesPermissions::enforce($request->user, 'sales.dashboard.view');
         SalesChallenge::sweepExpired();
 
-        $scope    = SalesPermissions::leadScope($request->user);
+        // Alerts are about your own day. "Follow-up due today" raised for a
+        // colleague's follow-up is a notification you can do nothing about, and
+        // it buries the ones you can.
+        $scope    = SalesPermissions::ownScope($request->user);
         $tenantId = Database::tenantId();
         $userId   = isset($request->user['user_id']) ? (int)$request->user['user_id'] : 0;
         $today    = date('Y-m-d');

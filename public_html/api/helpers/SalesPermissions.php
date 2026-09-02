@@ -261,6 +261,34 @@ class SalesPermissions
         ];
     }
 
+    /**
+     * The caller's own work — never widened by a permission.
+     *
+     * leadScope() answers "what may this person look at", which for the whole
+     * team is now every lead, because the pipeline is deliberately open. That is
+     * the right answer for a browsable list and the wrong one for a dashboard:
+     * "Follow-Ups Today" counting the team's follow-ups tells you nothing about
+     * your own day, and the queue you are supposed to work through fills with
+     * other people's rows.
+     *
+     * So the two questions are kept apart. This one is what the dashboard, the
+     * follow-up queue and the diary ask, and it always narrows to one person —
+     * the viewer, or the colleague being viewed.
+     */
+    public static function ownScope(array $user, string $column = 'assigned_to'): array
+    {
+        return [
+            'sql'    => " AND $column = ?",
+            'params' => [self::subjectId($user)],
+        ];
+    }
+
+    /** Whose work is being looked at: the caller, or the colleague being viewed. */
+    public static function subjectId(array $user): int
+    {
+        return SalesViewAs::subjectId($user);
+    }
+
     /** Aborts with 404 (not 403 — don't leak existence) when the lead is out of scope. */
     public static function assertLeadAccess(array $user, array $lead): void
     {
