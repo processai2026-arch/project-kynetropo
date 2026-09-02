@@ -45,6 +45,16 @@ class SalesCall
         );
     }
 
+    /** One call by id, formatted for the client. */
+    public static function find(int $id): ?array
+    {
+        $row = Database::fetch(
+            'SELECT * FROM sales_calls WHERE id = ? AND tenant_id = ? LIMIT 1',
+            [$id, Database::tenantId()]
+        );
+        return $row ? self::format($row) : null;
+    }
+
     public static function forLead(int $leadId): array
     {
         $rows = Database::fetchAll(

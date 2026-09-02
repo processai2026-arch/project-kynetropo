@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { namesakeHint, type TeamMember } from "@/hooks/useTeamMembers";
@@ -69,6 +70,48 @@ export function splitMentions(
   return parts;
 }
 
+/** Where the picker should sit, in viewport coordinates. */
+interface PickerBox {
+  left: number;
+  top: number;
+  width: number;
+  maxHeight: number;
+}
+
+/**
+ * Places the picker against the box it belongs to.
+ *
+ * Below the input when there is room, above when there is not, and never taller
+ * than the space it has. Measured against visualViewport where the browser
+ * offers it, because on a phone the on-screen keyboard covers the lower half of
+ * the window without changing innerHeight — so "there is room below" would
+ * otherwise be true while the list opened behind the keyboard.
+ */
+function placePicker(anchor: DOMRect): PickerBox {
+  const vv = typeof window !== "undefined" ? window.visualViewport : null;
+  const viewTop = vv ? vv.offsetTop : 0;
+  const viewHeight = vv ? vv.height : window.innerHeight;
+  const viewWidth = vv ? vv.width : window.innerWidth;
+  const GAP = 6;
+  const MARGIN = 8;
+  const IDEAL = 224;
+
+  const below = viewTop + viewHeight - anchor.bottom - GAP - MARGIN;
+  const above = anchor.top - viewTop - GAP - MARGIN;
+  const dropDown = below >= Math.min(IDEAL, above) || below >= 160;
+
+  const width = Math.min(Math.max(anchor.width, 220), viewWidth - MARGIN * 2);
+  const left = Math.min(Math.max(anchor.left, MARGIN), viewWidth - width - MARGIN);
+  const maxHeight = Math.max(96, Math.min(IDEAL, dropDown ? below : above));
+
+  return {
+    left,
+    width,
+    maxHeight,
+    top: dropDown ? anchor.bottom + GAP : anchor.top - GAP - maxHeight,
+  };
+}
+
 /** The "@ricky" fragment immediately before the caret, if there is one. */
 function activeQuery(text: string, caret: number): { query: string; start: number } | null {
   const upto = text.slice(0, caret);
@@ -102,8 +145,10 @@ export function MentionInput({
   onSubmit?: () => void;
 }) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
   const [query, setQuery] = useState<{ query: string; start: number } | null>(null);
   const [highlight, setHighlight] = useState(0);
+  const [box, setBox] = useState<PickerBox | null>(null);
 
   const matches = useMemo(() => {
     if (!query) return [];
@@ -117,6 +162,54 @@ export function MentionInput({
   }, [query, matches.length]);
 
   useEffect(() => setHighlight(0), [query?.query]);
+
+  const reposition = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    setBox(placePicker(el.getBoundingClientRect()));
+  }, []);
+
+  // Measured before paint, so the list never appears in the wrong place first.
+  useLayoutEffect(() => {
+    if (!query || matches.length === 0) {
+      setBox(null);
+      return;
+    }
+    reposition();
+  }, [query, matches.length, reposition]);
+
+  /*
+    The picker lives in <body>, outside the dialog that opened it, so a dialog
+    watching for a press "outside itself" counts a press on the picker as one —
+    and picking a name closed the whole comment box. These are native listeners
+    rather than React props because the dialog listens on the document, and the
+    event has to be stopped in the real DOM before it gets there.
+  */
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const stop = (e: Event) => e.stopPropagation();
+    const events = ["pointerdown", "mousedown", "touchstart", "focusin"];
+    events.forEach((n) => el.addEventListener(n, stop));
+    return () => events.forEach((n) => el.removeEventListener(n, stop));
+  }, [box]);
+
+  // The composer moves under the picker: the dialog scrolls, the page scrolls,
+  // and on a phone the keyboard opening shifts the whole visual viewport.
+  useEffect(() => {
+    if (!box) return;
+    const vv = window.visualViewport;
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    vv?.addEventListener("resize", reposition);
+    vv?.addEventListener("scroll", reposition);
+    return () => {
+      window.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("resize", reposition);
+      vv?.removeEventListener("resize", reposition);
+      vv?.removeEventListener("scroll", reposition);
+    };
+  }, [box, reposition]);
 
   const syncQuery = () => {
     const el = ref.current;
@@ -194,47 +287,69 @@ export function MentionInput({
         }}
       />
 
-      {query && matches.length > 0 && (
-        <ul
-          role="listbox"
-          aria-label="Mention a colleague"
-          className="absolute bottom-full left-0 z-50 mb-1 max-h-56 w-64 overflow-y-auto rounded-xl border bg-popover p-1 shadow-lg"
-        >
-          {matches.map((person, i) => (
-            <li key={person.user_id}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={i === highlight}
-                // onMouseDown, not onClick: mousedown fires before the
-                // textarea's blur, so the picker is still open when we insert.
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  insert(person);
-                }}
-                onMouseEnter={() => setHighlight(i)}
-                className={cn(
-                  "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors",
-                  i === highlight ? "bg-accent text-accent-foreground" : "hover:bg-muted",
-                )}
-              >
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-secondary text-[10px] font-semibold text-primary">
-                  {person.name.charAt(0).toUpperCase()}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">{person.name}</span>
-                  {/* Only when the name is shared — otherwise it is just noise. */}
-                  {namesakeHint(person) && (
-                    <span className="block truncate text-[11px] text-muted-foreground">
-                      {namesakeHint(person)}
-                    </span>
+      {/*
+        Rendered into <body> rather than beside the textarea. The composer sits
+        at the bottom of a scrolling dialog, and an absolutely-positioned list
+        was clipped by that dialog's overflow: the names appeared cut off above
+        the box with no way to scroll to the rest. Fixed positioning against the
+        viewport escapes every ancestor's clipping.
+      */}
+      {query && matches.length > 0 && box &&
+        createPortal(
+          <ul
+            ref={listRef}
+            role="listbox"
+            aria-label="Mention a colleague"
+            style={{
+              position: "fixed",
+              left: box.left,
+              top: box.top,
+              width: box.width,
+              maxHeight: box.maxHeight,
+            }}
+            // pointer-events-auto is not decoration: an open modal sets
+            // pointer-events:none on <body>, which this list would otherwise
+            // inherit -- visible, correctly placed, and completely untappable.
+            className="pointer-events-auto z-[100] overflow-y-auto overscroll-contain rounded-xl border bg-popover p-1 shadow-lg"
+          >
+            {matches.map((person, i) => (
+              <li key={person.user_id}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={i === highlight}
+                  // mousedown only holds the picker open: preventing the
+                  // default stops the textarea losing focus, so no blur fires
+                  // and the list survives long enough to be clicked.
+                  onMouseDown={(e) => e.preventDefault()}
+                  // The insert waits for the click. Doing it on mousedown meant
+                  // that starting a scroll gesture on a name picked that name,
+                  // which now matters because the list can actually scroll.
+                  onClick={() => insert(person)}
+                  onMouseEnter={() => setHighlight(i)}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors",
+                    i === highlight ? "bg-accent text-accent-foreground" : "hover:bg-muted",
                   )}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+                >
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-secondary text-[10px] font-semibold text-primary">
+                    {person.name.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{person.name}</span>
+                    {/* Only when the name is shared — otherwise it is just noise. */}
+                    {namesakeHint(person) && (
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {namesakeHint(person)}
+                      </span>
+                    )}
+                  </span>
+                  </button>
+                </li>
+              ))}
+          </ul>,
+          document.body,
+        )}
     </div>
   );
 }

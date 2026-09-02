@@ -161,8 +161,12 @@ class AdminSalesCallController
         SalesLead::touchActivity($leadId, $outcome);
         SalesLead::refreshSchedule($leadId);
 
+        // The call that was just written, looked up by its own id. Taking the
+        // first row of the lead's history returned whichever call sorts newest,
+        // which is a different one whenever this call was backdated or logged
+        // without a time -- so the client was handed the wrong record's id.
         Response::success([
-            'call'        => SalesCall::forLead($leadId)[0] ?? null,
+            'call'        => SalesCall::find($callId),
             'followup_id' => $followupId,
             'lead'        => SalesLead::find($leadId),
         ], 'Call logged', 201);
