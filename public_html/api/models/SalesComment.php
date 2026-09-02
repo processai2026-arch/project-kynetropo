@@ -101,6 +101,142 @@ class SalesComment
     }
 
     /**
+     * Every time this person was named, newest first.
+     *
+     * Returns enough to render the mention without opening it — who wrote it,
+     * what they said, and which record it hangs off — plus the address of the
+     * screen that shows it in context. A mention whose comment has since been
+     * deleted is dropped: there is nothing left to go and read.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function mentionsOf(
+        int $userId,
+        int $limit = 50,
+        bool $unreadOnly = false,
+        ?int $sinceHours = null
+    ): array {
+        $limit  = min(100, max(1, $limit));
+        $params = [Database::tenantId(), $userId];
+        $unread = $unreadOnly ? ' AND m.read_at IS NULL' : '';
+
+        // The alert feed passes an age limit so that turning this on does not
+        // announce every mention ever written as if it had just arrived. The
+        // mentions page itself passes none — the backlog is the point there.
+        // Interpolated rather than bound: MySQL will not take a placeholder as
+        // an INTERVAL operand. Safe because it is an int the caller controls.
+        $recent = '';
+        if ($sinceHours !== null && $sinceHours > 0) {
+            $recent = ' AND c.created_at >= NOW() - INTERVAL ' . (int)$sinceHours . ' HOUR';
+        }
+
+        $rows = Database::fetchAll(
+            "SELECT m.comment_id, m.read_at,
+                    c.entity_type, c.entity_id, c.body, c.author_id, c.author_name,
+                    c.created_at, c.edited_at, c.lead_id, c.challenge_id, c.task_id,
+                    COALESCE(u.name, c.author_name) AS author_current_name,
+                    l.name AS lead_name, l.company AS lead_company,
+                    ch.title AS challenge_title, ch.challenge_code,
+                    t.title AS task_title, t.task_code
+               FROM sales_comment_mentions m
+               JOIN sales_comments c ON c.id = m.comment_id AND c.tenant_id = m.tenant_id
+               LEFT JOIN users u           ON u.user_id = c.author_id
+               LEFT JOIN sales_leads l     ON l.id  = c.lead_id      AND l.tenant_id  = c.tenant_id
+               LEFT JOIN sales_challenges ch ON ch.id = c.challenge_id AND ch.tenant_id = c.tenant_id
+               LEFT JOIN sales_tasks t     ON t.id  = c.task_id      AND t.tenant_id  = c.tenant_id
+              WHERE m.tenant_id = ? AND m.user_id = ? AND c.deleted_at IS NULL" . $unread . $recent . "
+              ORDER BY m.id DESC
+              LIMIT " . $limit,
+            $params
+        );
+
+        return array_map(static function (array $r): array {
+            $entityType = (string)$r['entity_type'];
+            $leadLabel  = ($r['lead_company'] ?: $r['lead_name']) ?: null;
+
+            // Where the mention lives. A comment on a call, a follow-up or a
+            // meeting is a comment about that lead, so the lead page is where
+            // the conversation reads in context.
+            if ($entityType === 'task' && !empty($r['task_id'])) {
+                $url   = '/sales/tasks?task=' . (int)$r['task_id'];
+                $where = ($r['task_code'] ? $r['task_code'] . ' — ' : '') . (string)$r['task_title'];
+            } elseif ($entityType === 'challenge' && !empty($r['challenge_id'])) {
+                $url   = '/sales/challenges/' . (int)$r['challenge_id'];
+                $where = ($r['challenge_code'] ? $r['challenge_code'] . ' — ' : '') . (string)$r['challenge_title'];
+            } elseif ($entityType === 'followup') {
+                $url   = '/sales/followups?followup=' . (int)$r['entity_id'];
+                $where = $leadLabel ? 'Follow-up — ' . $leadLabel : 'Follow-up';
+            } elseif (!empty($r['lead_id'])) {
+                $url   = '/sales/leads/' . (int)$r['lead_id'];
+                $where = $leadLabel ?? 'Lead';
+            } else {
+                $url   = '/sales/more';
+                $where = 'A record that no longer exists';
+            }
+
+            return [
+                'comment_id'  => (int)$r['comment_id'],
+                'entity_type' => $entityType,
+                'entity_id'   => (int)$r['entity_id'],
+                'body'        => (string)$r['body'],
+                'author_id'   => $r['author_id'] !== null ? (int)$r['author_id'] : null,
+                'author_name' => (string)($r['author_current_name'] ?: $r['author_name']),
+                'created_at'  => $r['created_at'],
+                'edited_at'   => $r['edited_at'],
+                'read_at'     => $r['read_at'],
+                'where'       => $where,
+                'url'         => $url,
+                'lead_id'     => $r['lead_id'] !== null ? (int)$r['lead_id'] : null,
+            ];
+        }, $rows);
+    }
+
+    /** How many are still waiting to be looked at. */
+    public static function unreadMentionCount(int $userId): int
+    {
+        return Database::count(
+            "SELECT COUNT(*) AS cnt
+               FROM sales_comment_mentions m
+               JOIN sales_comments c ON c.id = m.comment_id AND c.tenant_id = m.tenant_id
+              WHERE m.tenant_id = ? AND m.user_id = ? AND m.read_at IS NULL AND c.deleted_at IS NULL",
+            [Database::tenantId(), $userId]
+        );
+    }
+
+    /**
+     * Marks this person's mentions read — the given comments, or all of them.
+     *
+     * Only ever touches rows belonging to the caller, and only ones not already
+     * read, so the timestamp records when it was first seen rather than the
+     * last time the page was opened.
+     *
+     * @param int[]|null $commentIds
+     */
+    public static function markMentionsRead(int $userId, ?array $commentIds = null): void
+    {
+        if ($userId < 1) {
+            return;
+        }
+        $params = [Database::tenantId(), $userId];
+        $extra  = '';
+
+        if ($commentIds !== null) {
+            $ids = array_values(array_filter(array_map('intval', $commentIds), static fn(int $i): bool => $i > 0));
+            if (!$ids) {
+                return;
+            }
+            $extra  = ' AND comment_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')';
+            $params = array_merge($params, $ids);
+        }
+
+        Database::execute(
+            'UPDATE sales_comment_mentions SET read_at = NOW()
+              WHERE tenant_id = ? AND user_id = ? AND read_at IS NULL' . $extra,
+            $params
+        );
+    }
+
+    /**
      * Records who a comment mentions. Replaces the set, so editing a comment to
      * drop a name drops the mention with it.
      *
@@ -109,23 +245,45 @@ class SalesComment
     public static function setMentions(int $commentId, array $people): void
     {
         $tenantId = Database::tenantId();
-        Database::execute(
-            'DELETE FROM sales_comment_mentions WHERE tenant_id = ? AND comment_id = ?',
-            [$tenantId, $commentId]
-        );
-        $seen = [];
+
+        $wanted = [];
         foreach (array_slice($people, 0, self::MAX_MENTIONS) as $person) {
             $userId = (int)($person['user_id'] ?? 0);
-            if ($userId < 1 || isset($seen[$userId])) {
+            if ($userId > 0 && !isset($wanted[$userId])) {
+                $wanted[$userId] = mb_substr((string)($person['name'] ?? ''), 0, 200);
+            }
+        }
+
+        // Difference the set rather than replacing it wholesale. Deleting and
+        // re-inserting would throw away read_at, so every typo the author fixed
+        // afterwards would push the mention back into your unread list.
+        $existing = [];
+        foreach (Database::fetchAll(
+            'SELECT user_id FROM sales_comment_mentions WHERE tenant_id = ? AND comment_id = ?',
+            [$tenantId, $commentId]
+        ) as $row) {
+            $existing[(int)$row['user_id']] = true;
+        }
+
+        foreach (array_keys($existing) as $userId) {
+            if (!isset($wanted[$userId])) {
+                Database::execute(
+                    'DELETE FROM sales_comment_mentions WHERE tenant_id = ? AND comment_id = ? AND user_id = ?',
+                    [$tenantId, $commentId, $userId]
+                );
+            }
+        }
+        foreach ($wanted as $userId => $name) {
+            if (isset($existing[$userId])) {
                 continue;
             }
-            $seen[$userId] = true;
             Database::execute(
                 'INSERT IGNORE INTO sales_comment_mentions (tenant_id, comment_id, user_id, user_name)
                  VALUES (?, ?, ?, ?)',
-                [$tenantId, $commentId, $userId, mb_substr((string)($person['name'] ?? ''), 0, 200)]
+                [$tenantId, $commentId, $userId, $name]
             );
         }
+        $seen = $wanted;
         Database::execute(
             'UPDATE sales_comments SET mention_count = ? WHERE id = ? AND tenant_id = ?',
             [count($seen), $commentId, $tenantId]

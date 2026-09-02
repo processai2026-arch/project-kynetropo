@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { CalendarClock, CheckCircle2, Pencil, Phone } from "lucide-react";
+import { CalendarClock, CheckCircle2, ChevronRight, Pencil, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,7 @@ import {
   canEditFollowup,
 } from "@/components/sales/FollowupEditDialog";
 import { CommentButton, CommentThreadDialog } from "@/components/sales/CommentThread";
+import { FollowupDetailDialog } from "@/components/sales/FollowupDetailDialog";
 import { TemperatureBadge, formatDate, formatTime, humanise } from "@/components/sales/SalesBits";
 import type { FollowupBucket, SalesFollowup } from "@/types/sales";
 import { cn } from "@/lib/utils";
@@ -72,6 +73,8 @@ export default function SalesFollowUps() {
   const [callingOn, setCallingOn] = useState<SalesFollowup | null>(null);
   const [editing, setEditing] = useState<SalesFollowup | null>(null);
   const [thread, setThread] = useState<SalesFollowup | null>(null);
+  /** The follow-up whose full record is open. */
+  const [viewing, setViewing] = useState<SalesFollowup | null>(null);
   const [completeForm, setCompleteForm] = useState({
     outcome_notes: "",
     next_followup_date: "",
@@ -102,6 +105,23 @@ export default function SalesFollowUps() {
   useEffect(() => {
     setSearchParams(bucket === "today" ? {} : { bucket }, { replace: true });
   }, [bucket, setSearchParams]);
+
+  /*
+    ?followup=<id> opens that one straight away — where a mention on a
+    follow-up lands. It only fires once the list holds the row, and the
+    parameter is dropped afterwards so a refresh does not reopen the dialog
+    somebody has just closed.
+  */
+  const deepLink = searchParams.get("followup");
+  useEffect(() => {
+    if (!deepLink) return;
+    const wanted = items.find((f) => String(f.id) === deepLink);
+    if (!wanted) return;
+    setViewing(wanted);
+    const next = new URLSearchParams(searchParams);
+    next.delete("followup");
+    setSearchParams(next, { replace: true });
+  }, [deepLink, items, searchParams, setSearchParams]);
 
   const handleComplete = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,40 +207,66 @@ export default function SalesFollowUps() {
       ) : (
         <div className="space-y-3 md:grid md:grid-cols-2 md:gap-3 md:space-y-0 xl:grid-cols-3">
           {items.map((f) => (
+            /*
+              The body of the card opens the follow-up. The buttons and the lead
+              link inside it stop the click going further — they are shortcuts
+              past the dialog, not part of it.
+            */
             <div key={f.id} className="rounded-2xl border bg-card p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <Link to={`/sales/leads/${f.lead_id}`} className="min-w-0 hover:underline">
-                  <p className="truncate font-semibold text-card-foreground">
-                    {f.lead_company || f.lead_name}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {f.lead_contact_person || f.lead_name}
-                    {f.lead_phone ? ` · ${f.lead_phone}` : ""}
-                  </p>
-                </Link>
-                {f.lead_temperature && <TemperatureBadge value={f.lead_temperature} />}
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label={`Follow-up with ${f.lead_company || f.lead_name} on ${formatDate(f.due_date)}`}
+                onClick={() => setViewing(f)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setViewing(f);
+                  }
+                }}
+                className="-m-1 cursor-pointer rounded-xl p-1 transition-colors hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <Link
+                    to={`/sales/leads/${f.lead_id}`}
+                    className="min-w-0 hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <p className="truncate font-semibold text-card-foreground">
+                      {f.lead_company || f.lead_name}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {f.lead_contact_person || f.lead_name}
+                      {f.lead_phone ? ` · ${f.lead_phone}` : ""}
+                    </p>
+                  </Link>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {f.lead_temperature && <TemperatureBadge value={f.lead_temperature} />}
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1",
+                      bucket === "overdue" && "font-medium text-destructive",
+                    )}
+                  >
+                    <CalendarClock className="h-3.5 w-3.5" />
+                    {formatDate(f.due_date)}
+                    {f.due_time ? ` · ${formatTime(f.due_time)}` : ""}
+                  </span>
+                  {f.lead_last_outcome && <span>Last: {humanise(f.lead_last_outcome)}</span>}
+                  {f.assigned_to_name && <span>{f.assigned_to_name}</span>}
+                </div>
+
+                {f.purpose && <p className="mt-2 text-sm text-muted-foreground">{f.purpose}</p>}
+
+                {/* Everyone sees that it moved, who moved it and why — not only
+                    the person who owns it. */}
+                <FollowupEditNote followup={f} className="mt-2" />
               </div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1",
-                    bucket === "overdue" && "font-medium text-destructive",
-                  )}
-                >
-                  <CalendarClock className="h-3.5 w-3.5" />
-                  {formatDate(f.due_date)}
-                  {f.due_time ? ` · ${formatTime(f.due_time)}` : ""}
-                </span>
-                {f.lead_last_outcome && <span>Last: {humanise(f.lead_last_outcome)}</span>}
-                {f.assigned_to_name && <span>{f.assigned_to_name}</span>}
-              </div>
-
-              {f.purpose && <p className="mt-2 text-sm text-muted-foreground">{f.purpose}</p>}
-
-              {/* Everyone sees that it moved, who moved it and why — not only
-                  the person who owns it. */}
-              <FollowupEditNote followup={f} className="mt-2" />
 
               {can("sales.comments.view") && (
                 <div className="mt-2">
@@ -279,6 +325,15 @@ export default function SalesFollowUps() {
           ))}
         </div>
       )}
+
+      <FollowupDetailDialog
+        followup={viewing}
+        onClose={() => {
+          setViewing(null);
+          // A comment may have been added from inside it.
+          void load();
+        }}
+      />
 
       <CommentThreadDialog
         open={thread !== null}

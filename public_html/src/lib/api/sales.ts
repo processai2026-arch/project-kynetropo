@@ -3,6 +3,7 @@ import type {
   ChallengeCounts,
   CommentEntityType,
   FollowupBucket,
+  LeadCallSummary,
   Pagination,
   SalesAccessUser,
   SalesActivityEntry,
@@ -18,6 +19,7 @@ import type {
   SalesLockoutInfo,
   SalesMe,
   SalesMeeting,
+  SalesMention,
   SalesTask,
   SalesTaskDetail,
   TaskBucket,
@@ -315,7 +317,15 @@ export interface LogCallPayload {
 }
 
 export const salesCallsApi = {
-  list: (filters: { lead_id?: number; outcome?: string; date_from?: string; date_to?: string; page?: number } = {}) =>
+  /** Call history collapsed to one entry per lead. */
+  byLead: async (): Promise<LeadCallSummary[]> =>
+    (await apiFetch<Envelope<{ items: LeadCallSummary[] }>>(
+      `/admin/sales/calls/leads${viewAsQs()}`,
+      { skipCache: true },
+    )).data.items ?? [],
+  list: (
+    filters: { lead_id?: number; outcome?: string; date_from?: string; date_to?: string; page?: number; limit?: number } = {},
+  ) =>
     apiFetch<Paginated<SalesCall>>(`/admin/sales/calls${qs(filters)}`),
   meta: async (): Promise<{ outcomes: string[]; temperatures: string[] }> =>
     (await apiFetch<Envelope<{ outcomes: string[]; temperatures: string[] }>>("/admin/sales/calls/meta")).data,
@@ -429,6 +439,27 @@ export const salesMeetingsApi = {
       method: "POST",
       body: JSON.stringify({ reason: reason ?? "" }),
     }),
+};
+
+// ─── Mentions ─────────────────────────────────────────────────────────────────
+
+export interface MentionListResult {
+  items: SalesMention[];
+  unread: number;
+}
+
+export const salesMentionsApi = {
+  list: async (opts: { unread?: boolean; limit?: number } = {}): Promise<MentionListResult> =>
+    (await apiFetch<Envelope<MentionListResult>>(
+      `/admin/sales/mentions${qs({ unread: opts.unread ? 1 : undefined, limit: opts.limit })}`,
+      { skipCache: true },
+    )).data,
+  /** Omit the ids to mark everything read. */
+  markRead: async (commentIds?: number[]): Promise<{ unread: number }> =>
+    (await apiFetch<Envelope<{ unread: number }>>("/admin/sales/mentions/read", {
+      method: "POST",
+      body: JSON.stringify(commentIds ? { comment_ids: commentIds } : {}),
+    })).data,
 };
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────

@@ -476,17 +476,22 @@ class AdminSalesDashboardController
             }
         }
 
-        // ── You were @mentioned ─────────────────────────────────────────────
+        // ── You were @mentioned, and have not looked yet ────────────────────
         // Deliberately NOT filtered by lead scope: being named is the point of
         // a mention, and the thread it is in has already decided who may read
         // it. The URL is the record, so the mention lands you where the
         // conversation is rather than in a notification list.
+        //
+        // Skipping the ones already read matters now that there is a page to
+        // read them on: without it, opening Mentioned cleared the badge and the
+        // same alerts kept arriving for another three days regardless.
         foreach (Database::fetchAll(
             "SELECT cm.id, cm.body, cm.author_name, cm.created_at, cm.entity_type, cm.entity_id,
                     cm.lead_id, cm.challenge_id, cm.task_id
                FROM sales_comment_mentions m
                JOIN sales_comments cm ON cm.id = m.comment_id AND cm.tenant_id = m.tenant_id
               WHERE m.tenant_id = ? AND m.user_id = ? AND cm.deleted_at IS NULL
+                AND m.read_at IS NULL
                 AND cm.created_at >= NOW() - INTERVAL 3 DAY
                 AND (cm.author_id IS NULL OR cm.author_id <> ?)
               ORDER BY cm.created_at DESC LIMIT 15",
@@ -513,10 +518,15 @@ class AdminSalesDashboardController
 
         // ── Comments someone else left on something you can see ─────────────
         if (SalesPermissions::has($request->user, 'sales.comments.view')) {
+            // A comment that names you is announced above as a mention, which
+            // says who wants you rather than merely that a thread moved. Without
+            // this the same comment would arrive twice.
             $where  = "cm.tenant_id = ? AND cm.deleted_at IS NULL
                        AND cm.created_at >= NOW() - INTERVAL 12 HOUR
-                       AND (cm.author_id IS NULL OR cm.author_id <> ?)";
-            $params = [$tenantId, $userId];
+                       AND (cm.author_id IS NULL OR cm.author_id <> ?)
+                       AND NOT EXISTS (SELECT 1 FROM sales_comment_mentions mm
+                                        WHERE mm.comment_id = cm.id AND mm.user_id = ?)";
+            $params = [$tenantId, $userId, $userId];
             if ($scope['sql'] !== '') {
                 // Own leads, plus challenge threads (challenges are team-wide).
                 $where   .= ' AND (l.assigned_to = ? OR cm.challenge_id IS NOT NULL)';

@@ -52,6 +52,7 @@ const SalesActivity        = lazy(() => import("./pages/sales/SalesActivity"));
 const SalesAccessControl   = lazy(() => import("./pages/sales/SalesAccessControl"));
 const SalesTasks           = lazy(() => import("./pages/sales/SalesTasks"));
 const SalesMore            = lazy(() => import("./pages/sales/SalesMore"));
+const SalesMentions        = lazy(() => import("./pages/sales/SalesMentions"));
 
 // System
 const UserManagement = lazy(() => import("./pages/UserManagement"));
@@ -130,6 +131,9 @@ function ProtectedRoutes() {
           <Route path="/sales/activity"        element={<SalesScope><SalesActivity /></SalesScope>} />
           <Route path="/sales/access-control"  element={<SalesAccessControl />} />
           <Route path="/sales/more"            element={<SalesScope><SalesMore /></SalesScope>} />
+          {/* Deliberately outside SalesScope: your mentions are yours, and
+              looking at a colleague's work does not mean reading their post. */}
+          <Route path="/sales/mentions"        element={<SalesMentions />} />
           {/* Team */}
           <Route path="/hiring"          element={<Hiring />} />
           <Route path="/employees"       element={<Employees />} />

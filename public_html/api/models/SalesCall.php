@@ -54,6 +54,74 @@ class SalesCall
         return array_map([self::class, 'format'], $rows);
     }
 
+    /**
+     * Call history collapsed to one row per lead.
+     *
+     * The flat history put a card on screen for every call, so a lead called
+     * eight times filled the page eight times over and pushed everyone else off
+     * it. Grouped, the page answers "who have we been speaking to" — and the
+     * calls themselves are one tap away, in order, under the lead they belong
+     * to.
+     *
+     * The aggregate carries the latest call inline so the card can show the
+     * most recent conversation without a second query per lead.
+     */
+    public static function byLead(array $scope, int $limit = 200): array
+    {
+        $limit  = min(500, max(1, $limit));
+        $where  = ['c.tenant_id = ?'];
+        $params = [Database::tenantId()];
+
+        if ($scope['sql'] !== '') {
+            $where[] = ltrim(str_replace('assigned_to', 'l.assigned_to', $scope['sql']), ' AND');
+            $params  = array_merge($params, $scope['params']);
+        }
+        $whereClause = implode(' AND ', $where);
+
+        // MAX(...) over a sortable string picks the latest call's own columns
+        // without a correlated subquery per lead. The key is zero-padded so it
+        // orders by date, then time, then id — the same order the detail list
+        // uses, so the card and the list agree on which call is the latest.
+        $rows = Database::fetchAll(
+            "SELECT l.id AS lead_id, l.name AS lead_name, l.company AS lead_company,
+                    l.temperature AS lead_temperature, l.assigned_to,
+                    ua.name AS owner_name,
+                    COUNT(*) AS call_count,
+                    SUM(c.duration_minutes) AS total_minutes,
+                    MIN(c.call_date) AS first_call_date,
+                    MAX(c.call_date) AS last_call_date,
+                    SUBSTRING(MAX(CONCAT(c.call_date, ' ', LPAD(COALESCE(c.call_time, '00:00:00'), 8, '0'),
+                                         '#', LPAD(c.id, 10, '0'), '#', c.outcome)), 32) AS last_outcome,
+                    SUBSTRING(MAX(CONCAT(c.call_date, ' ', LPAD(COALESCE(c.call_time, '00:00:00'), 8, '0'),
+                                         '#', LPAD(c.id, 10, '0'), '#', COALESCE(c.notes, ''))), 32) AS last_notes,
+                    SUBSTRING(MAX(CONCAT(c.call_date, ' ', LPAD(COALESCE(c.call_time, '00:00:00'), 8, '0'),
+                                         '#', LPAD(c.id, 10, '0'), '#', COALESCE(c.call_time, ''))), 32) AS last_call_time
+               FROM sales_calls c
+               JOIN sales_leads l ON l.id = c.lead_id AND l.tenant_id = c.tenant_id
+               LEFT JOIN users ua ON ua.user_id = l.assigned_to
+              WHERE $whereClause
+              GROUP BY l.id, l.name, l.company, l.temperature, l.assigned_to, ua.name
+              ORDER BY MAX(c.call_date) DESC, l.id DESC
+              LIMIT $limit",
+            $params
+        );
+
+        return array_map(static fn(array $r): array => [
+            'lead_id'          => (int)$r['lead_id'],
+            'lead_name'        => $r['lead_name'],
+            'lead_company'     => $r['lead_company'],
+            'lead_temperature' => $r['lead_temperature'],
+            'owner_name'       => $r['owner_name'],
+            'call_count'       => (int)$r['call_count'],
+            'total_minutes'    => (int)$r['total_minutes'],
+            'first_call_date'  => $r['first_call_date'],
+            'last_call_date'   => $r['last_call_date'],
+            'last_call_time'   => ($r['last_call_time'] ?? '') !== '' ? $r['last_call_time'] : null,
+            'last_outcome'     => $r['last_outcome'],
+            'last_notes'       => ($r['last_notes'] ?? '') !== '' ? $r['last_notes'] : null,
+        ], $rows);
+    }
+
     /** Call history across leads, restricted by the caller's lead scope. */
     public static function all(array $filters, array $scope, int $page = 1, int $limit = 50): array
     {

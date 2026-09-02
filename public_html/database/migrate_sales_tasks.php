@@ -109,6 +109,10 @@ $additions = [
     // The day the client actually came in, which is often not the day someone
     // got around to typing them in. NULL means the two are the same.
     ['sales_leads',     'acquired_on',   "DATE DEFAULT NULL"],
+
+    // When you first looked at a mention. NULL means it is still waiting, which
+    // is what the badge on More counts.
+    ['sales_comment_mentions', 'read_at', "DATETIME DEFAULT NULL"],
 ];
 
 foreach ($additions as [$table, $column, $definition]) {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Bell, CalendarDays, ChevronRight, ClipboardList, History, Phone, Settings, ShieldCheck, Trophy, User } from "lucide-react";
+import { AtSign, Bell, CalendarDays, ChevronRight, ClipboardList, History, Phone, Settings, ShieldCheck, Trophy, User } from "lucide-react";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -8,6 +8,7 @@ import { requestNotificationPermission } from "@/hooks/useSalesNotifications";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { salesMentionsApi } from "@/lib/api/sales";
 
 /**
  * "More" tab — the less frequent destinations, kept out of the primary tabs.
@@ -17,12 +18,34 @@ export default function SalesMore() {
   const { me, can, isSalesAdmin, loading } = useSalesAccess();
   const isMobile = useIsMobile();
   const [permission, setPermission] = useState<string>("default");
+  const [unreadMentions, setUnreadMentions] = useState(0);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) setPermission(Notification.permission);
   }, []);
 
+  // How many people are waiting on you. Failing quietly is right here: a badge
+  // is a convenience, and a broken one should not take the menu with it.
+  useEffect(() => {
+    if (!can("sales.comments.view")) return;
+    let live = true;
+    salesMentionsApi
+      .list({ unread: true, limit: 1 })
+      .then((res) => live && setUnreadMentions(res.unread))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [can]);
+
   const items = [
+    {
+      to: "/sales/mentions",
+      label: "Mentioned",
+      icon: AtSign,
+      show: can("sales.comments.view"),
+      badge: unreadMentions,
+    },
     { to: "/sales/meetings", label: "Meetings", icon: CalendarDays, show: can("sales.meetings.view") },
     { to: "/sales/calls", label: "Call History", icon: Phone, show: can("sales.calls.view") },
     { to: "/sales/activity", label: "Team Activity", icon: History, show: can("sales.dashboard.view") },
@@ -110,6 +133,11 @@ export default function SalesMore() {
           >
             <item.icon className="h-5 w-5 shrink-0 text-muted-foreground" />
             <span className="flex-1 text-sm font-medium text-card-foreground">{item.label}</span>
+            {!!item.badge && item.badge > 0 && (
+              <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                {item.badge > 99 ? "99+" : item.badge}
+              </span>
+            )}
             {item.admin && (
               <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 Admin

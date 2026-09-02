@@ -216,6 +216,41 @@ export interface SalesMeeting {
   updated_at: string | null;
 }
 
+/** Everyone we have spoken to, one entry per lead. */
+export interface LeadCallSummary {
+  lead_id: number;
+  lead_name: string | null;
+  lead_company: string | null;
+  lead_temperature: LeadTemperature | null;
+  owner_name: string | null;
+  call_count: number;
+  total_minutes: number;
+  first_call_date: string | null;
+  last_call_date: string | null;
+  last_call_time: string | null;
+  last_outcome: string | null;
+  last_notes: string | null;
+}
+
+/** A time somebody named you in a comment. */
+export interface SalesMention {
+  comment_id: number;
+  entity_type: CommentEntityType;
+  entity_id: number;
+  body: string;
+  author_id: number | null;
+  author_name: string;
+  created_at: string;
+  edited_at: string | null;
+  /** Null while it is still waiting to be looked at. */
+  read_at: string | null;
+  /** What it was written on, in words — a lead, a challenge, a task. */
+  where: string;
+  /** The screen that shows it in context. */
+  url: string;
+  lead_id: number | null;
+}
+
 export interface SalesActivityEntry {
   id: number;
   lead_id: number;

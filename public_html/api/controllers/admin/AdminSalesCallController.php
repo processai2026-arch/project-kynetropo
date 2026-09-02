@@ -35,6 +35,23 @@ class AdminSalesCallController
         ]);
     }
 
+    /**
+     * GET /admin/sales/calls/leads
+     *
+     * The same history the index returns, collapsed to one entry per lead.
+     */
+    public function byLead(Request $request): void
+    {
+        SalesPermissions::enforce($request->user, 'sales.calls.view');
+
+        Response::success([
+            'items' => SalesCall::byLead(
+                SalesPermissions::leadScope($request->user),
+                (int)$request->query('limit', 200)
+            ),
+        ]);
+    }
+
     public function store(Request $request): void
     {
         SalesPermissions::enforce($request->user, 'sales.calls.create');
