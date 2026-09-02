@@ -28,6 +28,8 @@ const healthStyles: Record<string, string> = {
 const EMPTY = {
   name: "", phone: "", email: "", source: "", source_pitch_id: "" as string | number,
   owner: "", health: "green" as const, notes: "",
+  // Both optional. Blank on every client added before the questions existed.
+  current_software: "", switch_reason: "",
 };
 
 export default function Clients() {
@@ -81,7 +83,8 @@ export default function Clients() {
     setEditing(c);
     setForm({ name: c.name, phone: c.phone, email: c.email, source: c.source,
               source_pitch_id: c.source_pitch_id ?? "", owner: c.owner,
-              health: c.health, notes: c.notes ?? "" });
+              health: c.health, notes: c.notes ?? "",
+              current_software: c.current_software ?? "", switch_reason: c.switch_reason ?? "" });
     setFormOpen(true);
   };
 
@@ -286,6 +289,23 @@ export default function Clients() {
                     {pitches.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name} ({p.date})</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1.5 col-span-2">
+                <Label>Software they use now</Label>
+                <Input
+                  value={form.current_software}
+                  onChange={e => set("current_software", e.target.value)}
+                  placeholder="Tally, spreadsheets, nothing yet…"
+                />
+              </div>
+              <div className="space-y-1.5 col-span-2">
+                <Label>Why they came to us</Label>
+                <Textarea
+                  value={form.switch_reason}
+                  onChange={e => set("switch_reason", e.target.value)}
+                  rows={2}
+                  placeholder="What is not working for them today, or what they are trying to do"
+                />
               </div>
               <div className="space-y-1.5 col-span-2">
                 <Label>Notes</Label>

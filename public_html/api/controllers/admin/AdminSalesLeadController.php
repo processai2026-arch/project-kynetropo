@@ -100,6 +100,10 @@ class AdminSalesLeadController
             'temperature'    => $temperature,
             'notes'          => $request->input('notes'),
             'acquired_on'    => $acquiredOn,
+            // Optional on purpose: most leads are captured in a hurry, and a
+            // required "why are you switching" would just get filled with junk.
+            'current_software' => trim((string)$request->input('current_software', '')),
+            'switch_reason'    => $request->input('switch_reason'),
         ], isset($request->user['user_id']) ? (int)$request->user['user_id'] : null);
 
         // A lead entered late says so on its own timeline. Without this the
@@ -126,7 +130,8 @@ class AdminSalesLeadController
         SalesPermissions::assertLeadAccess($request->user, $raw);
 
         $data = [];
-        foreach (['name', 'company', 'contact_person', 'phone', 'source', 'notes'] as $col) {
+        foreach (['name', 'company', 'contact_person', 'phone', 'source', 'notes',
+                  'current_software', 'switch_reason'] as $col) {
             if ($request->input($col) !== null) {
                 $data[$col] = $request->input($col);
             }
@@ -299,6 +304,13 @@ class AdminSalesLeadController
             'health' => $health,
             'stage'  => mb_substr(trim((string)$request->input('stage', 'Onboarding')), 0, 80),
             'notes'  => trim((string)$request->input('notes', "Converted from sales lead {$raw['lead_code']}.\n" . (string)$raw['notes'])),
+            // What the sales team found out travels with the client. Losing it
+            // at the handover is how the delivery team ends up asking a paying
+            // customer the same two questions all over again.
+            'current_software' => mb_substr(trim((string)$request->input(
+                'current_software', (string)($raw['current_software'] ?? ''))), 0, 300),
+            'switch_reason'    => trim((string)$request->input(
+                'switch_reason', (string)($raw['switch_reason'] ?? ''))),
         ];
 
         // Reuse an existing ops client when one already matches on phone/email,
@@ -708,6 +720,7 @@ class AdminSalesLeadController
             'status'         => 'Status',
             'temperature'    => 'Temperature',
             'acquired_on'    => 'Client received on',
+            'current_software' => 'Software they use now',
         ];
 
         $changes = [];
@@ -723,6 +736,11 @@ class AdminSalesLeadController
             $changes[] = $from === ''
                 ? $label . ' set to ' . ($to !== '' ? $to : '(empty)')
                 : $label . ': ' . $from . ' -> ' . ($to !== '' ? $to : '(cleared)');
+        }
+
+        if (array_key_exists('switch_reason', $after)
+            && trim((string)($before['switch_reason'] ?? '')) !== trim((string)$after['switch_reason'])) {
+            $changes[] = 'Reason for coming to us edited';
         }
 
         if (array_key_exists('notes', $after)

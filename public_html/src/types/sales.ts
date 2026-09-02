@@ -71,6 +71,10 @@ export interface SalesLead {
    * field existed, which means "the day it was entered" — not "unknown".
    */
   acquired_on: string | null;
+  /** What they run today. Empty when nobody asked, or nobody answered. */
+  current_software: string;
+  /** Why they are looking at us. */
+  switch_reason: string | null;
   converted_client_id: number | null;
   converted_project_id: number | null;
   converted_at: string | null;
@@ -214,6 +218,18 @@ export interface SalesMeeting {
   comment_count?: number;
   created_at: string;
   updated_at: string | null;
+}
+
+/**
+ * What a lead runs today, and why they are talking to us.
+ *
+ * Both optional and both free text: the honest answer is a sentence ("Tally,
+ * plus three spreadsheets"), not a value from a list somebody has to maintain.
+ * Empty on every lead recorded before the questions were asked.
+ */
+export interface SoftwareContext {
+  current_software: string;
+  switch_reason: string | null;
 }
 
 /** Everyone we have spoken to, one entry per lead. */

@@ -113,6 +113,14 @@ $additions = [
     // When you first looked at a mention. NULL means it is still waiting, which
     // is what the badge on More counts.
     ['sales_comment_mentions', 'read_at', "DATETIME DEFAULT NULL"],
+
+    // What they run today, and why they are talking to us. Both optional, and
+    // both free text: the answers are sentences ("Tally, plus three spreadsheets"),
+    // not a value from a list somebody would have to keep up to date.
+    ['sales_leads', 'current_software', "VARCHAR(300) NOT NULL DEFAULT ''"],
+    ['sales_leads', 'switch_reason',    "TEXT DEFAULT NULL"],
+    ['ops_clients', 'current_software', "VARCHAR(300) NOT NULL DEFAULT ''"],
+    ['ops_clients', 'switch_reason',    "TEXT DEFAULT NULL"],
 ];
 
 foreach ($additions as [$table, $column, $definition]) {

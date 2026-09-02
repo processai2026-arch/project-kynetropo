@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, Building2, CalendarClock, CalendarPlus, CalendarX, CheckCircle2,
-  Mail, Pencil, Phone, Thermometer, Undo2, UserCheck,
+  Mail, MessageSquareQuote, MonitorCog, Pencil, Phone, Thermometer, Undo2, UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -293,6 +293,37 @@ export default function SalesLeadDetail() {
           <Field icon={Building2} label="Company" value={lead.company} />
           <Field icon={UserCheck} label="Assigned to" value={lead.assigned_to_name} />
         </div>
+
+        {/* Only when there is something to say — an empty pair of headings on
+            every older lead would be worse than not asking. */}
+        {(lead.current_software || lead.switch_reason) && (
+          <div className="space-y-3 rounded-2xl border bg-card p-4 shadow-sm">
+            {lead.current_software && (
+              <div className="flex items-start gap-2.5">
+                <MonitorCog className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Using now
+                  </p>
+                  <p className="break-words text-sm text-card-foreground">{lead.current_software}</p>
+                </div>
+              </div>
+            )}
+            {lead.switch_reason && (
+              <div className="flex items-start gap-2.5">
+                <MessageSquareQuote className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Why they came to us
+                  </p>
+                  <p className="whitespace-pre-wrap break-words text-sm text-card-foreground">
+                    {lead.switch_reason}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {(lead.next_followup_at || lead.next_meeting_at) && (
           <div className="mt-4 grid gap-2 rounded-xl bg-muted/50 p-3 sm:grid-cols-2">

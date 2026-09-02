@@ -237,6 +237,9 @@ export interface ConvertLeadBody {
   stage?: string;
   health?: "green" | "yellow" | "red";
   notes?: string;
+  /** Both default to whatever the lead already knows. */
+  current_software?: string;
+  switch_reason?: string;
   /** Link to a customer that already exists instead of creating one. */
   link_client_id?: number;
   /** Insist on a new customer even when phone/email match an existing one. */

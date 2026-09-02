@@ -54,6 +54,8 @@ export function ConvertLeadDialog({
       stage: "Onboarding",
       health: "green",
       notes: lead.notes ?? "",
+      current_software: lead.current_software ?? "",
+      switch_reason: lead.switch_reason ?? "",
       project_name: "",
       project_quoted: undefined,
       project_deadline: "",
@@ -185,6 +187,32 @@ export function ConvertLeadDialog({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/*
+            Pre-filled from the lead. The delivery team inherits what sales
+            learned instead of asking a paying customer the same two questions
+            again, and this is the last sensible moment to correct it.
+          */}
+          <div className="space-y-1.5">
+            <Label htmlFor="cv-software">Software they use now</Label>
+            <Input
+              id="cv-software"
+              value={form.current_software ?? ""}
+              placeholder="Tally, spreadsheets, nothing yet…"
+              onChange={(e) => set("current_software", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="cv-reason">Why they came to us</Label>
+            <Textarea
+              id="cv-reason"
+              rows={2}
+              value={form.switch_reason ?? ""}
+              placeholder="What was not working for them, or what they are trying to do"
+              onChange={(e) => set("switch_reason", e.target.value)}
+            />
           </div>
 
           <div className="space-y-1.5">

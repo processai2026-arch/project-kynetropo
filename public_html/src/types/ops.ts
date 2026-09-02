@@ -11,6 +11,9 @@ export interface OpsClient {
   health: "green" | "yellow" | "red";
   stage: string;
   notes: string | null;
+  /** What they ran before us, and why they moved. Both optional. */
+  current_software: string;
+  switch_reason: string | null;
   project_name: string | null;
   project_id: number | null;
   balance_due: number | null;

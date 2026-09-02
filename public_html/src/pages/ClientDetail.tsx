@@ -521,6 +521,29 @@ export default function ClientDetail() {
                 <span className="text-card-foreground capitalize text-right truncate">{val as string}</span>
               </div>
             ))}
+            {/* What sales found out before the handover. Shown only when it was
+                actually recorded — two empty headings on every older client
+                would be worse than not asking. */}
+            {(data.current_software || data.switch_reason) && (
+              <div className="mt-2 space-y-2 border-t pt-2">
+                {data.current_software && (
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Using now</p>
+                    <p className="break-words text-xs text-card-foreground">{data.current_software}</p>
+                  </div>
+                )}
+                {data.switch_reason && (
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      Why they came to us
+                    </p>
+                    <p className="whitespace-pre-wrap break-words text-xs text-card-foreground">
+                      {data.switch_reason}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
             {data.notes && <p className="text-muted-foreground text-xs mt-2 pt-2 border-t">{data.notes}</p>}
           </div>
         </div>

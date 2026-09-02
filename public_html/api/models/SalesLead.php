@@ -26,6 +26,7 @@ class SalesLead
     private const COLUMNS = [
         'name', 'company', 'contact_person', 'phone', 'email', 'source',
         'assigned_to', 'status', 'temperature', 'notes', 'acquired_on',
+        'current_software', 'switch_reason',
     ];
 
     // ── Reads ───────────────────────────────────────────────────────────────
@@ -166,6 +167,8 @@ class SalesLead
             'temperature'    => $data['temperature'] ?? 'warm',
             'notes'          => $data['notes'] ?? null,
             'acquired_on'    => $data['acquired_on'] ?? null,
+            'current_software' => (string)($data['current_software'] ?? ''),
+            'switch_reason'    => $data['switch_reason'] ?? null,
             'last_activity_at' => date('Y-m-d H:i:s'),
             'created_by'     => $createdBy,
         ]);
@@ -307,6 +310,10 @@ class SalesLead
             // The day the client came in. Null means "the day it was entered",
             // which is what every lead recorded before this field existed says.
             'acquired_on'          => $row['acquired_on'] ?? null,
+            // What they run today, and why they are looking at us. Both blank
+            // on every lead recorded before the questions were asked.
+            'current_software'     => $row['current_software'] ?? '',
+            'switch_reason'        => $row['switch_reason'] ?? null,
             'converted_client_id'  => $row['converted_client_id'] !== null ? (int)$row['converted_client_id'] : null,
             'converted_project_id' => $row['converted_project_id'] !== null ? (int)$row['converted_project_id'] : null,
             'converted_at'         => $row['converted_at'],

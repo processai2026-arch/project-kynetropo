@@ -56,6 +56,8 @@ const EMPTY = {
   notes: "",
   assigned_to: "",
   acquired_on: "",
+  current_software: "",
+  switch_reason: "",
 };
 
 export function LeadFormDialog({
@@ -98,6 +100,8 @@ export function LeadFormDialog({
             notes: lead.notes ?? "",
             assigned_to: lead.assigned_to ? String(lead.assigned_to) : "",
             acquired_on: lead.acquired_on ?? "",
+            current_software: lead.current_software ?? "",
+            switch_reason: lead.switch_reason ?? "",
           }
         // A new lead defaults to today, which is right most of the time and
         // obvious to change when it is not.
@@ -129,6 +133,8 @@ export function LeadFormDialog({
         temperature: form.temperature,
         notes: form.notes,
         acquired_on: form.acquired_on,
+        current_software: form.current_software.trim(),
+        switch_reason: form.switch_reason,
       };
       // Only sent when it is actually the user's to change: the server enforces
       // the same two rules, so a field that cannot move is simply not offered.
@@ -229,6 +235,32 @@ export function LeadFormDialog({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/*
+            Both optional, and deliberately not marked required anywhere: a lead
+            is often captured mid-conversation, and a mandatory "why are you
+            switching" only ever gets filled with a full stop.
+          */}
+          <div className="space-y-1.5">
+            <Label htmlFor="lead-software">Software they use now</Label>
+            <Input
+              id="lead-software"
+              value={form.current_software}
+              placeholder="Tally, spreadsheets, nothing yet…"
+              onChange={(e) => set("current_software", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="lead-reason">Why they came to us</Label>
+            <Textarea
+              id="lead-reason"
+              rows={2}
+              value={form.switch_reason}
+              placeholder="What is not working for them today, or what they are trying to do"
+              onChange={(e) => set("switch_reason", e.target.value)}
+            />
           </div>
 
           {editing && (

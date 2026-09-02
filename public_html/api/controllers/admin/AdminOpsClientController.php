@@ -179,6 +179,10 @@ class AdminOpsClientController
             'health'          => in_array($body['health'] ?? '', ['green','yellow','red']) ? $body['health'] : 'green',
             'stage'           => 'First Meetup',
             'notes'           => trim((string)($body['notes'] ?? '')),
+            // Carried across when a lead is converted, so what the sales team
+            // learned about the client does not stop at the handover.
+            'current_software' => trim((string)($body['current_software'] ?? '')),
+            'switch_reason'    => trim((string)($body['switch_reason'] ?? '')),
         ]);
 
         $this->logActivity($tenantId, 'client', $id, 'created', 'Client created', $body['owner'] ?? '');
@@ -200,7 +204,7 @@ class AdminOpsClientController
         if (!$client) Response::error('Client not found', 404);
 
         $updates = [];
-        foreach (['name','phone','email','source','owner','notes'] as $f) {
+        foreach (['name','phone','email','source','owner','notes','current_software','switch_reason'] as $f) {
             if (isset($body[$f])) $updates[$f] = trim((string)$body[$f]);
         }
         if (isset($body['source_pitch_id'])) $updates['source_pitch_id'] = !empty($body['source_pitch_id']) ? (int)$body['source_pitch_id'] : null;
@@ -414,6 +418,8 @@ class AdminOpsClientController
             'health'          => $row['health'],
             'stage'           => $row['stage'],
             'notes'           => $row['notes'],
+            'current_software' => $row['current_software'] ?? '',
+            'switch_reason'    => $row['switch_reason'] ?? '',
             'project_name'    => $row['project_name'] ?? null,
             'project_id'      => isset($row['project_id']) ? (int)$row['project_id'] : null,
             'balance_due'     => isset($row['balance_due']) ? (float)$row['balance_due'] : null,
