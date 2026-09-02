@@ -162,30 +162,76 @@ class AdminSalesFollowupController
             Response::error('This follow-up is already ' . $row['status'], 409);
         }
 
-        $notes  = $request->input('outcome_notes');
         $leadId = (int)$row['lead_id'];
+        $userId = isset($request->user['user_id']) ? (int)$request->user['user_id'] : null;
 
-        SalesFollowup::complete($id, isset($request->user['user_id']) ? (int)$request->user['user_id'] : null, $notes);
-        SalesActivity::log($leadId, 'followup_completed', 'Follow-up completed', $request->user, (string)$notes, 'followup', $id);
+        // ── Everything is checked before anything is written ─────────────────
+        // Completing can also create the next follow-up and move the lead. Half
+        // of that happening and then a 422 arriving would leave the queue in a
+        // state nobody asked for and no screen explains.
 
-        // Optionally chain the next follow-up in the same action.
-        $nextId   = null;
-        $nextDate = $request->input('next_followup_date');
-        if (!empty($nextDate)) {
-            if (!$this->isValidDate((string)$nextDate)) {
-                Response::error('Invalid next follow-up date', 422);
-            }
-            $nextTime = $request->input('next_followup_time');
-            if (!empty($nextTime) && !$this->isValidTime((string)$nextTime)) {
-                Response::error('Invalid next follow-up time', 422);
-            }
+        // Absent means an older client that only ever said "done" — which is
+        // the answer it always implied.
+        $outcome = strtolower(trim((string)$request->input('outcome', '')));
+        if ($outcome === '') {
+            $outcome = 'completed';
+        }
+        if (!in_array($outcome, SalesFollowup::OUTCOMES, true)) {
+            Response::error(
+                'Invalid outcome. Allowed: ' . implode(', ', SalesFollowup::OUTCOMES),
+                422
+            );
+        }
+
+        $notes = trim((string)$request->input('outcome_notes', ''));
+        if ($outcome === 'not_interested' && $notes === '') {
+            Response::error('Say why they are not interested — that reason is the useful part.', 422);
+        }
+
+        $nextDate = trim((string)$request->input('next_followup_date', ''));
+        $nextTime = trim((string)$request->input('next_followup_time', ''));
+        if ($outcome === 'not_picked_up' && $nextDate === '') {
+            Response::error('Nobody answered, so pick a date to try again.', 422);
+        }
+        if ($nextDate !== '' && !$this->isValidDate($nextDate)) {
+            Response::error('Invalid next follow-up date', 422);
+        }
+        if ($nextTime !== '' && !$this->isValidTime($nextTime)) {
+            Response::error('Invalid next follow-up time', 422);
+        }
+
+        // Moving the lead is a lead edit, whoever asked for it.
+        $markLost = $outcome === 'not_interested' && (bool)$request->input('mark_lead_lost', false);
+        $markHot  = $outcome === 'interested'     && (bool)$request->input('mark_lead_hot', false);
+        if (($markLost || $markHot) && !SalesPermissions::has($request->user, 'sales.leads.edit')) {
+            Response::error('You do not have permission to change the lead itself.', 403);
+        }
+
+        // ── Writes ───────────────────────────────────────────────────────────
+        SalesFollowup::complete($id, $userId, $notes !== '' ? $notes : null, $outcome);
+
+        $label = ucfirst(str_replace('_', ' ', $outcome));
+        SalesActivity::log(
+            $leadId,
+            'followup_completed',
+            'Follow-up completed — ' . $label,
+            $request->user,
+            $notes,
+            'followup',
+            $id,
+            ['outcome' => $outcome]
+        );
+
+        // Chain the next follow-up in the same action.
+        $nextId = null;
+        if ($nextDate !== '') {
             $nextId = SalesFollowup::create([
                 'lead_id'     => $leadId,
                 'due_date'    => $nextDate,
                 'due_time'    => $nextTime ?: null,
                 'assigned_to' => $row['assigned_to'],
                 'purpose'     => (string)$request->input('next_followup_purpose', ''),
-            ], isset($request->user['user_id']) ? (int)$request->user['user_id'] : null);
+            ], $userId);
 
             SalesActivity::log(
                 $leadId, 'followup_created',
@@ -194,10 +240,69 @@ class AdminSalesFollowupController
             );
         }
 
-        SalesLead::touchActivity($leadId);
+        $this->applyToLead($request, $leadId, $outcome, $notes, $markLost, $markHot);
+
+        // The lead's own "last outcome" learns what the follow-up learned,
+        // rather than only recording that somebody touched it.
+        SalesLead::touchActivity($leadId, SalesFollowup::OUTCOME_ON_LEAD[$outcome] ?? null);
         SalesLead::refreshSchedule($leadId);
 
-        Response::success(['next_followup_id' => $nextId], 'Follow-up completed');
+        Response::success(
+            ['next_followup_id' => $nextId, 'outcome' => $outcome],
+            'Follow-up completed — ' . $label
+        );
+    }
+
+    /**
+     * The part of the answer that belongs on the lead rather than on the
+     * follow-up.
+     *
+     * "Not interested" left sitting in the pipeline as an open lead is how a
+     * board fills with work nobody intends to do, so the dialog offers to close
+     * it — but only offers: a person ticks it, the timeline records it with the
+     * reason, and it is undone by editing the lead like any other status.
+     *
+     * A lead already converted or onboarding is never moved. Whatever one
+     * follow-up says, the deal is further along than this.
+     */
+    private function applyToLead(
+        Request $request,
+        int $leadId,
+        string $outcome,
+        string $notes,
+        bool $markLost,
+        bool $markHot
+    ): void {
+        if (!$markLost && !$markHot) {
+            return;
+        }
+        $lead = SalesLead::findRaw($leadId);
+        if (!$lead) {
+            return;
+        }
+
+        if ($markLost) {
+            if (in_array((string)$lead['status'], ['converted', 'onboarding', 'lost'], true)) {
+                return;
+            }
+            SalesLead::update($leadId, ['status' => 'lost', 'temperature' => 'cold']);
+            SalesActivity::log(
+                $leadId, 'status_changed',
+                'Marked lost — not interested',
+                $request->user, $notes, 'followup', null
+            );
+            return;
+        }
+
+        if ((string)$lead['temperature'] === 'hot') {
+            return;
+        }
+        SalesLead::update($leadId, ['temperature' => 'hot']);
+        SalesActivity::log(
+            $leadId, 'temperature_changed',
+            'Marked hot — interested at follow-up',
+            $request->user, $notes, 'followup', null
+        );
     }
 
     public function cancel(Request $request): void

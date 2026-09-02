@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { CommentThread } from "@/components/sales/CommentThread";
 import { FollowupEditNote } from "@/components/sales/FollowupEditDialog";
+import { OutcomeBadge } from "@/components/sales/FollowupCompleteDialog";
 import {
   TemperatureBadge,
   formatDate,
@@ -117,10 +118,15 @@ export function FollowupDetailDialog({
 
               {f.status === "completed" && (
                 <div className="rounded-xl bg-muted/50 p-3">
-                  <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-700">
-                    <CheckCircle2 className="h-4 w-4" />
-                    Completed {formatDateTime(f.completed_at)}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-700">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Completed {formatDateTime(f.completed_at)}
+                    </p>
+                    {/* How it went, in its own words. Anything completed before
+                        the question was asked simply has no badge. */}
+                    <OutcomeBadge value={f.outcome} />
+                  </div>
                   <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">
                     {f.outcome_notes || "No outcome notes were written."}
                   </p>

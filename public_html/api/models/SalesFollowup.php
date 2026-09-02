@@ -11,6 +11,27 @@ class SalesFollowup
     public const STATUSES = ['pending', 'completed', 'cancelled'];
     public const BUCKETS  = ['today', 'overdue', 'upcoming', 'completed'];
 
+    /**
+     * How it went. Four answers, because those are the four things that
+     * actually happen when you chase somebody: they want it, they don't, they
+     * didn't answer, or the job is simply done.
+     *
+     * Deliberately shorter than the call outcomes: a call is a conversation
+     * with many possible shapes, a follow-up is a question with an answer.
+     */
+    public const OUTCOMES = ['interested', 'not_interested', 'not_picked_up', 'completed'];
+
+    /**
+     * The same fact in the vocabulary the lead's "last outcome" already speaks,
+     * so a follow-up and a call read alike on the lead. 'completed' says
+     * nothing new about where the lead stands, so it leaves it alone.
+     */
+    public const OUTCOME_ON_LEAD = [
+        'interested'     => 'interested',
+        'not_interested' => 'not_interested',
+        'not_picked_up'  => 'no_response',
+    ];
+
     public static function create(array $data, ?int $createdBy): int
     {
         return Database::insert('sales_followups', [
@@ -35,13 +56,14 @@ class SalesFollowup
         );
     }
 
-    public static function complete(int $id, ?int $userId, ?string $notes): void
+    public static function complete(int $id, ?int $userId, ?string $notes, string $outcome = 'completed'): void
     {
         Database::execute(
             "UPDATE sales_followups
-                SET status = 'completed', completed_by = ?, completed_at = NOW(), outcome_notes = ?
+                SET status = 'completed', completed_by = ?, completed_at = NOW(),
+                    outcome = ?, outcome_notes = ?
               WHERE id = ? AND tenant_id = ? AND status = 'pending'",
-            [$userId, $notes, $id, Database::tenantId()]
+            [$userId, $outcome, $notes, $id, Database::tenantId()]
         );
     }
 
@@ -261,6 +283,10 @@ class SalesFollowup
             'assigned_to_name'    => $row['assigned_to_name'] ?? null,
             'status'              => $row['status'],
             'purpose'             => $row['purpose'],
+            // '' for anything completed before outcomes existed, and for
+            // anything still pending. The client shows a badge only when there
+            // is one, rather than inventing an answer nobody gave.
+            'outcome'             => (string)($row['outcome'] ?? ''),
             'outcome_notes'       => $row['outcome_notes'],
             'completed_by'        => $row['completed_by'] !== null ? (int)$row['completed_by'] : null,
             'completed_at'        => $row['completed_at'],

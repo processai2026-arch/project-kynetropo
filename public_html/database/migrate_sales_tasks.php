@@ -121,6 +121,13 @@ $additions = [
     ['sales_leads', 'switch_reason',    "TEXT DEFAULT NULL"],
     ['ops_clients', 'current_software', "VARCHAR(300) NOT NULL DEFAULT ''"],
     ['ops_clients', 'switch_reason',    "TEXT DEFAULT NULL"],
+
+    // How a follow-up actually went, as one of four answers rather than
+    // buried in a sentence. Notes still hold what was said; this holds what
+    // happened, so it can be counted, filtered and shown on a card. Rows
+    // completed before this column existed read '' and are shown as just
+    // "Completed", which is all anyone knew about them.
+    ['sales_followups', 'outcome', "VARCHAR(30) NOT NULL DEFAULT ''"],
 ];
 
 foreach ($additions as [$table, $column, $definition]) {

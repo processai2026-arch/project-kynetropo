@@ -28,6 +28,14 @@ export type CallOutcome =
 export type FollowupBucket = "today" | "overdue" | "upcoming" | "completed";
 export type FollowupStatus = "pending" | "completed" | "cancelled";
 
+/**
+ * How a follow-up went. Four answers, because those are the four things that
+ * happen when you chase somebody: they want it, they don't, they didn't answer,
+ * or the job is done. "" for anything still pending, and for anything completed
+ * before the question was asked.
+ */
+export type FollowupOutcome = "interested" | "not_interested" | "not_picked_up" | "completed";
+
 export type MeetingType = "physical" | "virtual";
 export type MeetingStatus = "scheduled" | "completed" | "cancelled";
 export type MeetingOutcome =
@@ -172,6 +180,7 @@ export interface SalesFollowup {
   assigned_to_name: string | null;
   status: FollowupStatus;
   purpose: string;
+  outcome: FollowupOutcome | "";
   outcome_notes: string | null;
   completed_by: number | null;
   completed_at: string | null;

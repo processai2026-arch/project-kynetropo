@@ -2,11 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { CalendarClock, CheckCircle2, ChevronRight, Pencil, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { salesFollowupsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
@@ -19,6 +15,7 @@ import {
 } from "@/components/sales/FollowupEditDialog";
 import { CommentButton, CommentThreadDialog } from "@/components/sales/CommentThread";
 import { FollowupDetailDialog } from "@/components/sales/FollowupDetailDialog";
+import { FollowupCompleteDialog, OutcomeBadge } from "@/components/sales/FollowupCompleteDialog";
 import { TemperatureBadge, formatDate, formatTime, humanise } from "@/components/sales/SalesBits";
 import type { FollowupBucket, SalesFollowup } from "@/types/sales";
 import { cn } from "@/lib/utils";
@@ -44,15 +41,6 @@ function belongsToBucket(f: SalesFollowup, bucket: FollowupBucket): boolean {
   return false;
 }
 
-/**
- * Today, from the local clock — not toISOString(), which is UTC and names
- * yesterday for anyone east of Greenwich working in the evening.
- */
-function localToday(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 export default function SalesFollowUps() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { can, me } = useSalesAccess();
@@ -75,12 +63,6 @@ export default function SalesFollowUps() {
   const [thread, setThread] = useState<SalesFollowup | null>(null);
   /** The follow-up whose full record is open. */
   const [viewing, setViewing] = useState<SalesFollowup | null>(null);
-  const [completeForm, setCompleteForm] = useState({
-    outcome_notes: "",
-    next_followup_date: "",
-    next_followup_time: "",
-  });
-  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,31 +104,6 @@ export default function SalesFollowUps() {
     next.delete("followup");
     setSearchParams(next, { replace: true });
   }, [deepLink, items, searchParams, setSearchParams]);
-
-  const handleComplete = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!completing) return;
-    setSaving(true);
-    try {
-      await salesFollowupsApi.complete(completing.id, {
-        outcome_notes: completeForm.outcome_notes || undefined,
-        next_followup_date: completeForm.next_followup_date || undefined,
-        next_followup_time: completeForm.next_followup_time || undefined,
-      });
-      toast.success(
-        completeForm.next_followup_date
-          ? "Follow-up completed, and the next one is scheduled"
-          : "Follow-up completed",
-      );
-      setCompleting(null);
-      setCompleteForm({ outcome_notes: "", next_followup_date: "", next_followup_time: "" });
-      void load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not complete the follow-up");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <SalesLayout>
@@ -275,10 +232,20 @@ export default function SalesFollowUps() {
               )}
 
               {f.status === "completed" ? (
-                <div className="mt-3 flex items-center gap-1.5 text-xs text-emerald-700">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  Completed {formatDate(f.completed_at)}
-                  {f.outcome_notes ? ` — ${f.outcome_notes}` : ""}
+                <div className="mt-3 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-emerald-700">
+                    <span className="inline-flex items-center gap-1.5">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Completed {formatDate(f.completed_at)}
+                    </span>
+                    {/* The answer, not just the tick. */}
+                    <OutcomeBadge value={f.outcome} />
+                  </div>
+                  {f.outcome_notes && (
+                    <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                      {f.outcome_notes}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="mt-3 grid grid-cols-2 gap-2">
@@ -373,58 +340,11 @@ export default function SalesFollowUps() {
         onLogged={() => void load()}
       />
 
-      <Dialog open={completing !== null} onOpenChange={(o) => !o && setCompleting(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Complete Follow-Up</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleComplete} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="fu-notes">Outcome notes</Label>
-              <Textarea
-                id="fu-notes"
-                rows={3}
-                value={completeForm.outcome_notes}
-                onChange={(e) => setCompleteForm((f) => ({ ...f, outcome_notes: e.target.value }))}
-                placeholder="What happened?"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Schedule the next follow-up (optional)</Label>
-              {/*
-                A date on its own says "some time that day", which is no use to
-                whoever picks it up — the server has always accepted a time, the
-                form just never asked for one.
-              */}
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  id="fu-next"
-                  type="date"
-                  aria-label="Next follow-up date"
-                  min={localToday()}
-                  value={completeForm.next_followup_date}
-                  onChange={(e) => setCompleteForm((f) => ({ ...f, next_followup_date: e.target.value }))}
-                />
-                <Input
-                  id="fu-next-time"
-                  type="time"
-                  aria-label="Next follow-up time"
-                  value={completeForm.next_followup_time}
-                  onChange={(e) => setCompleteForm((f) => ({ ...f, next_followup_time: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setCompleting(null)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Saving…" : "Complete"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <FollowupCompleteDialog
+        followup={completing}
+        onClose={() => setCompleting(null)}
+        onCompleted={() => void load()}
+      />
     </SalesLayout>
   );
 }

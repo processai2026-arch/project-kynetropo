@@ -3,6 +3,7 @@ import type {
   ChallengeCounts,
   CommentEntityType,
   FollowupBucket,
+  FollowupOutcome,
   LeadCallSummary,
   Pagination,
   SalesAccessUser,
@@ -373,13 +374,18 @@ export const salesFollowupsApi = {
   complete: async (
     id: number,
     body: {
+      /** How it went. Omitted by older callers, which the server reads as "completed". */
+      outcome?: FollowupOutcome;
       outcome_notes?: string;
       next_followup_date?: string;
       next_followup_time?: string;
       next_followup_purpose?: string;
+      /** Both are lead edits, and the server refuses them without that permission. */
+      mark_lead_lost?: boolean;
+      mark_lead_hot?: boolean;
     } = {},
   ) =>
-    (await apiFetch<Envelope<{ next_followup_id: number | null }>>(`/admin/sales/followups/${id}/complete`, {
+    (await apiFetch<Envelope<{ next_followup_id: number | null; outcome: string }>>(`/admin/sales/followups/${id}/complete`, {
       method: "POST",
       body: JSON.stringify(body),
     })).data,

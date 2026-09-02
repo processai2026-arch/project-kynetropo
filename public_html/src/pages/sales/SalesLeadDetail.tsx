@@ -23,6 +23,7 @@ import {
   FollowupEditNote,
   canEditFollowup,
 } from "@/components/sales/FollowupEditDialog";
+import { FollowupCompleteDialog } from "@/components/sales/FollowupCompleteDialog";
 import { CommentButton, CommentThread, CommentThreadDialog } from "@/components/sales/CommentThread";
 import { ConvertLeadDialog } from "@/components/sales/ConvertLeadDialog";
 import { LeadFormDialog } from "@/components/sales/LeadFormDialog";
@@ -74,6 +75,9 @@ export default function SalesLeadDetail() {
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [editingFollowup, setEditingFollowup] = useState<SalesFollowup | null>(null);
+  /** The follow-up being completed. Same dialog as the follow-ups page: the
+      answer is worth the same here, and a bare "Done" recorded none of it. */
+  const [completingFollowup, setCompletingFollowup] = useState<SalesFollowup | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [thread, setThread] = useState<{ type: CommentEntityType; id: number; title: string } | null>(null);
   const [convertOpen, setConvertOpen] = useState(false);
@@ -168,16 +172,6 @@ export default function SalesLeadDetail() {
       void load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not cancel the meeting");
-    }
-  };
-
-  const handleCompleteFollowup = async (followupId: number) => {
-    try {
-      await salesFollowupsApi.complete(followupId);
-      toast.success("Follow-up completed");
-      void load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not complete the follow-up");
     }
   };
 
@@ -478,7 +472,7 @@ export default function SalesLeadDetail() {
                   </Button>
                 )}
                 {can("sales.followups.complete") && (
-                  <Button size="sm" variant="outline" className="h-9" onClick={() => void handleCompleteFollowup(f.id)}>
+                  <Button size="sm" variant="outline" className="h-9" onClick={() => setCompletingFollowup(f)}>
                     Done
                   </Button>
                 )}
@@ -702,6 +696,14 @@ export default function SalesLeadDetail() {
         followup={editingFollowup}
         onClose={() => setEditingFollowup(null)}
         onSaved={() => void load()}
+      />
+
+      <FollowupCompleteDialog
+        followup={completingFollowup}
+        onClose={() => setCompletingFollowup(null)}
+        // The outcome can move the lead's status and temperature, so the whole
+        // record is reloaded rather than the one row patched.
+        onCompleted={() => void load()}
       />
 
       <ConvertLeadDialog
