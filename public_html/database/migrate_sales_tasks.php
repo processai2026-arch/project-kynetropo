@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 /**
- * Idempotent migration for the tasks / mentions / follow-up-edit release.
+ * Idempotent column additions for the sales module.
  *
  *   php database/migrate_sales_tasks.php
  *
@@ -105,6 +105,10 @@ $additions = [
     // the one fact the undo cannot afford to guess. Rows converted before this
     // column existed read 0 and keep their customer.
     ['sales_leads',     'converted_client_created', "TINYINT(1) NOT NULL DEFAULT 0"],
+
+    // The day the client actually came in, which is often not the day someone
+    // got around to typing them in. NULL means the two are the same.
+    ['sales_leads',     'acquired_on',   "DATE DEFAULT NULL"],
 ];
 
 foreach ($additions as [$table, $column, $definition]) {

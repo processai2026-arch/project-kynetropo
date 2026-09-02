@@ -99,6 +99,7 @@ class AdminSalesAccessController
         // colleague all need the same thing: the names of the people on this
         // team. It is a list of colleagues, not a privilege.
         SalesPermissions::enforceAny($request->user, [
+            'sales.dashboard.view',
             'sales.challenges.create',
             'sales.challenges.manage',
             'sales.leads.assign',

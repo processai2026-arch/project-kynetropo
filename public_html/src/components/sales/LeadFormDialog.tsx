@@ -25,6 +25,12 @@ import type { LeadStatus, LeadTemperature, SalesLead } from "@/types/sales";
 
 const TEMPERATURES: LeadTemperature[] = ["hot", "warm", "cold"];
 
+/** Today, in the format a date input wants. */
+function today(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 /** The stages a lead can simply be moved between. */
 const PIPELINE_STATUSES: { value: LeadStatus; label: string }[] = [
   { value: "new", label: "New" },
@@ -49,6 +55,7 @@ const EMPTY = {
   status: "new" as LeadStatus,
   notes: "",
   assigned_to: "",
+  acquired_on: "",
 };
 
 export function LeadFormDialog({
@@ -90,8 +97,11 @@ export function LeadFormDialog({
             status: lead.status ?? "new",
             notes: lead.notes ?? "",
             assigned_to: lead.assigned_to ? String(lead.assigned_to) : "",
+            acquired_on: lead.acquired_on ?? "",
           }
-        : EMPTY,
+        // A new lead defaults to today, which is right most of the time and
+        // obvious to change when it is not.
+        : { ...EMPTY, acquired_on: today() },
     );
   }, [open, lead]);
 
@@ -118,6 +128,7 @@ export function LeadFormDialog({
         source: form.source,
         temperature: form.temperature,
         notes: form.notes,
+        acquired_on: form.acquired_on,
       };
       // Only sent when it is actually the user's to change: the server enforces
       // the same two rules, so a field that cannot move is simply not offered.
@@ -189,6 +200,19 @@ export function LeadFormDialog({
             <div className="space-y-1.5">
               <Label htmlFor="lead-source">Source</Label>
               <SourceSelect id="lead-source" value={form.source} onChange={(v) => set("source", v)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="lead-acquired">Client came in on</Label>
+              <Input
+                id="lead-acquired"
+                type="date"
+                max={today()}
+                value={form.acquired_on}
+                onChange={(e) => set("acquired_on", e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                The day you actually got them — not the day you are typing this.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>Temperature</Label>

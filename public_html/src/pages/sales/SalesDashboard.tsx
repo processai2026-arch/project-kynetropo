@@ -14,6 +14,7 @@ import { StatsRow } from "@/components/StatsRow";
 import { SectionCard } from "@/components/SectionCard";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { ViewAsSwitcher } from "@/components/sales/ViewAsSwitcher";
 import { TemperatureBadge, formatDate, formatTime, humanise } from "@/components/sales/SalesBits";
 import type { SalesDashboard as Dashboard, SalesFollowup, SalesMeeting } from "@/types/sales";
 import { cn } from "@/lib/utils";
@@ -53,6 +54,9 @@ function MetricRow({ items }: { items: { label: string; value: number; tone?: "d
 }
 
 function FollowupCard({ item, overdue }: { item: SalesFollowup; overdue?: boolean }) {
+  // Logging a call is an action, so it needs the permission for one — which
+  // also takes it off the card while you are reading a colleague's board.
+  const { can } = useSalesAccess();
   return (
     <div className="rounded-2xl border bg-card p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -79,14 +83,16 @@ function FollowupCard({ item, overdue }: { item: SalesFollowup; overdue?: boolea
 
       {item.purpose && <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{item.purpose}</p>}
 
-      <div className="mt-3">
-        <Button size="sm" variant="secondary" className="h-9 w-full sm:w-auto" asChild>
-          <Link to={`/sales/leads/${item.lead_id}?action=call`}>
-            <Phone className="mr-1.5 h-3.5 w-3.5" />
-            Log Call
-          </Link>
-        </Button>
-      </div>
+      {can("sales.calls.create") && (
+        <div className="mt-3">
+          <Button size="sm" variant="secondary" className="h-9 w-full sm:w-auto" asChild>
+            <Link to={`/sales/leads/${item.lead_id}?action=call`}>
+              <Phone className="mr-1.5 h-3.5 w-3.5" />
+              Log Call
+            </Link>
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -220,9 +226,12 @@ export default function SalesDashboard() {
       {isMobile ? (
         <>
           {/* Phone: greeting, one compact metrics block, then the work itself. */}
-          <header>
-            <p className="text-sm text-muted-foreground">{greeting()}{firstName ? `, ${firstName}` : ""}</p>
-            <h1 className="text-2xl font-bold text-foreground">Today's Sales</h1>
+          <header className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm text-muted-foreground">{greeting()}{firstName ? `, ${firstName}` : ""}</p>
+              <h1 className="text-2xl font-bold text-foreground">Today's Sales</h1>
+            </div>
+            <ViewAsSwitcher className="shrink-0" />
           </header>
 
           <MetricRow
@@ -244,11 +253,14 @@ export default function SalesDashboard() {
             title="Sales"
             subtitle={`${greeting()}${firstName ? `, ${firstName}` : ""} — here is today's pipeline.`}
             action={
-              <div className="rounded-xl border bg-card px-4 py-2 text-sm text-muted-foreground shadow-sm">
-                <CalendarDays className="mr-1.5 inline h-3.5 w-3.5" />
-                {new Date(data.server_time.replace(" ", "T")).toLocaleString("en-IN", {
-                  day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit",
-                })}
+              <div className="flex items-center gap-3">
+                <ViewAsSwitcher />
+                <div className="rounded-xl border bg-card px-4 py-2 text-sm text-muted-foreground shadow-sm">
+                  <CalendarDays className="mr-1.5 inline h-3.5 w-3.5" />
+                  {new Date(data.server_time.replace(" ", "T")).toLocaleString("en-IN", {
+                    day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit",
+                  })}
+                </div>
               </div>
             }
           />

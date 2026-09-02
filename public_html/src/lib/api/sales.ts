@@ -31,13 +31,38 @@ interface Paginated<T> { success: boolean; data: T[]; pagination: Pagination }
 
 type QueryParams = Record<string, string | number | boolean | undefined | null>;
 
+/**
+ * The colleague whose work is being read, or null for your own.
+ *
+ * A module variable rather than an argument on ninety call sites: every read in
+ * this file has to carry it, and one that forgets would quietly show the wrong
+ * person's data. Writes never carry it — the server refuses a write that does,
+ * so a mistake here surfaces immediately instead of acting as somebody else.
+ */
+let viewAsUserId: number | null = null;
+
+export function setSalesViewAs(userId: number | null): void {
+  viewAsUserId = userId && userId > 0 ? userId : null;
+}
+
+export function getSalesViewAs(): number | null {
+  return viewAsUserId;
+}
+
 function qs(params: QueryParams): string {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== "" && v !== "all") search.set(k, String(v));
   });
+  if (viewAsUserId !== null) search.set("view_as", String(viewAsUserId));
   const s = search.toString();
   return s ? `?${s}` : "";
+}
+
+/** Appends the selection to a read that takes no other query parameters. */
+function viewAsQs(existing = ""): string {
+  if (viewAsUserId === null) return existing;
+  return existing ? `${existing}&view_as=${viewAsUserId}` : `?view_as=${viewAsUserId}`;
 }
 
 // ─── Access ───────────────────────────────────────────────────────────────────
@@ -117,9 +142,11 @@ export interface SalesNotification {
 
 export const salesDashboardApi = {
   get: async (): Promise<SalesDashboard> =>
-    (await apiFetch<Envelope<SalesDashboard>>("/admin/sales/dashboard", { skipCache: true })).data,
+    (await apiFetch<Envelope<SalesDashboard>>(`/admin/sales/dashboard${viewAsQs()}`, { skipCache: true })).data,
   activity: async (limit = 50): Promise<SalesActivityEntry[]> =>
-    (await apiFetch<Envelope<SalesActivityEntry[]>>(`/admin/sales/activity?limit=${limit}`)).data,
+    (await apiFetch<Envelope<SalesActivityEntry[]>>(
+      `/admin/sales/activity${viewAsQs(`?limit=${limit}`)}`,
+    )).data,
   notifications: async (): Promise<{ server_time: string; items: SalesNotification[] }> =>
     (await apiFetch<Envelope<{ server_time: string; items: SalesNotification[] }>>(
       "/admin/sales/notifications",
@@ -223,7 +250,7 @@ export const salesLeadsApi = {
   list: (filters: LeadFilters = {}) =>
     apiFetch<Paginated<SalesLead>>(`/admin/sales/leads${qs(filters)}`),
   get: async (id: number): Promise<SalesLeadDetail> =>
-    (await apiFetch<Envelope<SalesLeadDetail>>(`/admin/sales/leads/${id}`, { skipCache: true })).data,
+    (await apiFetch<Envelope<SalesLeadDetail>>(`/admin/sales/leads/${id}${viewAsQs()}`, { skipCache: true })).data,
   create: async (body: Partial<SalesLead>): Promise<SalesLead> =>
     (await apiFetch<Envelope<SalesLead>>("/admin/sales/leads", { method: "POST", body: JSON.stringify(body) })).data,
   update: async (id: number, body: Partial<SalesLead>): Promise<SalesLead> =>
@@ -374,7 +401,7 @@ export const salesMeetingsApi = {
       skipCache: true,
     })).data,
   get: async (id: number): Promise<SalesMeeting> =>
-    (await apiFetch<Envelope<SalesMeeting>>(`/admin/sales/meetings/${id}`)).data,
+    (await apiFetch<Envelope<SalesMeeting>>(`/admin/sales/meetings/${id}${viewAsQs()}`)).data,
   create: async (body: ScheduleMeetingPayload): Promise<SalesMeeting> =>
     (await apiFetch<Envelope<SalesMeeting>>("/admin/sales/meetings", { method: "POST", body: JSON.stringify(body) })).data,
   update: async (id: number, body: Partial<ScheduleMeetingPayload>): Promise<SalesMeeting> =>
@@ -424,7 +451,7 @@ export const salesTasksApi = {
   ): Promise<TaskListResult> =>
     (await apiFetch<Envelope<TaskListResult>>(`/admin/sales/tasks${qs(filters)}`, { skipCache: true })).data,
   get: async (id: number): Promise<SalesTaskDetail> =>
-    (await apiFetch<Envelope<SalesTaskDetail>>(`/admin/sales/tasks/${id}`, { skipCache: true })).data,
+    (await apiFetch<Envelope<SalesTaskDetail>>(`/admin/sales/tasks/${id}${viewAsQs()}`, { skipCache: true })).data,
   create: async (body: TaskPayload): Promise<SalesTaskDetail> =>
     (await apiFetch<Envelope<SalesTaskDetail>>("/admin/sales/tasks", {
       method: "POST",
@@ -473,7 +500,10 @@ export const salesChallengesApi = {
   list: async (status = ""): Promise<ChallengeListResult> =>
     (await apiFetch<Envelope<ChallengeListResult>>(`/admin/sales/challenges${qs({ status })}`, { skipCache: true })).data,
   get: async (id: number): Promise<SalesChallengeDetail> =>
-    (await apiFetch<Envelope<SalesChallengeDetail>>(`/admin/sales/challenges/${id}`, { skipCache: true })).data,
+    (await apiFetch<Envelope<SalesChallengeDetail>>(
+      `/admin/sales/challenges/${id}${viewAsQs()}`,
+      { skipCache: true },
+    )).data,
   create: async (body: {
     title: string;
     description?: string;

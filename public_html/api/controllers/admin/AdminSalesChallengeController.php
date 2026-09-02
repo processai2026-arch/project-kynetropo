@@ -27,7 +27,11 @@ class AdminSalesChallengeController
         SalesPermissions::enforce($request->user, 'sales.challenges.view');
         SalesChallenge::sweepExpired();
 
-        $isManager = SalesPermissions::has($request->user, 'sales.challenges.manage');
+        // Viewing a colleague shows that colleague's board — what they set,
+        // took, or were offered — counted the same way.
+        $viewing   = SalesViewAs::current();
+        $subject   = $viewing !== null ? ['user_id' => (int)$viewing['user_id']] : $request->user;
+        $isManager = $viewing === null && SalesPermissions::has($request->user, 'sales.challenges.manage');
         $status    = (string)$request->query('status', '');
         if ($status !== '' && !in_array($status, SalesChallenge::STATUSES, true)) {
             Response::error('Invalid status filter', 422);
@@ -35,10 +39,11 @@ class AdminSalesChallengeController
 
         $result = SalesChallenge::all(
             $status,
-            $request->user,
+            $subject,
             $isManager,
             (int)$request->query('page', 1),
-            (int)$request->query('limit', 200)
+            (int)$request->query('limit', 200),
+            SalesViewAs::userId()
         );
 
         Response::success([
@@ -47,7 +52,7 @@ class AdminSalesChallengeController
             // which buttons are worth drawing.
             'items'       => array_map(fn(array $c): array => $this->withAcceptance($c, $request), $result['rows']),
             'pagination'  => $result['pagination'],
-            'counts'      => SalesChallenge::counts($request->user, $isManager),
+            'counts'      => SalesChallenge::counts($subject, $isManager),
             'server_time' => SalesChallenge::serverTime(),
             'can_manage'  => $isManager,
         ]);
@@ -336,13 +341,18 @@ class AdminSalesChallengeController
      */
     private function withAcceptance(array $challenge, Request $request): array
     {
-        $userId  = isset($request->user['user_id']) ? (int)$request->user['user_id'] : 0;
+        // Read from the subject's side, so viewing a colleague reads as their
+        // board — but never offering the button, because the accept endpoint
+        // will always act as the real caller and refuse.
+        $viewing = SalesViewAs::current();
+        $userId  = SalesViewAs::subjectId($request->user);
         $offered = SalesChallenge::isOfferedTo((int)$challenge['id'], $userId);
         $isMine  = $challenge['created_by'] !== null && (int)$challenge['created_by'] === $userId;
 
         $challenge['is_offered_to_me'] = $offered;
         $challenge['i_created_it']     = $isMine;
-        $challenge['can_accept']       = $offered
+        $challenge['can_accept']       = $viewing === null
+            && $offered
             && !$isMine
             && $challenge['status'] === 'available'
             && SalesPermissions::has($request->user, 'sales.challenges.accept');

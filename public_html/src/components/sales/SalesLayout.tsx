@@ -6,6 +6,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { useSalesNotifications } from "@/hooks/useSalesNotifications";
 import { SalesQuickAdd } from "@/components/sales/SalesQuickAdd";
+import { ViewAsBanner } from "@/components/sales/ViewAsSwitcher";
 import { AppDestroyedGate } from "@/components/sales/challenge/AppDestroyedGate";
 
 /**
@@ -104,6 +105,11 @@ export function SalesLayout({
        */
       style={isMobile ? { paddingBottom: "calc(9.5rem + env(safe-area-inset-bottom))" } : undefined}
     >
+      {/*
+        Whose figures these are, said on every screen. Forgetting you are
+        looking at a colleague is the one real risk in a mode like this.
+      */}
+      <ViewAsBanner />
       {children}
       <SalesQuickAdd onCreated={onCreated} />
       <SalesBottomTabs />

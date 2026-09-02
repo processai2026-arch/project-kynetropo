@@ -28,7 +28,9 @@ class AdminSalesTaskController
         SalesPermissions::enforce($request->user, 'sales.tasks.view');
 
         $userId = $this->userId($request);
-        $seeAll = SalesPermissions::has($request->user, 'sales.tasks.manage');
+        // A manager viewing one colleague wants that colleague's board, not
+        // everybody's.
+        $seeAll = !SalesViewAs::active() && SalesPermissions::has($request->user, 'sales.tasks.manage');
 
         $status = (string)$request->query('status', '');
         if ($status !== '' && !in_array($status, SalesTask::STATUSES, true)) {
@@ -301,9 +303,16 @@ class AdminSalesTaskController
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
+    /**
+     * Whose board this request is about.
+     *
+     * That is the caller, unless they are reading a colleague's work — and
+     * because the viewing parameter is only ever honoured on a GET, every
+     * write below still resolves to the real caller.
+     */
     private function userId(Request $request): int
     {
-        return isset($request->user['user_id']) ? (int)$request->user['user_id'] : 0;
+        return SalesViewAs::subjectId($request->user);
     }
 
     private function detail(int $id, Request $request): array
@@ -322,20 +331,24 @@ class AdminSalesTaskController
         $userId     = $this->userId($request);
         $isAssignee = (int)$task['assigned_to'] === $userId;
         $isAssigner = $task['assigned_by'] !== null && (int)$task['assigned_by'] === $userId;
-        $isAdmin    = SalesPermissions::has($request->user, 'sales.tasks.manage');
-        $live       = in_array($task['status'], SalesTask::LIVE_STATUSES, true);
+        $isAdmin    = !SalesViewAs::active() && SalesPermissions::has($request->user, 'sales.tasks.manage');
+        // Reading someone else's board draws no buttons at all. Every action
+        // below would be performed as the real caller, so a button here would
+        // promise something the server is right to refuse.
+        $viewing    = SalesViewAs::active();
+        $live       = !$viewing && in_array($task['status'], SalesTask::LIVE_STATUSES, true);
 
         $task['is_assignee']     = $isAssignee;
         $task['is_assigner']     = $isAssigner;
-        $task['can_start']       = $isAssignee && $task['status'] === 'open'
+        $task['can_start']       = !$viewing && $isAssignee && $task['status'] === 'open'
                                    && SalesPermissions::has($request->user, 'sales.tasks.complete');
         $task['can_complete']    = $isAssignee && $live
                                    && SalesPermissions::has($request->user, 'sales.tasks.complete');
         $task['can_edit']        = ($isAssigner || $isAdmin) && $live;
         $task['can_cancel']      = ($isAssigner || $isAdmin) && $live;
-        $task['can_restore']     = ($isAssigner || $isAdmin) && $task['status'] === 'cancelled';
-        $task['can_reopen']      = ($isAssigner || $isAdmin) && $task['status'] === 'completed';
-        $task['can_acknowledge'] = ($isAssigner || $isAdmin) && $task['status'] === 'completed'
+        $task['can_restore']     = !$viewing && ($isAssigner || $isAdmin) && $task['status'] === 'cancelled';
+        $task['can_reopen']      = !$viewing && ($isAssigner || $isAdmin) && $task['status'] === 'completed';
+        $task['can_acknowledge'] = !$viewing && ($isAssigner || $isAdmin) && $task['status'] === 'completed'
                                    && empty($task['reviewed_at']);
         return $task;
     }
@@ -343,7 +356,10 @@ class AdminSalesTaskController
     /** The task must be one the caller gave, was given, or administers. */
     private function assertVisible(Request $request, array $task): void
     {
-        if (SalesPermissions::has($request->user, 'sales.tasks.manage')) {
+        // An administrator sees every task — except while looking at one
+        // colleague, where the detail page must agree with the list about
+        // whose board this is.
+        if (!SalesViewAs::active() && SalesPermissions::has($request->user, 'sales.tasks.manage')) {
             return;
         }
         $userId = $this->userId($request);

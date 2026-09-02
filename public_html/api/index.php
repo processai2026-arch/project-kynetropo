@@ -1202,6 +1202,7 @@ require_once ROOT_PATH . '/controllers/admin/AdminOpsAiChatController.php';
 
 // ─── Kynetropo Sales Module ───────────────────────────────────────────────────
 require_once ROOT_PATH . '/helpers/SalesPermissions.php';
+require_once ROOT_PATH . '/helpers/SalesViewAs.php';
 require_once ROOT_PATH . '/models/SalesActivity.php';
 require_once ROOT_PATH . '/models/SalesLead.php';
 require_once ROOT_PATH . '/models/SalesCall.php';

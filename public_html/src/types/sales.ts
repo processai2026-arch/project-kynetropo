@@ -66,6 +66,11 @@ export interface SalesLead {
   last_activity_at: string | null;
   last_outcome: string;
   notes: string | null;
+  /**
+   * The day the client actually came in. Null on leads recorded before the
+   * field existed, which means "the day it was entered" — not "unknown".
+   */
+  acquired_on: string | null;
   converted_client_id: number | null;
   converted_project_id: number | null;
   converted_at: string | null;

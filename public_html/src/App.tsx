@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
+import { SalesViewAsProvider, SalesScope } from "@/hooks/useSalesViewAs";
 import NotFound from "./pages/NotFound";
 
 // Core
@@ -113,19 +114,22 @@ function ProtectedRoutes() {
           {/* Growth */}
           <Route path="/pitches"         element={<Pitches />} />
           <Route path="/pitches/:id"     element={<PitchDetail />} />
-          {/* Sales */}
-          <Route path="/sales"                 element={<SalesDashboard />} />
-          <Route path="/sales/leads"           element={<SalesLeads />} />
-          <Route path="/sales/leads/:id"       element={<SalesLeadDetail />} />
-          <Route path="/sales/followups"       element={<SalesFollowUps />} />
-          <Route path="/sales/meetings"        element={<SalesMeetings />} />
-          <Route path="/sales/tasks"           element={<SalesTasks />} />
-          <Route path="/sales/challenges"      element={<SalesChallenges />} />
-          <Route path="/sales/challenges/:id"  element={<SalesChallengeDetail />} />
-          <Route path="/sales/calls"           element={<SalesCallHistory />} />
-          <Route path="/sales/activity"        element={<SalesActivity />} />
+          {/*
+            Sales. SalesScope remounts the page when you switch to a colleague's
+            view, so every fetch on it runs again for the person now selected.
+          */}
+          <Route path="/sales"                 element={<SalesScope><SalesDashboard /></SalesScope>} />
+          <Route path="/sales/leads"           element={<SalesScope><SalesLeads /></SalesScope>} />
+          <Route path="/sales/leads/:id"       element={<SalesScope><SalesLeadDetail /></SalesScope>} />
+          <Route path="/sales/followups"       element={<SalesScope><SalesFollowUps /></SalesScope>} />
+          <Route path="/sales/meetings"        element={<SalesScope><SalesMeetings /></SalesScope>} />
+          <Route path="/sales/tasks"           element={<SalesScope><SalesTasks /></SalesScope>} />
+          <Route path="/sales/challenges"      element={<SalesScope><SalesChallenges /></SalesScope>} />
+          <Route path="/sales/challenges/:id"  element={<SalesScope><SalesChallengeDetail /></SalesScope>} />
+          <Route path="/sales/calls"           element={<SalesScope><SalesCallHistory /></SalesScope>} />
+          <Route path="/sales/activity"        element={<SalesScope><SalesActivity /></SalesScope>} />
           <Route path="/sales/access-control"  element={<SalesAccessControl />} />
-          <Route path="/sales/more"            element={<SalesMore />} />
+          <Route path="/sales/more"            element={<SalesScope><SalesMore /></SalesScope>} />
           {/* Team */}
           <Route path="/hiring"          element={<Hiring />} />
           <Route path="/employees"       element={<Employees />} />
@@ -154,6 +158,11 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <ConfirmProvider>
+            {/*
+              Above the router: the selected colleague has to survive
+              navigating between sales screens, and the sidebar reads it too.
+            */}
+            <SalesViewAsProvider>
             <ErrorBoundary>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
@@ -162,6 +171,7 @@ const App = () => (
                 </Routes>
               </Suspense>
             </ErrorBoundary>
+            </SalesViewAsProvider>
           </ConfirmProvider>
         </AuthProvider>
       </BrowserRouter>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { CalendarClock, Pencil, Plus, Search, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -133,6 +133,25 @@ export default function SalesLeads() {
     setEditingLead(null);
     setFormOpen(true);
   };
+
+  /*
+   * The dashboard's "Add New Lead" links here with ?new=1.
+   *
+   * Read on the first render rather than in an effect: the filter-sync effect
+   * above rewrites the URL as soon as it runs, and would have dropped the
+   * parameter before anything had a chance to act on it — which is why that
+   * button has been landing on the list and doing nothing.
+   */
+  const [openOnArrival] = useState(() => searchParams.get("new") === "1");
+  const handledArrival = useRef(false);
+  useEffect(() => {
+    if (handledArrival.current || !openOnArrival) return;
+    // Permissions arrive a moment after mount; keep waiting until they do.
+    if (!can("sales.leads.create")) return;
+    handledArrival.current = true;
+    setEditingLead(null);
+    setFormOpen(true);
+  }, [openOnArrival, can]);
 
   const openEdit = (lead: SalesLead) => {
     setEditingLead(lead);

@@ -193,6 +193,7 @@ class SalesPermissions
     /** Aborts with 403 unless the user holds the permission. */
     public static function enforce(?array $user, string $permission): void
     {
+        SalesViewAs::assertNotWriting();
         self::assertNotLocked($user);
         if ($user === null || !self::has($user, $permission)) {
             self::auditDenied($user, $permission);
@@ -203,6 +204,7 @@ class SalesPermissions
     /** Aborts with 403 unless the user holds at least one of the permissions. */
     public static function enforceAny(?array $user, array $permissions): void
     {
+        SalesViewAs::assertNotWriting();
         self::assertNotLocked($user);
         if ($user === null) {
             Response::error('You do not have permission to perform this action', 403);
@@ -232,6 +234,16 @@ class SalesPermissions
      */
     public static function leadScope(array $user, string $column = 'assigned_to'): array
     {
+        // Looking at a colleague narrows everything to THEIR records —
+        // deliberately not "everything they are allowed to see", which for an
+        // administrator would be the whole team and would make the switch
+        // meaningless. The question being asked is "what is Naresh working
+        // on?", not "what could Naresh open?".
+        $viewing = SalesViewAs::current();
+        if ($viewing !== null) {
+            return ['sql' => " AND $column = ?", 'params' => [(int)$viewing['user_id']]];
+        }
+
         if (self::canSeeAllLeads($user)) {
             return ['sql' => '', 'params' => []];
         }
@@ -244,6 +256,17 @@ class SalesPermissions
     /** Aborts with 404 (not 403 — don't leak existence) when the lead is out of scope. */
     public static function assertLeadAccess(array $user, array $lead): void
     {
+        // While viewing a colleague, their pipeline is the whole world — a lead
+        // outside it is out of view even for an administrator, so the list and
+        // the detail page agree about what is in this person's book.
+        $viewing = SalesViewAs::current();
+        if ($viewing !== null) {
+            if ((int)($lead['assigned_to'] ?? 0) !== (int)$viewing['user_id']) {
+                Response::error('Lead not found', 404);
+            }
+            return;
+        }
+
         if (self::canSeeAllLeads($user)) {
             return;
         }

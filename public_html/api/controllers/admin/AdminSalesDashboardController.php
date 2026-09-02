@@ -19,9 +19,14 @@ class AdminSalesDashboardController
         SalesPermissions::enforce($request->user, 'sales.dashboard.view');
         SalesChallenge::sweepExpired();
 
-        $scope     = SalesPermissions::leadScope($request->user);
-        $isManager = SalesPermissions::has($request->user, 'sales.challenges.manage');
-        $tenantId  = Database::tenantId();
+        $scope    = SalesPermissions::leadScope($request->user);
+        $tenantId = Database::tenantId();
+
+        // Viewing a colleague answers every question as them: a manager's
+        // team-wide totals would drown out the one person being looked at.
+        $viewing   = SalesViewAs::current();
+        $isManager = $viewing === null && SalesPermissions::has($request->user, 'sales.challenges.manage');
+        $subject   = $viewing !== null ? ['user_id' => (int)$viewing['user_id']] : $request->user;
 
         $followupCounts = SalesFollowup::counts($scope);
         $meetingCounts  = SalesMeeting::counts($scope);
@@ -44,10 +49,10 @@ class AdminSalesDashboardController
             $leadParams
         );
 
-        $challengeCounts = SalesChallenge::counts($request->user, $isManager);
+        $challengeCounts = SalesChallenge::counts($subject, $isManager);
 
-        $userId     = isset($request->user['user_id']) ? (int)$request->user['user_id'] : 0;
-        $seeAllTask = SalesPermissions::has($request->user, 'sales.tasks.manage');
+        $userId     = SalesViewAs::subjectId($request->user);
+        $seeAllTask = $viewing === null && SalesPermissions::has($request->user, 'sales.tasks.manage');
         $taskCounts = SalesPermissions::has($request->user, 'sales.tasks.view')
             ? SalesTask::counts($userId, $seeAllTask)
             : ['mine' => 0, 'given' => 0, 'live' => 0, 'overdue' => 0, 'completed' => 0, 'cancelled' => 0];
@@ -91,8 +96,8 @@ class AdminSalesDashboardController
             ],
             'challenges' => [
                 'counts' => $challengeCounts,
-                'active' => SalesChallenge::all('in_progress', $request->user, $isManager, 1, 5)['rows'],
-                'available' => SalesChallenge::all('available', $request->user, $isManager, 1, 5)['rows'],
+                'active' => SalesChallenge::all('in_progress', $subject, $isManager, 1, 5, SalesViewAs::userId())['rows'],
+                'available' => SalesChallenge::all('available', $subject, $isManager, 1, 5, SalesViewAs::userId())['rows'],
             ],
         ]);
     }

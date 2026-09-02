@@ -86,7 +86,12 @@ class SalesChallenge
      * @param array  $viewer the requesting user; non-managers only see challenges
      *                       offered to them (unassigned = offered to everyone)
      */
-    public static function all(string $status, array $viewer, bool $isManager, int $page = 1, int $limit = 100): array
+    /**
+     * @param int|null $onlyForUser restricts the board to challenges this
+     *   person set, took, or was offered — "Naresh's challenges" rather than
+     *   the whole team's. Used by the read-only view of a colleague.
+     */
+    public static function all(string $status, array $viewer, bool $isManager, int $page = 1, int $limit = 100, ?int $onlyForUser = null): array
     {
         $page  = max(1, $page);
         $limit = min(300, max(1, $limit));
@@ -101,6 +106,13 @@ class SalesChallenge
         if ($status !== '' && in_array($status, self::STATUSES, true)) {
             $where[]  = 'c.status = ?';
             $params[] = $status;
+        }
+
+        if ($onlyForUser !== null) {
+            $where[]  = '(c.created_by = ? OR c.accepted_by = ? OR EXISTS (
+                            SELECT 1 FROM sales_challenge_assignments a
+                             WHERE a.challenge_id = c.id AND a.tenant_id = c.tenant_id AND a.user_id = ?))';
+            array_push($params, $onlyForUser, $onlyForUser, $onlyForUser);
         }
 
         $whereClause = implode(' AND ', $where);

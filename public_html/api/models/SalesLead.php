@@ -25,7 +25,7 @@ class SalesLead
 
     private const COLUMNS = [
         'name', 'company', 'contact_person', 'phone', 'email', 'source',
-        'assigned_to', 'status', 'temperature', 'notes',
+        'assigned_to', 'status', 'temperature', 'notes', 'acquired_on',
     ];
 
     // ── Reads ───────────────────────────────────────────────────────────────
@@ -76,12 +76,15 @@ class SalesLead
             $where[]  = 'DATE(l.next_meeting_at) >= ?';
             $params[] = $filters['meeting_from'];
         }
+        // "Leads received in August" means the day the client came in, not the
+        // day the record was typed up. Rows with no acquired date fall back to
+        // when they were entered, which for those rows is the same thing.
         if (!empty($filters['created_from'])) {
-            $where[]  = 'DATE(l.created_at) >= ?';
+            $where[]  = 'COALESCE(l.acquired_on, DATE(l.created_at)) >= ?';
             $params[] = $filters['created_from'];
         }
         if (!empty($filters['created_to'])) {
-            $where[]  = 'DATE(l.created_at) <= ?';
+            $where[]  = 'COALESCE(l.acquired_on, DATE(l.created_at)) <= ?';
             $params[] = $filters['created_to'];
         }
         if (!empty($filters['search'])) {
@@ -156,6 +159,7 @@ class SalesLead
             'status'         => $data['status'] ?? 'new',
             'temperature'    => $data['temperature'] ?? 'warm',
             'notes'          => $data['notes'] ?? null,
+            'acquired_on'    => $data['acquired_on'] ?? null,
             'last_activity_at' => date('Y-m-d H:i:s'),
             'created_by'     => $createdBy,
         ]);
@@ -294,6 +298,9 @@ class SalesLead
             'last_activity_at'     => $row['last_activity_at'],
             'last_outcome'         => $row['last_outcome'],
             'notes'                => $row['notes'],
+            // The day the client came in. Null means "the day it was entered",
+            // which is what every lead recorded before this field existed says.
+            'acquired_on'          => $row['acquired_on'] ?? null,
             'converted_client_id'  => $row['converted_client_id'] !== null ? (int)$row['converted_client_id'] : null,
             'converted_project_id' => $row['converted_project_id'] !== null ? (int)$row['converted_project_id'] : null,
             'converted_at'         => $row['converted_at'],

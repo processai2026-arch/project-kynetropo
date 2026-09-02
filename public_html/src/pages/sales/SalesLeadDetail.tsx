@@ -359,6 +359,13 @@ export default function SalesLeadDetail() {
           <LeadStatusBadge value={lead.status} />
           <span className="text-[11px] text-muted-foreground">{lead.lead_code}</span>
           {lead.source && <span className="text-[11px] text-muted-foreground">· {humanise(lead.source)}</span>}
+          {/*
+            How long we have actually had them. Falls back to the day the
+            record was made, which is what a lead with no stated date means.
+          */}
+          <span className="text-[11px] text-muted-foreground">
+            · Client since {formatDate(lead.acquired_on ?? lead.created_at)}
+          </span>
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">

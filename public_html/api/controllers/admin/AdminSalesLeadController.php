@@ -78,6 +78,7 @@ class AdminSalesLeadController
 
         $temperature = $this->validTemperature($request->input('temperature', 'warm'));
         $status      = $this->validStatus($request->input('status', 'new'));
+        $acquiredOn  = $this->validAcquiredOn($request->input('acquired_on'));
 
         // Only someone who may assign leads can hand one to another user;
         // everyone else creates leads owned by themselves.
@@ -98,9 +99,17 @@ class AdminSalesLeadController
             'status'         => $status,
             'temperature'    => $temperature,
             'notes'          => $request->input('notes'),
+            'acquired_on'    => $acquiredOn,
         ], isset($request->user['user_id']) ? (int)$request->user['user_id'] : null);
 
-        SalesActivity::log($id, 'lead_created', 'Lead created', $request->user, $name);
+        // A lead entered late says so on its own timeline. Without this the
+        // history reads as though the client arrived the day it was typed up,
+        // and every "how long have we had them?" answer is wrong.
+        $note = $name;
+        if ($acquiredOn !== null && $acquiredOn !== date('Y-m-d')) {
+            $note .= ' — client received on ' . date('j M Y', strtotime($acquiredOn));
+        }
+        SalesActivity::log($id, 'lead_created', 'Lead created', $request->user, $note);
 
         Response::success(SalesLead::find($id), 'Lead created', 201);
     }
@@ -148,6 +157,9 @@ class AdminSalesLeadController
         }
         if ($request->input('temperature') !== null) {
             $data['temperature'] = $this->validTemperature($request->input('temperature'));
+        }
+        if ($request->input('acquired_on') !== null) {
+            $data['acquired_on'] = $this->validAcquiredOn($request->input('acquired_on'));
         }
         // Reassignment goes through the dedicated, permission-gated endpoint.
         if ($request->input('assigned_to') !== null) {
@@ -654,6 +666,36 @@ class AdminSalesLeadController
      * without quoting either version: they run to paragraphs, and pasting both
      * into a timeline entry buries everything around it.
      */
+    /**
+     * The day the client came in.
+     *
+     * Empty means "not recorded", which is what every lead entered before this
+     * field existed says, and is different from guessing at one. A date in the
+     * future is refused: a client you have not met yet is not a client, and the
+     * likeliest cause is a mistyped year that would quietly skew every report
+     * that groups leads by month.
+     */
+    private function validAcquiredOn(mixed $value): ?string
+    {
+        $raw = trim((string)$value);
+        if ($raw === '') {
+            return null;
+        }
+
+        $date = DateTime::createFromFormat('Y-m-d', $raw);
+        if ($date === false || $date->format('Y-m-d') !== $raw) {
+            Response::error('Invalid date. Expected YYYY-MM-DD', 422);
+        }
+        if ($raw > date('Y-m-d')) {
+            Response::error('The date the client came in cannot be in the future', 422);
+        }
+        if ($raw < '2000-01-01') {
+            Response::error('That date looks wrong — check the year', 422);
+        }
+
+        return $raw;
+    }
+
     private function describeChanges(array $before, array $after): array
     {
         $labels = [
@@ -665,6 +707,7 @@ class AdminSalesLeadController
             'source'         => 'Source',
             'status'         => 'Status',
             'temperature'    => 'Temperature',
+            'acquired_on'    => 'Client received on',
         ];
 
         $changes = [];
