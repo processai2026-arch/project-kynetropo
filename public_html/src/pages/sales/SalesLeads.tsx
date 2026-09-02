@@ -8,12 +8,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { salesLeadsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
+import { useTeamMembers, namesakeHint } from "@/hooks/useTeamMembers";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { LeadStatusBadge, TemperatureBadge, formatDate, formatTime } from "@/components/sales/SalesBits";
 import { LeadFormDialog } from "@/components/sales/LeadFormDialog";
 import type { SalesLead } from "@/types/sales";
 
 const TEMPERATURES = ["hot", "warm", "cold"] as const;
+
+/**
+ * The owner filter outlives the visit.
+ *
+ * Someone who works one colleague's leads sets this once and means it — having
+ * to re-pick a name on every visit would make the filter more trouble than
+ * scrolling past the rows it hides. localStorage rather than the session, so it
+ * survives closing the browser too, and it is always visible on screen as a
+ * selected value rather than silently filtering the list.
+ */
+const OWNER_KEY = "kyn_sales_lead_owner";
+
+function storedOwner(): string {
+  try {
+    return localStorage.getItem(OWNER_KEY) ?? "all";
+  } catch {
+    return "all";
+  }
+}
 const STATUSES = [
   "new", "contacted", "qualified", "meeting_scheduled",
   "proposal", "onboarding", "converted", "lost",
@@ -83,7 +103,7 @@ function LeadCard({ lead, onEdit }: { lead: SalesLead; onEdit?: (lead: SalesLead
 
 export default function SalesLeads() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { can } = useSalesAccess();
+  const { can, viewAs } = useSalesAccess();
 
   const [items, setItems] = useState<SalesLead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,7 +111,10 @@ export default function SalesLeads() {
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
   const [temperature, setTemperature] = useState(searchParams.get("temperature") ?? "all");
   const [status, setStatus] = useState(searchParams.get("status") ?? "all");
+  // A link with ?owner= wins for that visit; otherwise the last choice stands.
+  const [owner, setOwner] = useState(() => searchParams.get("owner") ?? storedOwner());
 
+  const people = useTeamMembers(true);
   const [formOpen, setFormOpen] = useState(false);
   // null = adding; a lead = editing that one. The dialog is the same either way.
   const [editingLead, setEditingLead] = useState<SalesLead | null>(null);
@@ -103,6 +126,7 @@ export default function SalesLeads() {
         search: search || undefined,
         temperature: temperature !== "all" ? temperature : undefined,
         status: status !== "all" ? status : undefined,
+        assigned_to: owner !== "all" ? owner : undefined,
         limit: 200,
       });
       setItems(res.data ?? []);
@@ -114,11 +138,19 @@ export default function SalesLeads() {
     } finally {
       setLoading(false);
     }
-  }, [search, temperature, status]);
+  }, [search, temperature, status, owner]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(OWNER_KEY, owner);
+    } catch {
+      /* Storage refused — the filter still works for this visit. */
+    }
+  }, [owner]);
 
   // Keep the filters shareable/bookmarkable.
   useEffect(() => {
@@ -126,8 +158,9 @@ export default function SalesLeads() {
     if (search) next.set("search", search);
     if (temperature !== "all") next.set("temperature", temperature);
     if (status !== "all") next.set("status", status);
+    if (owner !== "all") next.set("owner", owner);
     setSearchParams(next, { replace: true });
-  }, [search, temperature, status, setSearchParams]);
+  }, [search, temperature, status, owner, setSearchParams]);
 
   const openAdd = () => {
     setEditingLead(null);
@@ -180,7 +213,44 @@ export default function SalesLeads() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {/*
+            Whose lead is it? Hidden while reading a colleague's view, where
+            the banner has already answered that and a second, contradictory
+            answer here could only produce an empty list.
+          */}
+          {!viewAs && (
+            <div className="col-span-2 sm:col-span-1 sm:order-last">
+              <Select value={owner} onValueChange={setOwner}>
+                {/*
+                  Labelled rather than left as a bare name: sitting beside
+                  "All temperatures" and "All statuses", a chip reading just
+                  "naresh" does not say what it is filtering by.
+                */}
+                <SelectTrigger className="h-11">
+                  <span className="truncate">
+                    {owner === "all"
+                      ? "All owners"
+                      : owner === "none"
+                        ? "Unassigned"
+                        : `Owner: ${people.find((pp) => String(pp.user_id) === owner)?.name ?? "…"}`}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All owners</SelectItem>
+                  {people.map((pp) => (
+                    <SelectItem key={pp.user_id} value={String(pp.user_id)}>
+                      {pp.name}
+                      {namesakeHint(pp) && (
+                        <span className="ml-1.5 text-xs text-muted-foreground">{namesakeHint(pp)}</span>
+                      )}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="none">Unassigned</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <Select value={temperature} onValueChange={setTemperature}>
             <SelectTrigger className="h-11">
               <SelectValue placeholder="Temperature" />

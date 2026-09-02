@@ -57,8 +57,14 @@ class SalesLead
             $params[] = $filters['status'];
         }
         if (!empty($filters['assigned_to'])) {
-            $where[]  = 'l.assigned_to = ?';
-            $params[] = (int)$filters['assigned_to'];
+            // "none" is a real answer to "whose lead is this?", and without it
+            // the leads nobody owns are the ones no filter can reach.
+            if ($filters['assigned_to'] === 'none') {
+                $where[] = 'l.assigned_to IS NULL';
+            } else {
+                $where[]  = 'l.assigned_to = ?';
+                $params[] = (int)$filters['assigned_to'];
+            }
         }
         if (!empty($filters['source'])) {
             $where[]  = 'l.source = ?';

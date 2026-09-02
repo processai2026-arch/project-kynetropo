@@ -77,6 +77,11 @@ class SalesPermissions
         'sales' => [
             'sales.dashboard.view',
             'sales.leads.view',
+            // The team works one pipeline: everybody can see every lead, and
+            // the owner filter on the Leads page is how you narrow it to one
+            // person. Editing is still governed separately — seeing a
+            // colleague's lead is not the same as being able to change it.
+            'sales.leads.view_all',
             'sales.leads.create',
             'sales.leads.edit',
             'sales.calls.view',
@@ -105,7 +110,6 @@ class SalesPermissions
     /** Permissions only an administrator of the sales module should hold. */
     public const ADMIN_ONLY = [
         'sales.leads.assign',
-        'sales.leads.view_all',
         'sales.leads.convert',
         'sales.challenges.create',
         'sales.challenges.manage',
@@ -220,8 +224,12 @@ class SalesPermissions
     }
 
     /**
-     * Record-level access: a sales user only reaches leads assigned to them
-     * unless they hold sales.leads.view_all (admins always do).
+     * Record-level access.
+     *
+     * sales.leads.view_all is part of the sales role by default, so in practice
+     * the whole team reads the whole pipeline. The permission is kept rather
+     * than removed because revoking it is the only way back to a per-owner
+     * book, and that decision belongs to whoever runs the team.
      */
     public static function canSeeAllLeads(array $user): bool
     {
