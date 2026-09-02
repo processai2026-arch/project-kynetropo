@@ -111,3 +111,76 @@ self.addEventListener('fetch', (event) => {
     }),
   );
 });
+
+/*
+ * ── Push notifications ──────────────────────────────────────────────────────
+ *
+ * These handlers are why a notification arrives when the app is closed. The
+ * push service wakes this worker, it draws the notification, and a tap brings
+ * the app to the exact screen the notification is about.
+ *
+ * Everything here is defensive: a malformed payload must still produce a
+ * notification, because a browser that receives a push and shows nothing is
+ * permitted to revoke the permission entirely.
+ */
+
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : '' };
+  }
+
+  const title = data.title || 'Kynetropo';
+  const url = typeof data.url === 'string' && data.url.startsWith('/') ? data.url : '/sales';
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || '',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      // Repeats about the same thing replace each other rather than stacking.
+      tag: data.tag || url,
+      renotify: true,
+      // The url has to survive the round trip to the tap handler; notification
+      // data is the only thing that does.
+      data: { url },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const target = (event.notification.data && event.notification.data.url) || '/sales';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      // Prefer a tab that is already open: focusing it and navigating keeps the
+      // person in the session they already have, rather than cold-starting a
+      // second copy of the app.
+      for (const client of clients) {
+        if ('focus' in client) {
+          const focused = client.focus();
+          if ('navigate' in client) {
+            return Promise.resolve(focused).then(() => client.navigate(target)).catch(() => client.focus());
+          }
+          return focused;
+        }
+      }
+      return self.clients.openWindow(target);
+    }),
+  );
+});
+
+/*
+ * The push service can retire a subscription on its own — a browser update, a
+ * long silence. The event carries the replacement, and the app re-registers it
+ * the next time it is opened; nothing is lost by ignoring it here beyond one
+ * missed notification.
+ */
+self.addEventListener('pushsubscriptionchange', () => {
+  // Intentionally empty: re-subscribing needs the VAPID key and a signed-in
+  // session, neither of which the worker has on its own.
+});

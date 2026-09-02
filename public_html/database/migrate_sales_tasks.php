@@ -160,6 +160,35 @@ if (!$tableExists($pdo, 'sales_meeting_participants')) {
     fwrite(STDOUT, "[tasks] ok      sales_meeting_participants\n");
 }
 
+// Browsers that have agreed to be told things.
+//
+// The endpoint is the unique key because it is the browser's own identity: the
+// same device re-subscribing produces the same endpoint, so a person opening
+// the app twice does not accumulate rows. user_id is on the row rather than the
+// key so a shared device correctly follows whoever is signed in.
+if (!$tableExists($pdo, 'push_subscriptions')) {
+    $pdo->exec(
+        'CREATE TABLE push_subscriptions (
+           id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+           tenant_id    INT UNSIGNED NOT NULL DEFAULT 1,
+           user_id      INT UNSIGNED NOT NULL,
+           endpoint     VARCHAR(500) NOT NULL,
+           p256dh       VARCHAR(200) NOT NULL,
+           auth         VARCHAR(100) NOT NULL,
+           user_agent   VARCHAR(255) NOT NULL DEFAULT "",
+           failures     INT UNSIGNED NOT NULL DEFAULT 0,
+           last_sent_at DATETIME DEFAULT NULL,
+           last_seen_at DATETIME DEFAULT NULL,
+           created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+           UNIQUE KEY uq_ps_endpoint (endpoint(191)),
+           INDEX idx_ps_user (tenant_id, user_id)
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+    );
+    fwrite(STDOUT, "[tasks] created push_subscriptions\n");
+} else {
+    fwrite(STDOUT, "[tasks] ok      push_subscriptions\n");
+}
+
 // One index for the task comment threads; ignored when it already exists.
 if ($tableExists($pdo, 'sales_comments')) {
     $q = $pdo->prepare(

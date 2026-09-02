@@ -1222,6 +1222,10 @@ require_once ROOT_PATH . '/controllers/admin/AdminSalesTaskController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesAccessController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesCommentController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesMentionController.php';
+require_once ROOT_PATH . '/helpers/WebPush.php';
+require_once ROOT_PATH . '/helpers/Notifier.php';
+require_once ROOT_PATH . '/models/PushSubscription.php';
+require_once ROOT_PATH . '/controllers/admin/AdminPushController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminGlobalSearchController.php';
 
 // ─── Kynetropo Ops — Dashboard ────────────────────────────────────────────────
@@ -1444,6 +1448,11 @@ $router->post('/admin/sales/tasks/{id}/restore',         [AdminSalesTaskControll
 // Comments — the discussion thread on a lead, call, follow-up, meeting, task or
 // challenge. Access follows the record: the controller re-resolves the entity
 // and applies the same lead scope before it reads or writes a thread.
+$router->get('/admin/push/key',                          [AdminPushController::class, 'key'],                    'admin');
+$router->post('/admin/push/subscribe',                   [AdminPushController::class, 'subscribe'],              'admin');
+$router->post('/admin/push/unsubscribe',                 [AdminPushController::class, 'unsubscribe'],            'admin');
+$router->post('/admin/push/test',                        [AdminPushController::class, 'test'],                   'admin');
+
 $router->get('/admin/sales/mentions',                    [AdminSalesMentionController::class, 'index'],          'admin');
 $router->post('/admin/sales/mentions/read',              [AdminSalesMentionController::class, 'read'],           'admin');
 

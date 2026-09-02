@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { useSalesNotifications } from "@/hooks/useSalesNotifications";
+import { useKeepPushRegistered } from "@/hooks/usePushNotifications";
 import { SalesQuickAdd } from "@/components/sales/SalesQuickAdd";
 import { ViewAsBanner } from "@/components/sales/ViewAsSwitcher";
 import { AppDestroyedGate } from "@/components/sales/challenge/AppDestroyedGate";
@@ -86,6 +87,10 @@ export function SalesLayout({
   // Poll for follow-ups falling due, meetings starting and challenge deadlines.
   // A locked-out user is polling nothing: every endpoint refuses them anyway.
   useSalesNotifications(!loading && !lockout && can("sales.dashboard.view"), (url) => navigate(url));
+  // Re-registers this device with the server on startup. A browser can
+  // replace a push subscription without telling the app, and a shared
+  // device has to follow whoever is signed in now rather than last time.
+  useKeepPushRegistered(!loading && !lockout);
 
   // Accepting a challenge and missing the deadline destroys this user's access.
   // The server enforces it too (every sales endpoint answers them with 423);

@@ -119,6 +119,17 @@ class AdminSalesTaskController
 
         SalesTask::logActivity($id, 'created', $request->user, 'Assigned to ' . $assignee['name']);
 
+        // The person now owes this work. Waiting for them to open the app and
+        // notice is how a task with a due date today gets seen tomorrow.
+        Notifier::push(
+            [$assignedTo],
+            (string)($request->user['name'] ?? 'Someone') . ' gave you a task',
+            $title . ($dueDate !== null ? ' — due ' . $dueDate : ''),
+            '/sales/tasks?task=' . $id,
+            isset($request->user['user_id']) ? (int)$request->user['user_id'] : null,
+            'task:' . $id
+        );
+
         Response::success($this->detail($id, $request), 'Task assigned to ' . $assignee['name'], 201);
     }
 

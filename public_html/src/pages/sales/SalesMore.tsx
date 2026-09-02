@@ -4,7 +4,7 @@ import { AtSign, Bell, CalendarDays, ChevronRight, ClipboardList, History, Phone
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { requestNotificationPermission } from "@/hooks/useSalesNotifications";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -17,12 +17,9 @@ import { salesMentionsApi } from "@/lib/api/sales";
 export default function SalesMore() {
   const { me, can, isSalesAdmin, loading } = useSalesAccess();
   const isMobile = useIsMobile();
-  const [permission, setPermission] = useState<string>("default");
   const [unreadMentions, setUnreadMentions] = useState(0);
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && "Notification" in window) setPermission(Notification.permission);
-  }, []);
+  const push = usePushNotifications();
+  const [testing, setTesting] = useState(false);
 
   // How many people are waiting on you. Failing quietly is right here: a badge
   // is a convenience, and a broken one should not take the menu with it.
@@ -87,37 +84,69 @@ export default function SalesMore() {
         </div>
       )}
 
-      {/* Alerts replace the old bell icon: the app tells you, you don't go looking. */}
-      {typeof window !== "undefined" && "Notification" in window && (
+      {/*
+        Notifications that arrive with the app closed. The in-app version only
+        ever worked while a tab was open, which is not where people are when a
+        task lands on them.
+      */}
+      {push.state !== "unsupported" && (
         <div className="rounded-2xl border bg-card p-4 shadow-sm">
           <div className="flex items-start gap-3">
             <Bell className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-card-foreground">Alerts</p>
+              <p className="text-sm font-medium text-card-foreground">Notifications</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {permission === "granted"
-                  ? "On — you'll be alerted about follow-ups falling due, meetings starting and challenge deadlines while the app is open."
-                  : permission === "denied"
-                    ? "Blocked in your browser settings. Re-enable notifications for this site to turn them back on."
-                    : "Get told about follow-ups falling due, meetings starting and challenge deadlines."}
+                {push.state === "on"
+                  ? "On — you'll be told when work is assigned to you and when someone comments or names you, even with the app closed. Tapping one opens it."
+                  : push.state === "denied"
+                    ? "Blocked in your browser settings. Allow notifications for this site to turn them back on."
+                    : push.state === "unconfigured"
+                      ? "Not available on this server yet."
+                      : "Get told when work is assigned to you and when someone comments or names you — including when the app is closed."}
               </p>
+
+              {push.state === "on" && (
+                <button
+                  type="button"
+                  disabled={testing}
+                  className="mt-2 text-xs font-medium text-primary underline disabled:opacity-50"
+                  onClick={async () => {
+                    setTesting(true);
+                    try {
+                      // Everything between pressing Enable and a notification
+                      // arriving is invisible; this proves the whole chain.
+                      toast.success(await push.sendTest());
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Could not send a test");
+                    } finally {
+                      setTesting(false);
+                    }
+                  }}
+                >
+                  {testing ? "Sending…" : "Send me a test"}
+                </button>
+              )}
             </div>
-            {permission === "default" && (
+
+            {(push.state === "off" || push.state === "on") && (
               <Button
                 size="sm"
+                variant={push.state === "on" ? "outline" : "default"}
                 className="h-9 shrink-0"
+                disabled={push.busy}
                 onClick={async () => {
-                  const result = await requestNotificationPermission();
-                  if (result === "unsupported") {
-                    toast.error("This browser does not support notifications");
+                  if (push.state === "on") {
+                    await push.disable();
+                    toast.success("Notifications turned off");
                     return;
                   }
-                  setPermission(result);
-                  if (result === "granted") toast.success("Alerts enabled");
-                  else if (result === "denied") toast.error("Alerts blocked");
+                  const result = await push.enable();
+                  if (result === "on") toast.success("Notifications are on");
+                  else if (result === "denied") toast.error("Notifications blocked in your browser");
+                  else toast.error("Could not turn notifications on");
                 }}
               >
-                Enable
+                {push.busy ? "…" : push.state === "on" ? "Turn off" : "Enable"}
               </Button>
             )}
           </div>

@@ -115,6 +115,21 @@ class AdminSalesChallengeController
 
         SalesChallenge::logActivity($id, 'created', $request->user, $title);
 
+        // A challenge is first-come, first-served against a deadline, so the
+        // people it was offered to are exactly the people who need to know now.
+        $offeredTo = is_array($assignees) && $assignees
+            ? array_map('intval', $assignees)
+            : $this->everyoneWhoCouldAccept();
+
+        Notifier::push(
+            $offeredTo,
+            (string)($request->user['name'] ?? 'Someone') . ' set a challenge',
+            $title . ' — closes ' . $deadline,
+            '/sales/challenges/' . $id,
+            isset($request->user['user_id']) ? (int)$request->user['user_id'] : null,
+            'challenge:' . $id
+        );
+
         Response::success($this->detail($id, $request), 'Challenge created', 201);
     }
 
@@ -325,6 +340,24 @@ class AdminSalesChallengeController
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     /** One challenge, with the acceptance flags every response carries. */
+    /**
+     * The whole sales team, for a challenge offered to nobody in particular.
+     *
+     * An unassigned challenge is open to anyone; telling only the person who
+     * set it would leave a race nobody knows has started.
+     *
+     * @return int[]
+     */
+    private function everyoneWhoCouldAccept(): array
+    {
+        $rows = Database::fetchAll(
+            "SELECT user_id FROM users
+              WHERE tenant_id = ? AND user_type = 'admin' AND is_active = 1",
+            [Database::tenantId()]
+        );
+        return array_map(static fn(array $r): int => (int)$r['user_id'], $rows);
+    }
+
     private function detail(int $id, Request $request): ?array
     {
         $challenge = SalesChallenge::find($id);

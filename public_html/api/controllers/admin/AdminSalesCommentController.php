@@ -95,6 +95,8 @@ class AdminSalesCommentController
             );
         }
 
+        $this->announce($request, $entityType, $entityId, $context, $body, $mentions);
+
         Response::success(['comment' => $this->formatted($id)], 'Comment added', 201);
     }
 
@@ -150,6 +152,129 @@ class AdminSalesCommentController
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
+
+    /**
+     * Tells the people a comment concerns, on their devices.
+     *
+     * Being named reaches you wherever you are — that is the whole point of
+     * writing somebody's name. Everyone else involved in the record hears about
+     * it too, but only once: a person who was mentioned is not also sent the
+     * quieter "commented on" version of the same thing.
+     *
+     * The url is the screen the comment lives on, so the notification opens the
+     * conversation rather than the app's front door.
+     */
+    private function announce(
+        Request $request,
+        string $entityType,
+        int $entityId,
+        array $context,
+        string $body,
+        array $mentions
+    ): void {
+        $actor   = isset($request->user['user_id']) ? (int)$request->user['user_id'] : 0;
+        $name    = (string)($request->user['name'] ?? 'Someone');
+        $excerpt = Notifier::excerpt($body);
+
+        [$url, $where] = $this->whereItLives($entityType, $entityId, $context);
+
+        $mentioned = array_map(static fn(array $m): int => (int)$m['user_id'], $mentions);
+        if ($mentioned) {
+            Notifier::push(
+                $mentioned,
+                $name . ' mentioned you',
+                $excerpt,
+                $url,
+                $actor,
+                'comment:' . $entityType . ':' . $entityId
+            );
+        }
+
+        $others = array_diff($this->interestedIn($entityType, $entityId, $context), $mentioned);
+        if ($others) {
+            Notifier::push(
+                array_values($others),
+                $name . ' commented on ' . $where,
+                $excerpt,
+                $url,
+                $actor,
+                'comment:' . $entityType . ':' . $entityId
+            );
+        }
+    }
+
+    /** @return array{0:string,1:string} the screen it lives on, and what to call it */
+    private function whereItLives(string $entityType, int $entityId, array $context): array
+    {
+        if ($entityType === 'task' && !empty($context['task_id'])) {
+            $task = SalesTask::findRaw((int)$context['task_id']);
+            return ['/sales/tasks?task=' . (int)$context['task_id'], (string)($task['title'] ?? 'a task')];
+        }
+        if ($entityType === 'challenge' && !empty($context['challenge_id'])) {
+            $ch = SalesChallenge::findRaw((int)$context['challenge_id']);
+            return ['/sales/challenges/' . (int)$context['challenge_id'], (string)($ch['title'] ?? 'a challenge')];
+        }
+        if ($entityType === 'followup') {
+            $lead = !empty($context['lead_id']) ? SalesLead::findRaw((int)$context['lead_id']) : null;
+            $who  = $lead ? (string)($lead['company'] ?: $lead['name']) : 'a follow-up';
+            return ['/sales/followups?followup=' . $entityId, $who];
+        }
+        if (!empty($context['lead_id'])) {
+            $lead = SalesLead::findRaw((int)$context['lead_id']);
+            return [
+                '/sales/leads/' . (int)$context['lead_id'],
+                $lead ? (string)($lead['company'] ?: $lead['name']) : 'a lead',
+            ];
+        }
+        return ['/sales', 'a record'];
+    }
+
+    /**
+     * Who has a stake in this record.
+     *
+     * Deliberately narrow: the people it is between, not everyone who could
+     * open it. The task board is readable by the whole team, and notifying all
+     * of them about every comment is how people learn to ignore notifications.
+     *
+     * @return int[]
+     */
+    private function interestedIn(string $entityType, int $entityId, array $context): array
+    {
+        $ids = [];
+
+        if (!empty($context['task_id'])) {
+            $task = SalesTask::findRaw((int)$context['task_id']);
+            if ($task) {
+                $ids[] = (int)($task['assigned_to'] ?? 0);
+                $ids[] = (int)($task['assigned_by'] ?? 0);
+            }
+        } elseif (!empty($context['challenge_id'])) {
+            $ch = SalesChallenge::findRaw((int)$context['challenge_id']);
+            if ($ch) {
+                $ids[] = (int)($ch['accepted_by'] ?? 0);
+                $ids[] = (int)($ch['created_by'] ?? 0);
+            }
+        } elseif (!empty($context['lead_id'])) {
+            $lead = SalesLead::findRaw((int)$context['lead_id']);
+            if ($lead) {
+                $ids[] = (int)($lead['assigned_to'] ?? 0);
+            }
+        }
+
+        // Everyone already talking on this thread: a question asked of the
+        // group is for the group, not only for whoever owns the record.
+        foreach (Database::fetchAll(
+            "SELECT DISTINCT author_id FROM sales_comments
+              WHERE tenant_id = ? AND entity_type = ? AND entity_id = ?
+                AND author_id IS NOT NULL AND deleted_at IS NULL
+              LIMIT 30",
+            [Database::tenantId(), $entityType, $entityId]
+        ) as $row) {
+            $ids[] = (int)$row['author_id'];
+        }
+
+        return array_values(array_unique(array_filter($ids, static fn(int $i): bool => $i > 0)));
+    }
 
     /**
      * Validates the target record and confirms the user may see it.
