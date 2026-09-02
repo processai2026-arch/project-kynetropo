@@ -156,6 +156,38 @@ export function formatTime(value: string | null | undefined): string {
   return `${display}:${m} ${suffix}`;
 }
 
+/**
+ * A meeting link, but only where it will actually open.
+ *
+ * Links entered before they were checked can be anything — a scheme typo
+ * ("htttps://meet.google.com/…"), or a note to self. Rendering those as
+ * hyperlinks hides the problem until somebody taps one on their way into the
+ * call; shown as plain text, with a nudge, it can be fixed beforehand.
+ */
+export function MeetingLink({ href, label, className }: { href: string; label?: string; className?: string }) {
+  const usable = /^https?:\/\//i.test(href.trim());
+  if (!usable) {
+    // Wraps rather than truncates: a warning cut off at "not a working link, ed…"
+    // is a worse hint than no warning at all.
+    return (
+      <span className={cn("block break-all text-muted-foreground", className)}>
+        {href}
+        <span className="ml-1 whitespace-nowrap text-destructive">— not a working link</span>
+      </span>
+    );
+  }
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer noopener"
+      className={cn("block truncate text-primary underline", className)}
+    >
+      {label ?? href}
+    </a>
+  );
+}
+
 export function humanise(value: string | null | undefined): string {
   if (!value) return "—";
   return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarDays, MapPin, Video } from "lucide-react";
+import { CalendarDays, CalendarX, MapPin, Pencil, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,20 +8,28 @@ import { toast } from "sonner";
 import { salesMeetingsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { MeetingFormDialog, MeetingOutcomeDialog } from "@/components/sales/MeetingDialogs";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { CommentButton, CommentThreadDialog } from "@/components/sales/CommentThread";
-import { TemperatureBadge, formatDate, formatTime, humanise } from "@/components/sales/SalesBits";
+import { MeetingLink, TemperatureBadge, formatDate, formatTime, humanise } from "@/components/sales/SalesBits";
 import type { SalesMeeting } from "@/types/sales";
 import { cn } from "@/lib/utils";
 
 /**
- * Sales meetings list. Scheduling and outcome capture live on the lead detail
- * screen, where the salesperson already has the lead's context — this page is
- * the calendar-style overview.
+ * The sales diary.
+ *
+ * It used to be a read-only list: a meeting could be booked from a lead, but
+ * from here there was no way to write down how it went, move it, or call it
+ * off — you had to find the lead first. Working a day of meetings means going
+ * down this list, so the actions belong on it.
  */
 export default function SalesMeetings() {
   const { can } = useSalesAccess();
+  const confirm = useConfirm();
   const [items, setItems] = useState<SalesMeeting[]>([]);
   const [thread, setThread] = useState<SalesMeeting | null>(null);
+  const [outcomeMeeting, setOutcomeMeeting] = useState<SalesMeeting | null>(null);
+  const [editingMeeting, setEditingMeeting] = useState<SalesMeeting | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState("scheduled");
@@ -48,6 +56,23 @@ export default function SalesMeetings() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const cancelMeeting = async (m: SalesMeeting) => {
+    const ok = await confirm({
+      title: "Call off this meeting?",
+      description: `"${m.title}" is removed from the diary and the reason is recorded on the lead's timeline. The lead itself is not changed.`,
+      confirmLabel: "Call it off",
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await salesMeetingsApi.cancel(m.id);
+      toast.success("Meeting cancelled");
+      void load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not cancel the meeting");
+    }
+  };
 
   return (
     <SalesLayout>
@@ -135,21 +160,41 @@ export default function SalesMeetings() {
                 <p className="mt-2 text-sm text-muted-foreground">{m.place}</p>
               )}
               {m.meeting_type === "virtual" && m.meeting_link && (
-                <a
-                  href={m.meeting_link}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="mt-2 block truncate text-sm text-primary underline"
-                >
-                  {m.meeting_link}
-                </a>
+                <MeetingLink href={m.meeting_link} className="mt-2 text-sm" />
               )}
 
-              {can("sales.comments.view") && (
-                <div className="mt-2">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {can("sales.comments.view") && (
                   <CommentButton count={m.comment_count ?? 0} onClick={() => setThread(m)} />
-                </div>
-              )}
+                )}
+                {m.status === "scheduled" && can("sales.meetings.edit") && (
+                  <>
+                    <Button size="sm" className="h-9" onClick={() => setOutcomeMeeting(m)}>
+                      How did it go?
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-9 px-2"
+                      aria-label="Edit meeting"
+                      title="Move it, or fix the link"
+                      onClick={() => setEditingMeeting(m)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-9 px-2 text-destructive hover:text-destructive"
+                      aria-label="Cancel meeting"
+                      title="Call it off"
+                      onClick={() => void cancelMeeting(m)}
+                    >
+                      <CalendarX className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
 
               {m.status === "completed" && m.outcome && (
                 <div className="mt-3 rounded-xl bg-muted/50 p-3 text-xs">
@@ -162,6 +207,22 @@ export default function SalesMeetings() {
           ))}
         </div>
       )}
+
+      <MeetingOutcomeDialog
+        open={outcomeMeeting !== null}
+        meeting={outcomeMeeting}
+        onClose={() => setOutcomeMeeting(null)}
+        onSaved={() => void load()}
+      />
+
+      <MeetingFormDialog
+        open={editingMeeting !== null}
+        leadId={editingMeeting?.lead_id ?? 0}
+        leadLabel={editingMeeting?.lead_company || editingMeeting?.lead_name}
+        meeting={editingMeeting}
+        onClose={() => setEditingMeeting(null)}
+        onSaved={() => void load()}
+      />
 
       <CommentThreadDialog
         open={thread !== null}

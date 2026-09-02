@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
-  ArrowLeft, Building2, CalendarClock, CalendarPlus, CheckCircle2, Mail,
-  Pencil, Phone, Thermometer, Undo2, UserCheck,
+  ArrowLeft, Building2, CalendarClock, CalendarPlus, CalendarX, CheckCircle2,
+  Mail, Pencil, Phone, Thermometer, Undo2, UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import { salesCallsApi, salesFollowupsApi, salesLeadsApi, salesMeetingsApi } fro
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { LogCallDialog } from "@/components/sales/LogCallDialog";
+import { MeetingFormDialog, MeetingOutcomeDialog } from "@/components/sales/MeetingDialogs";
 import { useConfirm } from "@/components/ConfirmDialog";
 import {
   FollowupEditDialog,
@@ -25,13 +26,25 @@ import {
 import { CommentButton, CommentThread, CommentThreadDialog } from "@/components/sales/CommentThread";
 import { ConvertLeadDialog } from "@/components/sales/ConvertLeadDialog";
 import { LeadFormDialog } from "@/components/sales/LeadFormDialog";
-import { LeadStatusBadge, TemperatureBadge, formatDate, formatDateTime, formatTime, humanise } from "@/components/sales/SalesBits";
-import type { CommentEntityType, LeadTemperature, SalesFollowup, SalesLeadDetail as LeadDetail } from "@/types/sales";
+import {
+  LeadStatusBadge, MeetingLink, TemperatureBadge,
+  formatDate, formatDateTime, formatTime, humanise,
+} from "@/components/sales/SalesBits";
+import type {
+  CommentEntityType, LeadTemperature, SalesFollowup, SalesMeeting,
+  SalesLeadDetail as LeadDetail,
+} from "@/types/sales";
 import { cn } from "@/lib/utils";
 
-const MEETING_OUTCOMES = ["positive", "neutral", "negative", "rescheduled", "no_show", "other"] as const;
-
-const today = () => new Date().toISOString().slice(0, 10);
+/**
+ * Today, from the local clock. toISOString() is UTC, which east of Greenwich
+ * names yesterday all evening — the follow-up date this pre-fills would then be
+ * a day in the past.
+ */
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 
 type DialogKind = "call" | "meeting" | "followup" | "temperature" | "meeting_outcome" | null;
 
@@ -65,30 +78,10 @@ export default function SalesLeadDetail() {
   const [thread, setThread] = useState<{ type: CommentEntityType; id: number; title: string } | null>(null);
   const [convertOpen, setConvertOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [outcomeMeetingId, setOutcomeMeetingId] = useState<number | null>(null);
-
-  const [meetingForm, setMeetingForm] = useState({
-    title: "",
-    meeting_type: "virtual",
-    meeting_date: today(),
-    meeting_time: "10:30",
-    place: "",
-    meeting_link: "",
-    participants: "",
-    notes: "",
-  });
+  const [outcomeMeeting, setOutcomeMeeting] = useState<SalesMeeting | null>(null);
+  const [editingMeeting, setEditingMeeting] = useState<SalesMeeting | null>(null);
 
   const [followupForm, setFollowupForm] = useState({ due_date: today(), due_time: "", purpose: "" });
-
-  const [outcomeForm, setOutcomeForm] = useState({
-    outcome: "positive",
-    outcome_notes: "",
-    requirements: "",
-    decisions: "",
-    next_action: "",
-    next_meeting_date: "",
-    next_followup_date: "",
-  });
 
   const load = useCallback(async () => {
     if (!Number.isFinite(leadId) || leadId <= 0) {
@@ -126,31 +119,6 @@ export default function SalesLeadDetail() {
 
   const closeDialog = () => setDialog(null);
 
-  const handleScheduleMeeting = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await salesMeetingsApi.create({
-        lead_id: leadId,
-        title: meetingForm.title.trim() || `Meeting with ${lead?.company || lead?.name}`,
-        meeting_type: meetingForm.meeting_type,
-        meeting_date: meetingForm.meeting_date,
-        meeting_time: meetingForm.meeting_time || undefined,
-        place: meetingForm.meeting_type === "physical" ? meetingForm.place : undefined,
-        meeting_link: meetingForm.meeting_type === "virtual" ? meetingForm.meeting_link : undefined,
-        participants: meetingForm.participants || undefined,
-        notes: meetingForm.notes || undefined,
-      });
-      toast.success("Meeting scheduled");
-      closeDialog();
-      void load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not schedule the meeting");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleAddFollowup = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -186,28 +154,20 @@ export default function SalesLeadDetail() {
     }
   };
 
-  const handleMeetingOutcome = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!outcomeMeetingId) return;
-    setSaving(true);
+  const handleCancelMeeting = async (m: SalesMeeting) => {
+    const ok = await confirm({
+      title: "Call off this meeting?",
+      description: `"${m.title}" is removed from the diary and the reason is recorded on the lead's timeline. The lead itself is not changed.`,
+      confirmLabel: "Call it off",
+      destructive: true,
+    });
+    if (!ok) return;
     try {
-      await salesMeetingsApi.complete(outcomeMeetingId, {
-        outcome: outcomeForm.outcome,
-        outcome_notes: outcomeForm.outcome_notes || undefined,
-        requirements: outcomeForm.requirements || undefined,
-        decisions: outcomeForm.decisions || undefined,
-        next_action: outcomeForm.next_action || undefined,
-        next_meeting_date: outcomeForm.next_meeting_date || undefined,
-        next_followup_date: outcomeForm.next_followup_date || undefined,
-      });
-      toast.success("Meeting outcome recorded");
-      closeDialog();
-      setOutcomeMeetingId(null);
+      await salesMeetingsApi.cancel(m.id);
+      toast.success("Meeting cancelled");
       void load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not record the outcome");
-    } finally {
-      setSaving(false);
+      toast.error(err instanceof Error ? err.message : "Could not cancel the meeting");
     }
   };
 
@@ -386,7 +346,14 @@ export default function SalesLeadDetail() {
             </Button>
           )}
           {can("sales.meetings.create") && (
-            <Button className="h-11" variant="secondary" onClick={() => setDialog("meeting")}>
+            <Button
+              className="h-11"
+              variant="secondary"
+              onClick={() => {
+                setEditingMeeting(null);
+                setDialog("meeting");
+              }}
+            >
               <CalendarPlus className="mr-1.5 h-4 w-4" />
               Meeting
             </Button>
@@ -496,16 +463,7 @@ export default function SalesLeadDetail() {
                   {m.meeting_time ? ` · ${formatTime(m.meeting_time)}` : ""}
                   {m.place ? ` · ${m.place}` : ""}
                 </p>
-                {m.meeting_link && (
-                  <a
-                    href={m.meeting_link}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="truncate text-xs text-primary underline"
-                  >
-                    Join link
-                  </a>
-                )}
+                {m.meeting_link && <MeetingLink href={m.meeting_link} label="Join link" className="text-xs" />}
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {can("sales.comments.view") && (
@@ -515,17 +473,42 @@ export default function SalesLeadDetail() {
                   />
                 )}
                 {can("sales.meetings.edit") && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-9"
-                    onClick={() => {
-                      setOutcomeMeetingId(m.id);
-                      setDialog("meeting_outcome");
-                    }}
-                  >
-                    Outcome
-                  </Button>
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9"
+                      onClick={() => {
+                        setOutcomeMeeting(m);
+                        setDialog("meeting_outcome");
+                      }}
+                    >
+                      Outcome
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-9 px-2"
+                      aria-label="Edit meeting"
+                      title="Move it, or fix the link"
+                      onClick={() => {
+                        setEditingMeeting(m);
+                        setDialog("meeting");
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-9 px-2 text-destructive hover:text-destructive"
+                      aria-label="Cancel meeting"
+                      title="Call it off"
+                      onClick={() => void handleCancelMeeting(m)}
+                    >
+                      <CalendarX className="h-4 w-4" />
+                    </Button>
+                  </>
                 )}
               </div>
             </div>
@@ -586,110 +569,14 @@ export default function SalesLeadDetail() {
         onLogged={() => void load()}
       />
 
-      {/* ── Schedule Meeting ─────────────────────────────────────────────── */}
-      <Dialog open={dialog === "meeting"} onOpenChange={(o) => !o && closeDialog()}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Schedule Meeting</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleScheduleMeeting} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="m-title">Title</Label>
-              <Input
-                id="m-title"
-                value={meetingForm.title}
-                placeholder={`Meeting with ${lead.company || lead.name}`}
-                onChange={(e) => setMeetingForm((f) => ({ ...f, title: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Type</Label>
-              <Select
-                value={meetingForm.meeting_type}
-                onValueChange={(v) => setMeetingForm((f) => ({ ...f, meeting_type: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="virtual">Virtual</SelectItem>
-                  <SelectItem value="physical">Physical</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="m-date">Date</Label>
-                <Input
-                  id="m-date"
-                  type="date"
-                  value={meetingForm.meeting_date}
-                  onChange={(e) => setMeetingForm((f) => ({ ...f, meeting_date: e.target.value }))}
-                  required
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="m-time">Time</Label>
-                <Input
-                  id="m-time"
-                  type="time"
-                  value={meetingForm.meeting_time}
-                  onChange={(e) => setMeetingForm((f) => ({ ...f, meeting_time: e.target.value }))}
-                />
-              </div>
-            </div>
-            {/* Physical → place; virtual → link (spec §16). */}
-            {meetingForm.meeting_type === "physical" ? (
-              <div className="space-y-1.5">
-                <Label htmlFor="m-place">Meeting place *</Label>
-                <Input
-                  id="m-place"
-                  value={meetingForm.place}
-                  onChange={(e) => setMeetingForm((f) => ({ ...f, place: e.target.value }))}
-                  required
-                />
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                <Label htmlFor="m-link">Meeting link *</Label>
-                <Input
-                  id="m-link"
-                  type="url"
-                  placeholder="https://meet.google.com/…"
-                  value={meetingForm.meeting_link}
-                  onChange={(e) => setMeetingForm((f) => ({ ...f, meeting_link: e.target.value }))}
-                  required
-                />
-              </div>
-            )}
-            <div className="space-y-1.5">
-              <Label htmlFor="m-participants">Participants</Label>
-              <Input
-                id="m-participants"
-                value={meetingForm.participants}
-                onChange={(e) => setMeetingForm((f) => ({ ...f, participants: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="m-notes">Notes</Label>
-              <Textarea
-                id="m-notes"
-                rows={3}
-                value={meetingForm.notes}
-                onChange={(e) => setMeetingForm((f) => ({ ...f, notes: e.target.value }))}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={closeDialog}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Saving…" : "Schedule"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <MeetingFormDialog
+        open={dialog === "meeting"}
+        leadId={leadId}
+        leadLabel={lead.company || lead.name}
+        meeting={editingMeeting}
+        onClose={closeDialog}
+        onSaved={() => void load()}
+      />
 
       {/* ── Add Follow-Up ────────────────────────────────────────────────── */}
       <Dialog open={dialog === "followup"} onOpenChange={(o) => !o && closeDialog()}>
@@ -763,94 +650,12 @@ export default function SalesLeadDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Meeting Outcome ──────────────────────────────────────────────── */}
-      <Dialog open={dialog === "meeting_outcome"} onOpenChange={(o) => !o && closeDialog()}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Meeting Outcome</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleMeetingOutcome} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Outcome</Label>
-              <Select value={outcomeForm.outcome} onValueChange={(v) => setOutcomeForm((f) => ({ ...f, outcome: v }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MEETING_OUTCOMES.map((o) => (
-                    <SelectItem key={o} value={o}>
-                      {humanise(o)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="o-notes">Notes</Label>
-              <Textarea
-                id="o-notes"
-                rows={3}
-                value={outcomeForm.outcome_notes}
-                onChange={(e) => setOutcomeForm((f) => ({ ...f, outcome_notes: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="o-req">Requirements</Label>
-              <Textarea
-                id="o-req"
-                rows={2}
-                value={outcomeForm.requirements}
-                onChange={(e) => setOutcomeForm((f) => ({ ...f, requirements: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="o-dec">Decisions</Label>
-              <Textarea
-                id="o-dec"
-                rows={2}
-                value={outcomeForm.decisions}
-                onChange={(e) => setOutcomeForm((f) => ({ ...f, decisions: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="o-next">Next action</Label>
-              <Input
-                id="o-next"
-                value={outcomeForm.next_action}
-                onChange={(e) => setOutcomeForm((f) => ({ ...f, next_action: e.target.value }))}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3 rounded-xl bg-muted/50 p-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="o-nm">Next meeting</Label>
-                <Input
-                  id="o-nm"
-                  type="date"
-                  value={outcomeForm.next_meeting_date}
-                  onChange={(e) => setOutcomeForm((f) => ({ ...f, next_meeting_date: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="o-nf">Next follow-up</Label>
-                <Input
-                  id="o-nf"
-                  type="date"
-                  value={outcomeForm.next_followup_date}
-                  onChange={(e) => setOutcomeForm((f) => ({ ...f, next_followup_date: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={closeDialog}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Saving…" : "Save Outcome"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <MeetingOutcomeDialog
+        open={dialog === "meeting_outcome"}
+        meeting={outcomeMeeting}
+        onClose={closeDialog}
+        onSaved={() => void load()}
+      />
 
       <LeadFormDialog
         open={editOpen}

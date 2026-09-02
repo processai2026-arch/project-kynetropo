@@ -415,14 +415,20 @@ export const salesMeetingsApi = {
       decisions?: string;
       next_action?: string;
       next_meeting_date?: string;
+      next_meeting_time?: string;
       next_followup_date?: string;
+      next_followup_time?: string;
     },
   ) =>
     (await apiFetch<Envelope<{ next_meeting_id: number | null; next_followup_id: number | null }>>(
       `/admin/sales/meetings/${id}/complete`,
       { method: "POST", body: JSON.stringify(body) },
     )).data,
-  cancel: (id: number) => apiFetch<Envelope<null>>(`/admin/sales/meetings/${id}/cancel`, { method: "POST" }),
+  cancel: (id: number, reason?: string) =>
+    apiFetch<Envelope<null>>(`/admin/sales/meetings/${id}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ reason: reason ?? "" }),
+    }),
 };
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────

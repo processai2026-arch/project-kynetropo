@@ -130,6 +130,11 @@ class AdminSalesMeetingController
             Response::error('This meeting is already ' . $row['status'], 409);
         }
 
+        // Everything is checked before anything is written. Validating the
+        // follow-up date further down used to mark the meeting completed and
+        // then reject the request: the caller saw an error, fixed the date,
+        // pressed save again and got "this meeting is already completed" --
+        // with the follow-up they had asked for never created.
         $outcome = strtolower(trim((string)$request->input('outcome', '')));
         if (!in_array($outcome, SalesMeeting::OUTCOMES, true)) {
             Response::error('Invalid meeting outcome. Allowed: ' . implode(', ', SalesMeeting::OUTCOMES), 422);
@@ -138,6 +143,19 @@ class AdminSalesMeetingController
         $nextMeetingDate = $request->input('next_meeting_date');
         if (!empty($nextMeetingDate) && !$this->isValidDate((string)$nextMeetingDate)) {
             Response::error('Invalid next meeting date', 422);
+        }
+        $nextMeetingTime = $request->input('next_meeting_time');
+        if (!empty($nextMeetingTime) && !$this->isValidTime((string)$nextMeetingTime)) {
+            Response::error('Invalid next meeting time', 422);
+        }
+
+        $followupDate = $request->input('next_followup_date');
+        if (!empty($followupDate) && !$this->isValidDate((string)$followupDate)) {
+            Response::error('Invalid next follow-up date', 422);
+        }
+        $followupTime = $request->input('next_followup_time');
+        if (!empty($followupTime) && !$this->isValidTime((string)$followupTime)) {
+            Response::error('Invalid next follow-up time', 422);
         }
 
         $leadId = (int)$row['lead_id'];
@@ -169,7 +187,7 @@ class AdminSalesMeetingController
                 'title'        => 'Follow-up meeting — ' . $row['title'],
                 'meeting_type' => $row['meeting_type'],
                 'meeting_date' => $nextMeetingDate,
-                'meeting_time' => $row['meeting_time'],
+                'meeting_time' => $nextMeetingTime ?: $row['meeting_time'],
                 'place'        => $row['place'],
                 'meeting_link' => $row['meeting_link'],
                 'participants' => $row['participants'],
@@ -186,17 +204,15 @@ class AdminSalesMeetingController
 
         // A follow-up task requested during the wrap-up.
         $followupId = null;
-        $followupDate = $request->input('next_followup_date');
         if (!empty($followupDate)) {
-            if (!$this->isValidDate((string)$followupDate)) {
-                Response::error('Invalid next follow-up date', 422);
-            }
+            $purpose = trim((string)$request->input('next_action', ''));
             $followupId = SalesFollowup::create([
                 'lead_id'     => $leadId,
                 'meeting_id'  => $id,
                 'due_date'    => $followupDate,
+                'due_time'    => $followupTime ?: null,
                 'assigned_to' => $row['assigned_to'],
-                'purpose'     => (string)$request->input('next_action', 'Meeting follow-up'),
+                'purpose'     => $purpose !== '' ? $purpose : 'Meeting follow-up',
             ], isset($request->user['user_id']) ? (int)$request->user['user_id'] : null);
 
             SalesActivity::log(
@@ -208,6 +224,7 @@ class AdminSalesMeetingController
 
         SalesLead::touchActivity($leadId, 'meeting_' . $outcome);
         SalesLead::refreshSchedule($leadId);
+        $this->syncMeetingStatus($leadId);
 
         Response::success([
             'next_meeting_id'  => $nextMeetingId,
@@ -226,8 +243,27 @@ class AdminSalesMeetingController
         }
         $this->assertAccess($request, $row);
 
+        // Cancelling a meeting that is not scheduled used to answer "Meeting
+        // cancelled" while changing nothing, because the UPDATE carries its own
+        // status guard. Say so instead.
+        if ($row['status'] !== 'scheduled') {
+            Response::error('This meeting is already ' . $row['status'], 409);
+        }
+
+        $reason = trim((string)$request->input('reason', ''));
+
         SalesMeeting::cancel($id);
+
+        // Every other thing that happens to a meeting reaches the lead's
+        // timeline; a cancellation is the one people most want explained later.
+        SalesActivity::log(
+            (int)$row['lead_id'], 'meeting_cancelled',
+            'Meeting cancelled - ' . $row['title'],
+            $request->user, $reason, 'meeting', $id
+        );
+
         SalesLead::refreshSchedule((int)$row['lead_id']);
+        $this->syncMeetingStatus((int)$row['lead_id']);
 
         Response::success(null, 'Meeting cancelled');
     }
@@ -240,8 +276,11 @@ class AdminSalesMeetingController
      */
     private function validatePayload(Request $request, bool $required, array $existing = []): array
     {
+        // Checked whenever a title is actually supplied, not only on create:
+        // sending an empty one to the edit endpoint used to blank the meeting's
+        // title, leaving an untitled row in the list.
         $title = trim((string)$request->input('title', $existing['title'] ?? ''));
-        if ($required && mb_strlen($title) < 2) {
+        if (($required || $request->input('title') !== null) && mb_strlen($title) < 2) {
             Response::error('Meeting title is required', 422);
         }
 
@@ -266,8 +305,11 @@ class AdminSalesMeetingController
         if ($type === 'physical' && $place === '') {
             Response::error('A meeting place is required for a physical meeting', 422);
         }
-        if ($type === 'virtual' && $link === '') {
-            Response::error('A meeting link is required for a virtual meeting', 422);
+        if ($type === 'virtual') {
+            if ($link === '') {
+                Response::error('A meeting link is required for a virtual meeting', 422);
+            }
+            $link = $this->normaliseLink($link);
         }
 
         $data = [
@@ -290,8 +332,82 @@ class AdminSalesMeetingController
         return $data;
     }
 
+    /**
+     * A meeting link people can actually click.
+     *
+     * The list renders it as a hyperlink, so whatever is stored here is what
+     * somebody taps on the way into a call. A scheme typo ("htttps://") or a
+     * note to self ("ask Kaushik") used to be saved verbatim and presented as a
+     * working link -- the failure only shows up at the moment the meeting starts.
+     */
+    private function normaliseLink(string $link): string
+    {
+        // A pasted "meet.google.com/abc-defg-hij" is a link, just an unqualified
+        // one -- complete it rather than refusing it.
+        if (!preg_match('#^[a-zA-Z][a-zA-Z0-9+.\\-]*://#', $link)) {
+            $link = 'https://' . $link;
+        }
+
+        $scheme = strtolower((string)parse_url($link, PHP_URL_SCHEME));
+        $host   = (string)parse_url($link, PHP_URL_HOST);
+
+        if (!in_array($scheme, ['http', 'https'], true)
+            || $host === ''
+            || !str_contains($host, '.')
+            || filter_var($link, FILTER_VALIDATE_URL) === false
+        ) {
+            Response::error(
+                'That does not look like a meeting link. Paste the full address, '
+                . 'for example https://meet.google.com/abc-defg-hij',
+                422
+            );
+        }
+
+        return $link;
+    }
+
+    /**
+     * Keeps the lead's status honest about whether a meeting is still coming.
+     *
+     * A lead moved to "meeting scheduled" when the meeting was booked, and then
+     * stayed there for good -- the meeting could be held, cancelled or missed and
+     * the pipeline still claimed one was on the way. Once nothing is scheduled,
+     * the lead is simply a qualified one awaiting its next step.
+     */
+    private function syncMeetingStatus(int $leadId): void
+    {
+        $lead = SalesLead::findRaw($leadId);
+        if (!$lead || $lead['status'] !== 'meeting_scheduled') {
+            return;
+        }
+        $stillScheduled = Database::fetch(
+            "SELECT id FROM sales_meetings
+              WHERE tenant_id = ? AND lead_id = ? AND status = 'scheduled' LIMIT 1",
+            [Database::tenantId(), $leadId]
+        );
+        if (!$stillScheduled) {
+            SalesLead::update($leadId, ['status' => 'qualified']);
+        }
+    }
+
     private function assertAccess(Request $request, array $meeting): void
     {
+        // While looking at a colleague, their diary is the whole world -- the
+        // list is already narrowed to them, and the detail has to agree or a
+        // meeting that is invisible in the list still opens by id.
+        $viewing = SalesViewAs::current();
+        if ($viewing !== null) {
+            $subject = (int)$viewing['user_id'];
+            if ((int)($meeting['assigned_to'] ?? 0) === $subject) {
+                return;
+            }
+            $lead = SalesLead::findRaw((int)$meeting['lead_id']);
+            if (!$lead || (int)($lead['assigned_to'] ?? 0) !== $subject) {
+                Response::error('Meeting not found', 404);
+            }
+            return;
+        }
+
         if (SalesPermissions::canSeeAllLeads($request->user)) {
             return;
         }
