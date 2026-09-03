@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Home, Users, CalendarClock, ClipboardList, Trophy, MoreHorizontal } from "lucide-react";
+import { Home, Users, UserCheck, CalendarClock, ClipboardList, Trophy, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
@@ -21,6 +21,9 @@ import { AppDestroyedGate } from "@/components/sales/challenge/AppDestroyedGate"
 const TABS = [
   { label: "Home",       to: "/sales",            icon: Home,          permission: "sales.dashboard.view" },
   { label: "Leads",      to: "/sales/leads",      icon: Users,         permission: "sales.leads.view" },
+  // Converted leads. Same permission as Leads because it is the same records —
+  // anyone who can see the pipeline can see who came out of it.
+  { label: "Clients",    to: "/sales/clients",    icon: UserCheck,     permission: "sales.leads.view" },
   { label: "Follow-Ups", to: "/sales/followups",  icon: CalendarClock, permission: "sales.followups.view" },
   { label: "Tasks",      to: "/sales/tasks",      icon: ClipboardList, permission: "sales.tasks.view" },
   { label: "Challenges", to: "/sales/challenges", icon: Trophy,        permission: "sales.challenges.view" },

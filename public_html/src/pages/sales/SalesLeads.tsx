@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { CalendarClock, Pencil, Plus, Search, Users } from "lucide-react";
+import { CalendarClock, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,6 +12,7 @@ import { useTeamMembers, namesakeHint } from "@/hooks/useTeamMembers";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { LeadStatusBadge, TemperatureBadge, formatDate, formatTime } from "@/components/sales/SalesBits";
 import { LeadFormDialog } from "@/components/sales/LeadFormDialog";
+import { useConfirm } from "@/components/ConfirmDialog";
 import type { SalesLead } from "@/types/sales";
 
 const TEMPERATURES = ["hot", "warm", "cold"] as const;
@@ -39,7 +40,16 @@ const STATUSES = [
   "proposal", "onboarding", "converted", "lost",
 ] as const;
 
-function LeadCard({ lead, onEdit }: { lead: SalesLead; onEdit?: (lead: SalesLead) => void }) {
+function LeadCard({
+  lead,
+  onEdit,
+  onDelete,
+}: {
+  lead: SalesLead;
+  onEdit?: (lead: SalesLead) => void;
+  /** Absent without the permission, and for a converted lead the server refuses to delete. */
+  onDelete?: (lead: SalesLead) => void;
+}) {
   return (
     <Link
       to={`/sales/leads/${lead.id}`}
@@ -69,6 +79,20 @@ function LeadCard({ lead, onEdit }: { lead: SalesLead; onEdit?: (lead: SalesLead
               }}
             >
               <Pencil className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              aria-label={`Delete ${lead.company || lead.name}`}
+              className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onDelete(lead);
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
@@ -104,6 +128,7 @@ function LeadCard({ lead, onEdit }: { lead: SalesLead; onEdit?: (lead: SalesLead
 export default function SalesLeads() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { can, viewAs } = useSalesAccess();
+  const confirm = useConfirm();
 
   const [items, setItems] = useState<SalesLead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -189,6 +214,34 @@ export default function SalesLeads() {
   const openEdit = (lead: SalesLead) => {
     setEditingLead(lead);
     setFormOpen(true);
+  };
+
+  /**
+   * Deletes straight from the list, without opening the lead first.
+   *
+   * The list has no counts of the calls and follow-ups underneath a lead — it
+   * would have to fetch the record to know — so the confirmation says plainly
+   * what class of thing goes rather than pretending to a number it does not
+   * have. The row is dropped locally instead of reloading: a full reload here
+   * would scroll the list back to the top and lose the filters' place.
+   */
+  const handleDelete = async (lead: SalesLead) => {
+    const ok = await confirm({
+      title: `Delete ${lead.company || lead.name}?`,
+      description:
+        "Every call, follow-up and meeting on this lead goes with it, along with its timeline and discussion.\nThis cannot be undone. To take a lead out of the pipeline without losing its history, mark it lost instead.",
+      confirmLabel: "Delete lead",
+      destructive: true,
+    });
+    if (!ok) return;
+
+    try {
+      await salesLeadsApi.remove(lead.id);
+      setItems((prev) => prev.filter((l) => l.id !== lead.id));
+      toast.success("Lead deleted");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not delete the lead");
+    }
   };
 
   return (
@@ -313,6 +366,12 @@ export default function SalesLeads() {
                 key={lead.id}
                 lead={lead}
                 onEdit={can("sales.leads.edit") ? openEdit : undefined}
+                // A converted lead has a customer record pointing at its sales
+                // history, so the server refuses; no button rather than one
+                // that fails.
+                onDelete={
+                  can("sales.leads.assign") && lead.status !== "converted" ? handleDelete : undefined
+                }
               />
             ))}
           </div>

@@ -43,6 +43,7 @@ const Employees = lazy(() => import("./pages/Employees"));
 const SalesDashboard       = lazy(() => import("./pages/sales/SalesDashboard"));
 const SalesLeads           = lazy(() => import("./pages/sales/SalesLeads"));
 const SalesLeadDetail      = lazy(() => import("./pages/sales/SalesLeadDetail"));
+const SalesClients         = lazy(() => import("./pages/sales/SalesClients"));
 const SalesFollowUps       = lazy(() => import("./pages/sales/SalesFollowUps"));
 const SalesMeetings        = lazy(() => import("./pages/sales/SalesMeetings"));
 const SalesChallenges      = lazy(() => import("./pages/sales/SalesChallenges"));
@@ -122,6 +123,8 @@ function ProtectedRoutes() {
           <Route path="/sales"                 element={<SalesScope><SalesDashboard /></SalesScope>} />
           <Route path="/sales/leads"           element={<SalesScope><SalesLeads /></SalesScope>} />
           <Route path="/sales/leads/:id"       element={<SalesScope><SalesLeadDetail /></SalesScope>} />
+          {/* Converted leads. A row opens /sales/leads/:id — same record. */}
+          <Route path="/sales/clients"         element={<SalesScope><SalesClients /></SalesScope>} />
           <Route path="/sales/followups"       element={<SalesScope><SalesFollowUps /></SalesScope>} />
           <Route path="/sales/meetings"        element={<SalesScope><SalesMeetings /></SalesScope>} />
           <Route path="/sales/tasks"           element={<SalesScope><SalesTasks /></SalesScope>} />
