@@ -108,16 +108,20 @@ CREATE TABLE IF NOT EXISTS `audit_log` (
   KEY `idx_audit_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Insert default admin user
--- The hash below is for the password "password" (standard test hash)
--- ALWAYS generate a real password after import:
+-- Insert default admin user — admin@project.com / Admin@123
+-- The hash below is bcrypt cost 12 (BCRYPT_COST in api/config/app.php).
+-- Change the password from Settings → Security after the first login, or
+-- rotate it here before importing:
 --   HASH=$(php -r "echo password_hash('YourPassword', PASSWORD_BCRYPT, ['cost'=>12]);")
---   mysql -u <user> -p'<pass>' <db> -e "UPDATE users SET password_hash='$HASH', email='admin@client.com' WHERE user_type='admin';"
+--   mysql -u <user> -p'<pass>' <db> -e "UPDATE users SET password_hash='$HASH' WHERE user_type='admin';"
+-- To repoint an EXISTING database at these credentials, run
+-- database/set_admin_credentials.sql instead — this INSERT IGNORE is a
+-- no-op once an admin row already exists.
 INSERT IGNORE INTO `users`
   (`name`, `email`, `phone`, `password_hash`, `user_type`, `is_active`, `approval_status`, `tenant_id`)
 VALUES
-  ('Admin', 'admin@client.com', '9999999999',
-   '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uXttdWO6y',
+  ('Admin', 'admin@project.com', '9999999999',
+   '$2y$12$JZHn1DRTKj0lPw275vBtKON.DUQGRozNaOjAKnIWUeFeHWL.myHay',
    'admin', 1, 'approved', 1);
 
 -- Insert default settings

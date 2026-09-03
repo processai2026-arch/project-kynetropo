@@ -262,9 +262,9 @@ export function getMockResponse(path: string, method: string, body?: unknown): u
   if (url.match(/^\/admin\/ops\/employees\/\d+$/) && method === "PUT") return ok({ ...(body as object) });
 
   // Auth (needed for login)
-  if (url === "/auth/login") return { success: true, data: { token: "mock-token", refresh_token: "mock-refresh", user: { email: "admin@kynetropo.com", name: "Admin", company_name: "Kynetropo", user_type: "admin" } } };
+  if (url === "/auth/login") return { success: true, data: { token: "mock-token", refresh_token: "mock-refresh", user: { email: "admin@project.com", name: "Admin", company_name: "Kynetropo", user_type: "admin" } } };
   if (url === "/auth/logout") return { success: true };
-  if (url === "/auth/me")    return { success: true, data: { email: "admin@kynetropo.com", name: "Admin", user_type: "admin" } };
+  if (url === "/auth/me")    return { success: true, data: { email: "admin@project.com", name: "Admin", user_type: "admin" } };
   if (url === "/auth/refresh") return { success: true, data: { token: "mock-token", refresh_token: "mock-refresh" } };
 
   // Fallback

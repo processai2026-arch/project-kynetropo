@@ -35,10 +35,10 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
   KEY idx_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Default admin user (password: Admin@2026)
+-- Default admin user (password: Admin@123)
 INSERT IGNORE INTO users (id, tenant_id, name, email, phone, password_hash, user_type, status)
-VALUES (1, 1, 'Kaushik', 'admin@kynetropo.com', '9876543210',
-  '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uFutgzYA.', 'admin', 'active');
+VALUES (1, 1, 'Kaushik', 'admin@project.com', '9876543210',
+  '$2y$12$JZHn1DRTKj0lPw275vBtKON.DUQGRozNaOjAKnIWUeFeHWL.myHay', 'admin', 'active');
 
 -- ============================================================
 -- OPS CLIENTS
