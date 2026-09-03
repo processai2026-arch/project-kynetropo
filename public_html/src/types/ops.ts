@@ -30,6 +30,36 @@ export interface OpsClientDetail extends OpsClient {
   meetings: OpsMeeting[];
   bugs: OpsBug[];
   checklist: OpsChecklistItem[];
+  /**
+   * The sales lead this client was converted from, or null for a client keyed
+   * in directly on the CRM side. Follow-ups belong to the lead, so this is what
+   * makes them addable from here.
+   */
+  sales_lead: OpsClientSalesLead | null;
+  followups: OpsClientFollowup[];
+}
+
+export interface OpsClientSalesLead {
+  id: number;
+  lead_code: string;
+  name: string;
+  company: string;
+  status: string;
+  assigned_to: number | null;
+}
+
+export interface OpsClientFollowup {
+  id: number;
+  due_date: string;
+  due_time: string | null;
+  purpose: string;
+  status: "pending" | "completed";
+  /** '' for anything completed before follow-ups recorded an outcome. */
+  outcome: string;
+  outcome_notes: string | null;
+  completed_at: string | null;
+  assigned_to: number | null;
+  assigned_to_name: string | null;
 }
 
 export interface OpsProject {

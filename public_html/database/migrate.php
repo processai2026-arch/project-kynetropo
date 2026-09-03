@@ -252,6 +252,8 @@ $featureSchemas = [
     'create_sales_comments.sql',
     'create_sales_lockouts.sql',
     'create_sales_tasks.sql',
+    // After create_sales_module.sql above, which creates the table it alters.
+    'add_followup_outcome.sql',
 ];
 foreach ($featureSchemas as $file) {
     $path = __DIR__ . '/' . $file;

@@ -10,10 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { opsClientsApi, opsProjectsApi, opsFinanceApi } from "@/lib/api/ops";
+import { salesFollowupsApi } from "@/lib/api/sales";
+import { useSalesAccess } from "@/hooks/useSalesAccess";
 import type { OpsClientDetail, OpsProject } from "@/types/ops";
 import {
   ArrowLeft, Plus, Check, ChevronRight, IndianRupee,
-  Bug, CalendarDays, FileText, Pencil,
+  Bug, CalendarDays, CalendarClock, FileText, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -42,11 +44,29 @@ const actionIcons: Record<string, React.ReactNode> = {
   created:           <Plus className="h-3.5 w-3.5" />,
 };
 
-type Tab = "overview" | "timeline" | "payments" | "meetings" | "bugs" | "checklist";
+type Tab = "overview" | "timeline" | "payments" | "meetings" | "followups" | "bugs" | "checklist";
+
+/**
+ * Today, from the local clock. toISOString() is UTC, which east of Greenwich
+ * names yesterday all evening — the date this pre-fills would then be in the
+ * past, and the follow-up would land in Overdue the moment it was created.
+ */
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+const outcomeLabels: Record<string, string> = {
+  interested:     "Interested",
+  not_interested: "Not interested",
+  not_picked_up:  "Not picked up",
+  completed:      "Completed",
+};
 
 export default function ClientDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { can } = useSalesAccess();
 
   const [data, setData]           = useState<OpsClientDetail | null>(null);
   const [loading, setLoading]     = useState(true);
@@ -71,6 +91,11 @@ export default function ClientDetail() {
   const [projectOpen, setProjectOpen] = useState(false);
   const [newProjForm, setNewProjForm] = useState({ name: "", owner: "", quoted: 0, deadline: "", priority: "medium" });
   const [creatingProj, setCreatingProj] = useState(false);
+
+  // Follow-up on the lead this client came from
+  const [followupOpen, setFollowupOpen] = useState(false);
+  const [followupForm, setFollowupForm] = useState({ due_date: today(), due_time: "", purpose: "" });
+  const [savingFollowup, setSavingFollowup] = useState(false);
 
   const load = async () => {
     if (!id) return;
@@ -106,6 +131,37 @@ export default function ClientDetail() {
       setStageTarget(null); setStageNote(""); load();
     } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); }
     finally       { setAdvancing(false); }
+  };
+
+  /**
+   * Books a follow-up against the lead this client was converted from.
+   *
+   * Deliberately the same record the sales team works from, not a second kind
+   * of follow-up owned by the CRM: one made here lands in that owner's queue on
+   * the Follow-Ups page, and one made there shows up here. A client that never
+   * came through sales has no lead, and the tab this sits behind is not
+   * rendered at all.
+   */
+  const handleAddFollowup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!data?.sales_lead) return;
+    setSavingFollowup(true);
+    try {
+      await salesFollowupsApi.create({
+        lead_id: data.sales_lead.id,
+        due_date: followupForm.due_date,
+        due_time: followupForm.due_time || undefined,
+        purpose: followupForm.purpose,
+      });
+      toast.success("Follow-up scheduled");
+      setFollowupOpen(false);
+      setFollowupForm({ due_date: today(), due_time: "", purpose: "" });
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not schedule the follow-up");
+    } finally {
+      setSavingFollowup(false);
+    }
   };
 
   const handleSaveProject = async () => {
@@ -165,11 +221,20 @@ export default function ClientDetail() {
   const p = data.project;
   const totalPaid = (data.payments ?? []).reduce((s, pay) => s + pay.amount, 0);
 
+  const followups = data.followups ?? [];
+  const pendingFollowups = followups.filter(f => f.status === "pending");
+  // Only for a client that came through sales — follow-ups belong to the lead,
+  // and one keyed straight into the CRM has none to belong to.
+  const showFollowups = Boolean(data.sales_lead) && can("sales.followups.view");
+
   const TABS: { key: Tab; label: string }[] = [
     { key: "overview",  label: "Overview" },
     { key: "timeline",  label: "Timeline" },
     { key: "payments",  label: `Payments (${(data.payments ?? []).length})` },
     { key: "meetings",  label: `Meetings (${(data.meetings ?? []).length})` },
+    ...(showFollowups
+      ? [{ key: "followups" as const, label: `Follow-Ups (${pendingFollowups.length})` }]
+      : []),
     { key: "bugs",      label: `Bugs (${(data.bugs ?? []).length})` },
     { key: "checklist", label: "Checklist" },
   ];
@@ -435,6 +500,66 @@ export default function ClientDetail() {
             </div>
           )}
 
+          {/* FOLLOW-UPS — the sales follow-up queue, on the client it is about */}
+          {activeTab === "followups" && showFollowups && data.sales_lead && (
+            <div className="bg-card rounded-xl border shadow-sm p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  Against{" "}
+                  <Link to={`/sales/leads/${data.sales_lead.id}`} className="text-primary hover:underline">
+                    {data.sales_lead.lead_code || data.sales_lead.company || data.sales_lead.name}
+                  </Link>
+                  , the lead this client was converted from.
+                </p>
+                {can("sales.followups.create") && (
+                  <Button size="sm" className="shrink-0" onClick={() => setFollowupOpen(true)}>
+                    <Plus className="h-3.5 w-3.5 mr-1" />Add
+                  </Button>
+                )}
+              </div>
+
+              {followups.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No follow-ups yet
+                </p>
+              ) : followups.map(f => (
+                <div key={f.id} className="border rounded-lg p-3 text-sm space-y-1">
+                  <div className="flex justify-between items-center gap-3">
+                    <span className="font-medium text-card-foreground">
+                      {new Date(`${f.due_date}T00:00:00`).toLocaleDateString("en-IN", { day:"2-digit", month:"short", year:"numeric" })}
+                      {f.due_time ? ` · ${f.due_time.slice(0, 5)}` : ""}
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className={cn("text-xs shrink-0",
+                        f.status === "pending" && f.due_date < today() && "bg-red-50 text-red-600 border-red-200",
+                        f.status === "pending" && f.due_date >= today() && "bg-amber-50 text-amber-600 border-amber-200",
+                        f.status === "completed" && "bg-emerald-50 text-emerald-700 border-emerald-200")}>
+                      {f.status === "completed"
+                        ? (outcomeLabels[f.outcome] ?? "Done")
+                        : f.due_date < today() ? "Overdue" : "Pending"}
+                    </Badge>
+                  </div>
+                  {f.purpose && <p className="text-muted-foreground text-xs">{f.purpose}</p>}
+                  {f.outcome_notes && <p className="text-card-foreground text-xs">{f.outcome_notes}</p>}
+                  {f.assigned_to_name && (
+                    <p className="text-xs text-muted-foreground">Owner: {f.assigned_to_name}</p>
+                  )}
+                </div>
+              ))}
+
+              {/*
+                Completing one stays where the rest of the day's queue is. Doing
+                it from here would mean rebuilding the outcome dialog on a page
+                that shows one client, and the person working a follow-up is
+                working a list of them, not this record.
+              */}
+              <Link to="/sales/followups" className="text-xs text-primary hover:underline block mt-1">
+                Open the follow-up queue →
+              </Link>
+            </div>
+          )}
+
           {/* BUGS */}
           {activeTab === "bugs" && (
             <div className="bg-card rounded-xl border shadow-sm p-4 space-y-2">
@@ -650,6 +775,57 @@ export default function ClientDetail() {
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setProjectOpen(false)} disabled={creatingProj}>Cancel</Button>
               <Button type="submit" disabled={creatingProj}>{creatingProj ? "Creating…" : "Create Project"}</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add follow-up */}
+      <Dialog open={followupOpen} onOpenChange={v => { if (!savingFollowup) setFollowupOpen(v); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarClock className="h-4 w-4" />Add Follow-Up
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddFollowup} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="cf-date">Date</Label>
+                <Input
+                  id="cf-date"
+                  type="date"
+                  value={followupForm.due_date}
+                  onChange={e => setFollowupForm(f => ({ ...f, due_date: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cf-time">Time</Label>
+                <Input
+                  id="cf-time"
+                  type="time"
+                  value={followupForm.due_time}
+                  onChange={e => setFollowupForm(f => ({ ...f, due_time: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cf-purpose">Purpose</Label>
+              <Input
+                id="cf-purpose"
+                value={followupForm.purpose}
+                placeholder="Check the install went ok, chase renewal…"
+                onChange={e => setFollowupForm(f => ({ ...f, purpose: e.target.value }))}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              This goes into the sales follow-up queue against{" "}
+              {data.sales_lead?.company || data.sales_lead?.name || "this client"}&apos;s lead.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setFollowupOpen(false)} disabled={savingFollowup}>Cancel</Button>
+              <Button type="submit" disabled={savingFollowup}>{savingFollowup ? "Saving…" : "Add"}</Button>
             </div>
           </form>
         </DialogContent>

@@ -272,9 +272,67 @@ class SalesLead
         );
     }
 
+    /**
+     * Deletes a lead and everything that only existed because of it.
+     *
+     * None of the sales tables carry foreign keys, so nothing cascades on its
+     * own: deleting the row alone left its calls, follow-ups, meetings and
+     * timeline behind. Every list INNER JOINs sales_leads, so those orphans
+     * were invisible rather than harmless — they sat in the tables forever, and
+     * InnoDB hands out a deleted lead's id again after a restart, which would
+     * graft a stranger's call history onto the next lead created.
+     *
+     * What goes and what stays is the difference between a record OF the lead
+     * and a record that merely MENTIONS it. Calls, follow-ups, meetings, the
+     * timeline and the discussion are the lead's own and go with it. A
+     * challenge or a task is somebody's work — it outlives the lead it happened
+     * to be about, so the link is cut and the work is kept.
+     *
+     * All of it in one transaction: half a deleted lead is worse than either
+     * outcome, and the caller has already told the user this cannot be undone.
+     */
     public static function delete(int $id): void
     {
-        Database::execute('DELETE FROM sales_leads WHERE id = ? AND tenant_id = ?', [$id, Database::tenantId()]);
+        $tenantId = Database::tenantId();
+
+        Database::beginTransaction();
+        try {
+            // Mentions hang off comments, so they go before the comments do —
+            // otherwise the Mentions page keeps pointing at comments that are
+            // no longer there. Scoped to exactly the comments deleted below.
+            Database::execute(
+                "DELETE m FROM sales_comment_mentions m
+                   JOIN sales_comments c ON c.id = m.comment_id AND c.tenant_id = m.tenant_id
+                  WHERE c.lead_id = ? AND c.tenant_id = ? AND c.entity_type <> 'challenge'",
+                [$id, $tenantId]
+            );
+
+            // A comment on the lead or on one of its calls, follow-ups and
+            // meetings is part of the lead. A comment on a challenge carries
+            // the lead only as a back-reference, and the challenge is kept.
+            Database::execute(
+                "DELETE FROM sales_comments WHERE lead_id = ? AND tenant_id = ? AND entity_type <> 'challenge'",
+                [$id, $tenantId]
+            );
+
+            foreach (['sales_calls', 'sales_followups', 'sales_meetings', 'sales_lead_activities'] as $table) {
+                Database::execute("DELETE FROM `$table` WHERE lead_id = ? AND tenant_id = ?", [$id, $tenantId]);
+            }
+
+            // Kept, and detached. Every one of these columns is nullable
+            // precisely because a challenge, a task or a comment about one does
+            // not need a lead to make sense — but a lead_id pointing at nothing
+            // would, and the comment feed builds a lead URL out of it.
+            foreach (['sales_challenges', 'sales_tasks', 'sales_comments'] as $table) {
+                Database::execute("UPDATE `$table` SET lead_id = NULL WHERE lead_id = ? AND tenant_id = ?", [$id, $tenantId]);
+            }
+
+            Database::execute('DELETE FROM sales_leads WHERE id = ? AND tenant_id = ?', [$id, $tenantId]);
+            Database::commit();
+        } catch (\Throwable $e) {
+            Database::rollBack();
+            throw $e;
+        }
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

@@ -148,6 +148,8 @@ class AdminOpsClientController
             );
         }
 
+        [$salesLead, $followups] = $this->salesFollowups($id, $tenantId);
+
         $data = $this->format($client);
         $data['project']       = $project ? $this->formatProject($project) : null;
         $data['stage_history'] = $stageHistory;
@@ -156,6 +158,8 @@ class AdminOpsClientController
         $data['meetings']      = $meetings;
         $data['bugs']          = $bugs;
         $data['checklist']     = $checklist;
+        $data['sales_lead']    = $salesLead;
+        $data['followups']     = $followups;
 
         Response::success($data);
     }
@@ -403,6 +407,70 @@ class AdminOpsClientController
             'description' => $desc,
             'done_by'     => $doneBy,
         ]);
+    }
+
+    /**
+     * The lead this client was converted from, and its sales follow-ups.
+     *
+     * Follow-ups belong to a lead, not to a client — so the way back is
+     * sales_leads.converted_client_id, and a client keyed in directly on the
+     * CRM side has no lead and therefore nothing to show. That is a normal
+     * state, not an error: the caller gets a null lead and an empty list, and
+     * the page offers nothing rather than an explanation nobody asked for.
+     *
+     * Wrapped because the sales module is a separate schema file. A database
+     * that has not imported it should still be able to open a client, so a
+     * missing table costs this one section and not the whole page.
+     *
+     * @return array{0: ?array<string,mixed>, 1: list<array<string,mixed>>}
+     */
+    private function salesFollowups(int $clientId, int $tenantId): array
+    {
+        try {
+            $lead = Database::fetch(
+                'SELECT id, lead_code, name, company, status, assigned_to
+                   FROM sales_leads
+                  WHERE converted_client_id = ? AND tenant_id = ?
+                  ORDER BY id ASC LIMIT 1',
+                [$clientId, $tenantId]
+            );
+            if (!$lead) {
+                return [null, []];
+            }
+
+            // Pending first and soonest-first inside that, because the only
+            // question this section answers is "what is still owed to this
+            // client, and when". Completed ones stay underneath as the record
+            // of what was already done, newest first.
+            $followups = Database::fetchAll(
+                "SELECT f.id, f.due_date, f.due_time, f.purpose, f.status, f.outcome,
+                        f.outcome_notes, f.completed_at, f.assigned_to,
+                        u.name AS assigned_to_name
+                   FROM sales_followups f
+                   LEFT JOIN users u ON u.user_id = f.assigned_to
+                  WHERE f.tenant_id = ? AND f.lead_id = ? AND f.status <> 'cancelled'
+                  ORDER BY f.status = 'pending' DESC,
+                           IF(f.status = 'pending', f.due_date, '9999-12-31') ASC,
+                           f.due_date DESC
+                  LIMIT 25",
+                [$tenantId, (int)$lead['id']]
+            );
+
+            return [
+                [
+                    'id'          => (int)$lead['id'],
+                    'lead_code'   => $lead['lead_code'],
+                    'name'        => $lead['name'],
+                    'company'     => $lead['company'],
+                    'status'      => $lead['status'],
+                    'assigned_to' => $lead['assigned_to'] !== null ? (int)$lead['assigned_to'] : null,
+                ],
+                $followups,
+            ];
+        } catch (\Throwable $e) {
+            error_log('[OpsClient] sales follow-ups unavailable: ' . $e->getMessage());
+            return [null, []];
+        }
     }
 
     private function format(array $row): array

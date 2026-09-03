@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, Building2, CalendarClock, CalendarPlus, CalendarX, CheckCircle2,
-  Mail, MessageSquareQuote, MonitorCog, Pencil, Phone, Thermometer, Undo2, UserCheck,
+  Mail, MessageSquareQuote, MonitorCog, Pencil, Phone, Thermometer, Trash2, Undo2, UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -220,6 +220,50 @@ export default function SalesLeadDetail() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not revert the lead");
     } finally {
+      setSaving(false);
+    }
+  };
+
+  /**
+   * Deletes the lead and everything hanging off it.
+   *
+   * The confirmation counts the work that goes with it rather than asking "are
+   * you sure": a lead with eleven calls and two open follow-ups against it is
+   * almost never the one somebody meant to delete, and the count is the only
+   * thing on the screen that would stop them.
+   */
+  const handleDelete = async () => {
+    if (!lead) return;
+    const attached = [
+      lead.calls?.length ? `${lead.calls.length} call${lead.calls.length === 1 ? "" : "s"}` : null,
+      lead.followups?.length
+        ? `${lead.followups.length} follow-up${lead.followups.length === 1 ? "" : "s"}`
+        : null,
+      lead.meetings?.length
+        ? `${lead.meetings.length} meeting${lead.meetings.length === 1 ? "" : "s"}`
+        : null,
+    ].filter(Boolean) as string[];
+
+    const ok = await confirm({
+      title: `Delete ${lead.company || lead.name}?`,
+      description:
+        (attached.length
+          ? `Its ${attached.join(", ")} and its whole timeline go with it.\n`
+          : "Its timeline goes with it.\n") +
+        "This cannot be undone. To take a lead out of the pipeline without losing its history, mark it lost instead.",
+      confirmLabel: "Delete lead",
+      destructive: true,
+    });
+    if (!ok) return;
+
+    setSaving(true);
+    try {
+      await salesLeadsApi.remove(leadId);
+      toast.success("Lead deleted");
+      // Nothing left to show, so leave before the page tries to reload it.
+      navigate("/sales/leads");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not delete the lead");
       setSaving(false);
     }
   };
@@ -583,6 +627,41 @@ export default function SalesLeadDetail() {
           <div className="rounded-2xl border bg-card p-4 shadow-sm">
             <CommentThread entityType="lead" entityId={lead.id} initialComments={lead.comments ?? []} />
           </div>
+        </section>
+      )}
+
+      {/*
+        Deleting sits at the foot of the page rather than in the sticky action
+        bar. That bar is under the thumb on every screen of this record, and an
+        irreversible action does not belong somewhere it can be caught on the
+        way past — reaching this one takes a deliberate scroll to the bottom.
+        Same permission the server enforces, so it is never offered to somebody
+        who would be refused.
+      */}
+      {can("sales.leads.assign") && (
+        <section className="rounded-2xl border border-destructive/25 bg-destructive/[0.03] p-4">
+          {lead.status === "converted" ? (
+            <p className="text-xs text-muted-foreground">
+              A converted lead cannot be deleted — the customer record it created still points at
+              its sales history. Undo the conversion first if it was made by mistake.
+            </p>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground">
+                Deleting removes this lead and every call, follow-up and meeting on it.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 shrink-0 border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                disabled={saving}
+                onClick={handleDelete}
+              >
+                <Trash2 className="mr-1.5 h-4 w-4" />
+                Delete Lead
+              </Button>
+            </div>
+          )}
         </section>
       )}
 
