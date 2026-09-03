@@ -40,3 +40,13 @@ api/run_migrate.php
 # template now lives at app.html, and index.html is a build artifact only.
 /index.html
 /assets/
+# Same deal for the PWA shell: the source of each of these is public/, vite
+# copies them into dist/, and the deploy copies them out to the web root. The
+# root copies are duplicates of tracked files — committing them means every
+# icon lives in the repo twice and the two can drift.
+/sw.js
+/manifest.webmanifest
+/apple-touch-icon.png
+/icon-192.png
+/icon-512.png
+/icon-maskable-512.png
