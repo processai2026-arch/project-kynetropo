@@ -38,6 +38,16 @@ class SalesActivity
         ?int $referenceId = null,
         ?array $metadata = null
     ): int {
+        // This is the LEAD timeline. Calls and follow-ups can now belong to a
+        // client instead, and those reach here with lead 0 — writing them would
+        // create timeline rows against a lead that does not exist, which no
+        // screen can display and every join would have to filter out. Refused
+        // at the door rather than at each of the call sites, so a path added
+        // later cannot forget the check.
+        if ($leadId <= 0) {
+            return 0;
+        }
+
         return Database::insert('sales_lead_activities', [
             'tenant_id'      => Database::tenantId(),
             'lead_id'        => $leadId,

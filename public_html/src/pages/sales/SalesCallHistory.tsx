@@ -9,7 +9,7 @@ import { salesCallsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { CommentButton, CommentThread } from "@/components/sales/CommentThread";
-import { TemperatureBadge, formatDate, formatTime, humanise } from "@/components/sales/SalesBits";
+import { TemperatureBadge, formatDate, formatTime, humanise, subjectLabel, subjectPath } from "@/components/sales/SalesBits";
 import type { LeadCallSummary, SalesCall } from "@/types/sales";
 
 /**
@@ -41,7 +41,7 @@ function CallDetail({ call, onClose }: { call: SalesCall | null; onClose: () => 
               <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                 <div>
                   <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">With</dt>
-                  <dd className="text-card-foreground">{call.lead_company || call.lead_name || "—"}</dd>
+                  <dd className="text-card-foreground">{subjectLabel(call)}</dd>
                 </div>
                 <div>
                   <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Lasted</dt>
@@ -135,7 +135,7 @@ function LeadCalls({
           <>
             <DialogHeader>
               <DialogTitle className="text-left">
-                <span className="block truncate">{lead.lead_company || lead.lead_name}</span>
+                <span className="block truncate">{subjectLabel(lead)}</span>
                 <span className="block text-sm font-normal text-muted-foreground">
                   {lead.call_count} {lead.call_count === 1 ? "call" : "calls"}
                   {lead.total_minutes > 0 ? ` · ${lead.total_minutes} min in total` : ""}
@@ -145,11 +145,11 @@ function LeadCalls({
 
             <div className="max-h-[65vh] space-y-2 overflow-y-auto pr-1">
               <Link
-                to={`/sales/leads/${lead.lead_id}`}
+                to={subjectPath(lead)}
                 className="inline-block text-sm text-primary underline"
                 onClick={onClose}
               >
-                Open the lead
+                {lead.subject_type === "client" ? "Open the client" : "Open the lead"}
               </Link>
 
               {loading ? (
@@ -291,7 +291,7 @@ export default function SalesCallHistory() {
               key={l.lead_id}
               role="button"
               tabIndex={0}
-              aria-label={`${l.call_count} calls with ${l.lead_company || l.lead_name}`}
+              aria-label={`${l.call_count} calls with ${subjectLabel(l)}`}
               onClick={() => setOpenLead(l)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
@@ -303,11 +303,11 @@ export default function SalesCallHistory() {
             >
               <div className="flex items-start justify-between gap-3">
                 <Link
-                  to={`/sales/leads/${l.lead_id}`}
+                  to={subjectPath(l)}
                   className="min-w-0 hover:underline"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <p className="truncate font-semibold text-card-foreground">{l.lead_company || l.lead_name}</p>
+                  <p className="truncate font-semibold text-card-foreground">{subjectLabel(l)}</p>
                   <p className="truncate text-xs text-muted-foreground">
                     {l.call_count} {l.call_count === 1 ? "call" : "calls"}
                     {l.total_minutes > 0 ? ` · ${l.total_minutes} min` : ""}

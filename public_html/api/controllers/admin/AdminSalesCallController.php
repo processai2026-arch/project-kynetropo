@@ -56,12 +56,34 @@ class AdminSalesCallController
     {
         SalesPermissions::enforce($request->user, 'sales.calls.create');
 
-        $leadId = (int)$request->input('lead_id');
-        $lead   = SalesLead::findRaw($leadId);
-        if (!$lead) {
-            Response::error('Lead not found', 404);
+        // A call is made to a lead we are chasing or to a client we already
+        // have — one or the other, never both and never neither.
+        $leadId   = (int)$request->input('lead_id');
+        $clientId = (int)$request->input('client_id');
+
+        if ($leadId && $clientId) {
+            Response::error('A call belongs to a lead or a client, not both', 422);
         }
-        SalesPermissions::assertLeadAccess($request->user, $lead);
+        if (!$leadId && !$clientId) {
+            Response::error('A lead or a client is required', 422);
+        }
+
+        $lead = null;
+        if ($leadId) {
+            $lead = SalesLead::findRaw($leadId);
+            if (!$lead) {
+                Response::error('Lead not found', 404);
+            }
+            SalesPermissions::assertLeadAccess($request->user, $lead);
+        } else {
+            $client = Database::fetch(
+                'SELECT id FROM ops_clients WHERE id = ? AND tenant_id = ? LIMIT 1',
+                [$clientId, Database::tenantId()]
+            );
+            if (!$client) {
+                Response::error('Client not found', 404);
+            }
+        }
 
         $outcome = strtolower(trim((string)$request->input('outcome', '')));
         if (!in_array($outcome, SalesCall::OUTCOMES, true)) {
@@ -103,7 +125,8 @@ class AdminSalesCallController
         }
 
         $callId = SalesCall::create([
-            'lead_id'           => $leadId,
+            'lead_id'           => $leadId ?: null,
+            'client_id'         => $clientId ?: null,
             'call_date'         => $callDate,
             'call_time'         => $callTime ?: null,
             'duration_minutes'  => $duration,
@@ -123,7 +146,7 @@ class AdminSalesCallController
         );
 
         // Optional temperature update captured during the call.
-        if ($temperatureAfter && $temperatureAfter !== $lead['temperature']) {
+        if ($lead && $temperatureAfter && $temperatureAfter !== $lead['temperature']) {
             SalesLead::update($leadId, ['temperature' => $temperatureAfter]);
             SalesActivity::log(
                 $leadId, 'temperature_changed',
@@ -137,11 +160,12 @@ class AdminSalesCallController
         $followupId = null;
         if (!empty($nextDate)) {
             $followupId = SalesFollowup::create([
-                'lead_id'     => $leadId,
+                'lead_id'     => $leadId ?: null,
+                'client_id'   => $clientId ?: null,
                 'call_id'     => $callId,
                 'due_date'    => $nextDate,
                 'due_time'    => $nextTime ?: null,
-                'assigned_to' => $lead['assigned_to'] ?? ($request->user['user_id'] ?? null),
+                'assigned_to' => ($lead['assigned_to'] ?? null) ?: ($request->user['user_id'] ?? null),
                 'purpose'     => (string)$request->input('next_followup_purpose', 'Follow-up from call'),
             ], isset($request->user['user_id']) ? (int)$request->user['user_id'] : null);
 
@@ -154,12 +178,14 @@ class AdminSalesCallController
         }
 
         // A logged call always advances a brand-new lead to "contacted".
-        if ($lead['status'] === 'new') {
+        if ($lead && $lead['status'] === 'new') {
             SalesLead::update($leadId, ['status' => 'contacted']);
         }
 
-        SalesLead::touchActivity($leadId, $outcome);
-        SalesLead::refreshSchedule($leadId);
+        if ($leadId) {
+            SalesLead::touchActivity($leadId, $outcome);
+            SalesLead::refreshSchedule($leadId);
+        }
 
         // The call that was just written, looked up by its own id. Taking the
         // first row of the lead's history returned whichever call sorts newest,
@@ -168,7 +194,7 @@ class AdminSalesCallController
         Response::success([
             'call'        => SalesCall::find($callId),
             'followup_id' => $followupId,
-            'lead'        => SalesLead::find($leadId),
+            'lead'        => $leadId ? SalesLead::find($leadId) : null,
         ], 'Call logged', 201);
     }
 

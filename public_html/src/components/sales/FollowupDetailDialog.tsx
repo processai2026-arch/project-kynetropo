@@ -11,6 +11,8 @@ import {
   formatDateTime,
   formatTime,
   humanise,
+  subjectLabel,
+  subjectPath,
 } from "@/components/sales/SalesBits";
 import type { SalesFollowup } from "@/types/sales";
 
@@ -38,7 +40,7 @@ export function FollowupDetailDialog({
           <>
             <DialogHeader>
               <DialogTitle className="text-left">
-                <span className="block truncate">{f.lead_company || f.lead_name}</span>
+                <span className="block truncate">{subjectLabel(f)}</span>
                 <span className="block text-sm font-normal text-muted-foreground">
                   {f.status === "completed" ? "Completed follow-up" : "Follow-up"}
                 </span>
@@ -134,7 +136,7 @@ export function FollowupDetailDialog({
               )}
 
               <Link
-                to={`/sales/leads/${f.lead_id}`}
+                to={subjectPath(f)}
                 className="inline-block text-sm text-primary underline"
                 onClick={onClose}
               >

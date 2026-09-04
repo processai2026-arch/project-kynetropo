@@ -25,7 +25,9 @@ class SalesCall
     {
         return Database::insert('sales_calls', [
             'tenant_id'         => Database::tenantId(),
-            'lead_id'           => (int)$data['lead_id'],
+            // One or the other: a call chases a lead or is made to a client.
+            'lead_id'           => !empty($data['lead_id'])   ? (int)$data['lead_id']   : null,
+            'client_id'         => !empty($data['client_id']) ? (int)$data['client_id'] : null,
             'called_by'         => isset($actor['user_id']) ? (int)$actor['user_id'] : null,
             'called_by_name'    => (string)($actor['name'] ?? ''),
             'call_date'         => $data['call_date'],
@@ -48,8 +50,15 @@ class SalesCall
     /** One call by id, formatted for the client. */
     public static function find(int $id): ?array
     {
+        // The names come along: format() resolves the subject from them, and a
+        // bare SELECT * left the caller holding a call with a blank subject.
         $row = Database::fetch(
-            'SELECT * FROM sales_calls WHERE id = ? AND tenant_id = ? LIMIT 1',
+            'SELECT c.*, l.name AS lead_name, l.company AS lead_company,
+                    l.temperature AS lead_temperature, oc.name AS client_name
+               FROM sales_calls c
+               LEFT JOIN sales_leads l ON l.id = c.lead_id AND l.tenant_id = c.tenant_id
+               LEFT JOIN ops_clients oc ON oc.id = c.client_id AND oc.tenant_id = c.tenant_id
+              WHERE c.id = ? AND c.tenant_id = ? LIMIT 1',
             [$id, Database::tenantId()]
         );
         return $row ? self::format($row) : null;
@@ -58,7 +67,11 @@ class SalesCall
     public static function forLead(int $leadId): array
     {
         $rows = Database::fetchAll(
-            'SELECT * FROM sales_calls WHERE tenant_id = ? AND lead_id = ? ORDER BY call_date DESC, (call_time IS NULL), call_time DESC, id DESC',
+            'SELECT c.*, l.name AS lead_name, l.company AS lead_company, l.temperature AS lead_temperature
+               FROM sales_calls c
+               LEFT JOIN sales_leads l ON l.id = c.lead_id AND l.tenant_id = c.tenant_id
+              WHERE c.tenant_id = ? AND c.lead_id = ?
+              ORDER BY c.call_date DESC, (c.call_time IS NULL), c.call_time DESC, c.id DESC',
             [Database::tenantId(), $leadId]
         );
         return array_map([self::class, 'format'], $rows);
@@ -83,8 +96,12 @@ class SalesCall
         $params = [Database::tenantId()];
 
         if ($scope['sql'] !== '') {
-            $where[] = ltrim(str_replace('assigned_to', 'l.assigned_to', $scope['sql']), ' AND');
-            $params  = array_merge($params, $scope['params']);
+            // A client's calls have no lead owner to scope by, so they fall
+            // back to whoever made the call — otherwise they belong to
+            // nobody and show up for no one.
+            $where[]  = '(l.assigned_to = ? OR (c.client_id IS NOT NULL AND c.called_by = ?))';
+            $params[] = $scope['params'][0];
+            $params[] = $scope['params'][0];
         }
         $whereClause = implode(' AND ', $where);
 
@@ -95,6 +112,7 @@ class SalesCall
         $rows = Database::fetchAll(
             "SELECT l.id AS lead_id, l.name AS lead_name, l.company AS lead_company,
                     l.temperature AS lead_temperature, l.assigned_to,
+                    c.client_id, oc.name AS client_name,
                     ua.name AS owner_name,
                     COUNT(*) AS call_count,
                     SUM(c.duration_minutes) AS total_minutes,
@@ -107,17 +125,27 @@ class SalesCall
                     SUBSTRING(MAX(CONCAT(c.call_date, ' ', LPAD(COALESCE(c.call_time, '00:00:00'), 8, '0'),
                                          '#', LPAD(c.id, 10, '0'), '#', COALESCE(c.call_time, ''))), 32) AS last_call_time
                FROM sales_calls c
-               JOIN sales_leads l ON l.id = c.lead_id AND l.tenant_id = c.tenant_id
+               LEFT JOIN sales_leads l ON l.id = c.lead_id AND l.tenant_id = c.tenant_id
+               LEFT JOIN ops_clients oc ON oc.id = c.client_id AND oc.tenant_id = c.tenant_id
                LEFT JOIN users ua ON ua.user_id = l.assigned_to
               WHERE $whereClause
-              GROUP BY l.id, l.name, l.company, l.temperature, l.assigned_to, ua.name
+              GROUP BY l.id, l.name, l.company, l.temperature, l.assigned_to,
+                       c.client_id, oc.name, ua.name
               ORDER BY MAX(c.call_date) DESC, l.id DESC
               LIMIT $limit",
             $params
         );
 
         return array_map(static fn(array $r): array => [
-            'lead_id'          => (int)$r['lead_id'],
+            'lead_id'          => $r['lead_id']   !== null ? (int)$r['lead_id']   : null,
+            'client_id'        => $r['client_id'] !== null ? (int)$r['client_id'] : null,
+            'client_name'      => $r['client_name'] ?? null,
+            'subject_type'     => $r['client_id'] !== null ? 'client' : 'lead',
+            'subject_name'     => $r['client_id'] !== null
+                                  ? (string)($r['client_name'] ?? '')
+                                  : ((string)($r['lead_company'] ?? '') !== ''
+                                     ? (string)$r['lead_company']
+                                     : (string)($r['lead_name'] ?? '')),
             'lead_name'        => $r['lead_name'],
             'lead_company'     => $r['lead_company'],
             'lead_temperature' => $r['lead_temperature'],
@@ -166,18 +194,20 @@ class SalesCall
 
         $total = Database::count(
             "SELECT COUNT(*) AS cnt FROM sales_calls c
-               JOIN sales_leads l ON l.id = c.lead_id AND l.tenant_id = c.tenant_id
+               LEFT JOIN sales_leads l ON l.id = c.lead_id AND l.tenant_id = c.tenant_id
               WHERE $whereClause",
             $params
         );
 
         $rows = Database::fetchAll(
             "SELECT c.*, l.name AS lead_name, l.company AS lead_company, l.temperature AS lead_temperature,
+                    oc.name AS client_name,
                     (SELECT COUNT(*) FROM sales_comments sc
                       WHERE sc.tenant_id = c.tenant_id AND sc.entity_type = 'call'
                         AND sc.entity_id = c.id AND sc.deleted_at IS NULL) AS comment_count
                FROM sales_calls c
-               JOIN sales_leads l ON l.id = c.lead_id AND l.tenant_id = c.tenant_id
+               LEFT JOIN sales_leads l ON l.id = c.lead_id AND l.tenant_id = c.tenant_id
+               LEFT JOIN ops_clients oc ON oc.id = c.client_id AND oc.tenant_id = c.tenant_id
               WHERE $whereClause
               ORDER BY c.call_date DESC, (c.call_time IS NULL), c.call_time DESC, c.id DESC
               LIMIT ? OFFSET ?",
@@ -199,7 +229,17 @@ class SalesCall
     {
         return [
             'id'                => (int)$row['id'],
-            'lead_id'           => (int)$row['lead_id'],
+            'lead_id'           => isset($row['lead_id']) && $row['lead_id'] !== null ? (int)$row['lead_id'] : null,
+            'client_id'         => isset($row['client_id']) && $row['client_id'] !== null ? (int)$row['client_id'] : null,
+            'client_name'       => $row['client_name'] ?? null,
+            // Who the call was WITH, resolved here so no screen has to ask
+            // whether it is looking at a lead or a customer.
+            'subject_type'      => !empty($row['client_id']) ? 'client' : 'lead',
+            'subject_name'      => !empty($row['client_id'])
+                                   ? ($row['client_name'] ?? '')
+                                   : ((($row['lead_company'] ?? '') !== '')
+                                      ? $row['lead_company']
+                                      : ($row['lead_name'] ?? '')),
             'lead_name'         => $row['lead_name']        ?? null,
             'lead_company'      => $row['lead_company']     ?? null,
             'lead_temperature'  => $row['lead_temperature'] ?? null,

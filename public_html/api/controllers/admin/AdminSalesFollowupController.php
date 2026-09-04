@@ -41,12 +41,37 @@ class AdminSalesFollowupController
     {
         SalesPermissions::enforce($request->user, 'sales.followups.create');
 
-        $leadId = (int)$request->input('lead_id');
-        $lead   = SalesLead::findRaw($leadId);
-        if (!$lead) {
-            Response::error('Lead not found', 404);
+        // A follow-up hangs off a lead we are chasing or a client we already
+        // have — one or the other, never both and never neither.
+        $leadId   = (int)$request->input('lead_id');
+        $clientId = (int)$request->input('client_id');
+
+        if ($leadId && $clientId) {
+            Response::error('A follow-up belongs to a lead or a client, not both', 422);
         }
-        SalesPermissions::assertLeadAccess($request->user, $lead);
+        if (!$leadId && !$clientId) {
+            Response::error('A lead or a client is required', 422);
+        }
+
+        $lead = null;
+        if ($leadId) {
+            $lead = SalesLead::findRaw($leadId);
+            if (!$lead) {
+                Response::error('Lead not found', 404);
+            }
+            SalesPermissions::assertLeadAccess($request->user, $lead);
+        } else {
+            // Clients are not owned by one salesperson the way leads are, so
+            // there is no per-record scope to enforce here — the module-level
+            // permission checked above is the boundary.
+            $client = Database::fetch(
+                'SELECT id FROM ops_clients WHERE id = ? AND tenant_id = ? LIMIT 1',
+                [$clientId, Database::tenantId()]
+            );
+            if (!$client) {
+                Response::error('Client not found', 404);
+            }
+        }
 
         $dueDate = (string)$request->input('due_date', '');
         if (!$this->isValidDate($dueDate)) {
@@ -58,21 +83,32 @@ class AdminSalesFollowupController
         }
 
         $id = SalesFollowup::create([
-            'lead_id'     => $leadId,
+            'lead_id'     => $leadId ?: null,
+            'client_id'   => $clientId ?: null,
             'due_date'    => $dueDate,
             'due_time'    => $dueTime ?: null,
+            // A lead's follow-up goes to whoever owns the lead. A client's has
+            // no owner to inherit, so it goes to the person booking it — better
+            // than unassigned, which belongs to nobody's queue.
             'assigned_to' => $lead['assigned_to'] ?? ($request->user['user_id'] ?? null),
             'purpose'     => (string)$request->input('purpose', ''),
         ], isset($request->user['user_id']) ? (int)$request->user['user_id'] : null);
 
-        SalesActivity::log(
-            $leadId, 'followup_created',
-            'Follow-up scheduled for ' . $dueDate . ($dueTime ? ' ' . $dueTime : ''),
-            $request->user, (string)$request->input('purpose', ''), 'followup', $id
-        );
-        SalesLead::refreshSchedule($leadId);
+        // The lead timeline and its next_followup_at only exist for leads.
+        if ($leadId) {
+            SalesActivity::log(
+                $leadId, 'followup_created',
+                'Follow-up scheduled for ' . $dueDate . ($dueTime ? ' ' . $dueTime : ''),
+                $request->user, (string)$request->input('purpose', ''), 'followup', $id
+            );
+            SalesLead::refreshSchedule($leadId);
+        }
 
-        Response::success(['id' => $id, 'lead' => SalesLead::find($leadId)], 'Follow-up created', 201);
+        Response::success(
+            ['id' => $id, 'lead' => $leadId ? SalesLead::find($leadId) : null],
+            'Follow-up created',
+            201
+        );
     }
 
     public function update(Request $request): void

@@ -229,6 +229,12 @@ class SalesLead
     /** Recomputes the denormalised next follow-up / next meeting pointers. */
     public static function refreshSchedule(int $id): void
     {
+        // Nothing to refresh for a follow-up or call that belongs to a client:
+        // next_followup_at lives on the lead row, and there isn't one.
+        if ($id <= 0) {
+            return;
+        }
+
         $tenantId = Database::tenantId();
 
         $followup = Database::fetch(

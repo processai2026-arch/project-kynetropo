@@ -146,7 +146,16 @@ export interface SalesFeedEvent {
 
 export interface SalesCall {
   id: number;
-  lead_id: number;
+  lead_id: number | null;
+  /**
+   * What this is about. A call or follow-up belongs to a lead we are chasing
+   * OR to a client we already have — exactly one of the two ids is set, and
+   * `subject_*` is that one resolved, so a screen never has to ask which.
+   */
+  client_id: number | null;
+  client_name?: string | null;
+  subject_type: "lead" | "client";
+  subject_name: string;
   lead_name?: string | null;
   lead_company?: string | null;
   lead_temperature?: LeadTemperature | null;
@@ -165,7 +174,17 @@ export interface SalesCall {
 
 export interface SalesFollowup {
   id: number;
-  lead_id: number;
+  lead_id: number | null;
+  /**
+   * What this is about. A call or follow-up belongs to a lead we are chasing
+   * OR to a client we already have — exactly one of the two ids is set, and
+   * `subject_*` is that one resolved, so a screen never has to ask which.
+   */
+  client_id: number | null;
+  client_name?: string | null;
+  subject_type: "lead" | "client";
+  subject_name: string;
+  subject_phone?: string | null;
   lead_name?: string | null;
   lead_company?: string | null;
   lead_phone?: string | null;
@@ -246,7 +265,11 @@ export interface SoftwareContext {
 
 /** Everyone we have spoken to, one entry per lead. */
 export interface LeadCallSummary {
-  lead_id: number;
+  lead_id: number | null;
+  client_id: number | null;
+  client_name?: string | null;
+  subject_type: "lead" | "client";
+  subject_name: string;
   lead_name: string | null;
   lead_company: string | null;
   lead_temperature: LeadTemperature | null;

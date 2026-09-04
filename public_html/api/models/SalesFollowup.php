@@ -36,7 +36,10 @@ class SalesFollowup
     {
         return Database::insert('sales_followups', [
             'tenant_id'   => Database::tenantId(),
-            'lead_id'     => (int)$data['lead_id'],
+            // Exactly one of these. A follow-up is either chasing a lead or
+            // owed to a customer; the controller decides which and never both.
+            'lead_id'     => !empty($data['lead_id'])   ? (int)$data['lead_id']   : null,
+            'client_id'   => !empty($data['client_id']) ? (int)$data['client_id'] : null,
             'call_id'     => !empty($data['call_id'])    ? (int)$data['call_id']    : null,
             'meeting_id'  => !empty($data['meeting_id']) ? (int)$data['meeting_id'] : null,
             'due_date'    => $data['due_date'],
@@ -192,9 +195,11 @@ class SalesFollowup
 
         $whereClause = implode(' AND ', $where);
 
+        // LEFT, both of them: a follow-up owned by a client has no lead and an
+        // inner join would silently drop it from the queue it belongs in.
         $total = Database::count(
             "SELECT COUNT(*) AS cnt FROM sales_followups f
-               JOIN sales_leads l ON l.id = f.lead_id AND l.tenant_id = f.tenant_id
+               LEFT JOIN sales_leads l ON l.id = f.lead_id AND l.tenant_id = f.tenant_id
               WHERE $whereClause",
             $params
         );
@@ -210,9 +215,11 @@ class SalesFollowup
                         AND sc.entity_id = f.id AND sc.deleted_at IS NULL) AS comment_count,
                     l.name AS lead_name, l.company AS lead_company, l.phone AS lead_phone,
                     l.contact_person AS lead_contact_person, l.temperature AS lead_temperature,
-                    l.last_outcome AS lead_last_outcome
+                    l.last_outcome AS lead_last_outcome,
+                    oc.name AS client_name, oc.phone AS client_phone
                FROM sales_followups f
-               JOIN sales_leads l ON l.id = f.lead_id AND l.tenant_id = f.tenant_id
+               LEFT JOIN sales_leads l ON l.id = f.lead_id AND l.tenant_id = f.tenant_id
+               LEFT JOIN ops_clients oc ON oc.id = f.client_id AND oc.tenant_id = f.tenant_id
                LEFT JOIN users u ON u.user_id = f.assigned_to
               WHERE $whereClause
               ORDER BY $order
@@ -251,7 +258,7 @@ class SalesFollowup
                SUM(f.status = 'pending' AND f.due_date > ?)  AS upcoming_count,
                SUM(f.status = 'completed')                   AS completed_count
              FROM sales_followups f
-             JOIN sales_leads l ON l.id = f.lead_id AND l.tenant_id = f.tenant_id
+             LEFT JOIN sales_leads l ON l.id = f.lead_id AND l.tenant_id = f.tenant_id
              WHERE f.tenant_id = ?" . $extra,
             [$today, $today, $today, ...$params]
         );
@@ -268,7 +275,22 @@ class SalesFollowup
     {
         return [
             'id'                  => (int)$row['id'],
-            'lead_id'             => (int)$row['lead_id'],
+            'lead_id'             => isset($row['lead_id']) && $row['lead_id'] !== null ? (int)$row['lead_id'] : null,
+            'client_id'           => isset($row['client_id']) && $row['client_id'] !== null ? (int)$row['client_id'] : null,
+            'client_name'         => $row['client_name'] ?? null,
+            // What this follow-up is ABOUT, resolved once here so no screen has
+            // to work out whether it is looking at a lead or a customer. A lead
+            // is shown by company falling back to name, the way the pipeline
+            // shows it; a client has only the one name.
+            'subject_type'        => !empty($row['client_id']) ? 'client' : 'lead',
+            'subject_name'        => !empty($row['client_id'])
+                                     ? ($row['client_name'] ?? '')
+                                     : (($row['lead_company'] ?? '') !== ''
+                                        ? $row['lead_company']
+                                        : ($row['lead_name'] ?? '')),
+            'subject_phone'       => !empty($row['client_id'])
+                                     ? ($row['client_phone'] ?? null)
+                                     : ($row['lead_phone'] ?? null),
             'lead_name'           => $row['lead_name']           ?? null,
             'lead_company'        => $row['lead_company']        ?? null,
             'lead_phone'          => $row['lead_phone']          ?? null,

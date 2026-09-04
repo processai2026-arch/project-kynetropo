@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { salesFollowupsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
+import { subjectLabel } from "@/components/sales/SalesBits";
 import type { FollowupOutcome, SalesFollowup } from "@/types/sales";
 
 /**
@@ -190,9 +191,9 @@ export function FollowupCompleteDialog({ followup, onClose, onCompleted }: Props
           <form onSubmit={submit} className="space-y-4">
             {/* The lead's name is not on the row when this opens from the lead's
                 own page — it is already the page you are standing on. */}
-            {(followup.lead_company || followup.lead_name || followup.purpose) && (
+            {(subjectLabel(followup) !== "—" || followup.purpose) && (
               <p className="text-sm text-muted-foreground">
-                {[followup.lead_company || followup.lead_name, followup.purpose]
+                {[subjectLabel(followup), followup.purpose]
                   .filter(Boolean)
                   .join(" — ")}
               </p>

@@ -18,6 +18,8 @@ import {
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { useTeamMembers, namesakeHint } from "@/hooks/useTeamMembers";
 import { SourceSelect } from "@/components/sales/SalesBits";
+import { opsClientsApi } from "@/lib/api/ops";
+import type { OpsClient } from "@/types/ops";
 import type { SalesLead } from "@/types/sales";
 import { cn } from "@/lib/utils";
 
@@ -25,9 +27,12 @@ import { cn } from "@/lib/utils";
  * The quick-add surface for the mobile sales app: one button that reaches every
  * "create" action without hunting for the right screen first.
  *
- * Log Call / Follow-Up / Meeting all need a lead, so each starts with a lead
- * picker. Every action is permission-gated — the entries are hidden when the
- * user lacks the permission, and the server refuses them regardless.
+ * Log Call and Follow-Up start with a subject picker: both can be about a lead
+ * we are chasing or a client we already have, because work does not stop the
+ * day a lead converts. Meeting still takes a lead only — sales_meetings has no
+ * client of its own yet. Every action is permission-gated: the entries are
+ * hidden when the user lacks the permission, and the server refuses them
+ * regardless.
  */
 
 type Action = "menu" | "lead" | "call" | "followup" | "meeting" | "challenge" | null;
@@ -39,6 +44,156 @@ const CALL_OUTCOMES = [
 
 const today = () => new Date().toISOString().slice(0, 10);
 const humanise = (s: string) => s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+/**
+ * What a call or follow-up is about: a lead, or a client.
+ *
+ * Kept as one shape so the forms carry a single piece of state and the submit
+ * handler sends whichever id it holds.
+ */
+export type Subject =
+  | { type: "lead"; id: number; name: string; detail: string; lead: SalesLead }
+  | { type: "client"; id: number; name: string; detail: string };
+
+/**
+ * Searchable subject list — a plain filtered list beats a combobox on a phone.
+ *
+ * Leads and clients are two different tables with two different shapes, so both
+ * are flattened to name + detail on arrival and everything below this line
+ * treats them identically.
+ */
+function SubjectPicker({
+  value,
+  onChange,
+}: {
+  value: Subject | null;
+  onChange: (subject: Subject | null) => void;
+}) {
+  const [tab, setTab] = useState<"lead" | "client">("lead");
+  const [leads, setLeads] = useState<SalesLead[]>([]);
+  const [clients, setClients] = useState<OpsClient[]>([]);
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Both lists up front: the toggle is instant afterwards, and a salesperson
+    // switching tabs mid-thought should not wait on a request to find out the
+    // other list was there all along.
+    Promise.all([
+      salesLeadsApi.list({ limit: 200 }).then((r) => r.data ?? []),
+      opsClientsApi.list({ limit: "200" }).then((r) => r.data ?? []),
+    ])
+      .then(([l, c]) => {
+        if (cancelled) return;
+        setLeads(l);
+        setClients(c);
+      })
+      .catch(() => !cancelled && toast.error("Could not load leads and clients"))
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (value) {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-xl border bg-muted/40 px-3 py-2.5">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">
+            {value.name}
+            <span className="ml-2 rounded-full bg-background px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {value.type}
+            </span>
+          </p>
+          <p className="truncate text-xs text-muted-foreground">{value.detail}</p>
+        </div>
+        <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0" onClick={() => onChange(null)}>
+          Change
+        </Button>
+      </div>
+    );
+  }
+
+  const q = query.toLowerCase();
+  const leadRows: Subject[] = leads
+    .filter((l) => !q || `${l.name} ${l.company} ${l.contact_person} ${l.phone}`.toLowerCase().includes(q))
+    .map((l) => ({
+      type: "lead",
+      id: l.id,
+      name: l.company || l.name,
+      detail: `${l.contact_person || l.name}${l.phone ? ` · ${l.phone}` : ""}`,
+      lead: l,
+    }));
+  const clientRows: Subject[] = clients
+    .filter((c) => !q || `${c.name} ${c.phone} ${c.email} ${c.owner}`.toLowerCase().includes(q))
+    .map((c) => ({
+      type: "client",
+      id: c.id,
+      name: c.name,
+      detail: [c.phone, c.owner].filter(Boolean).join(" · ") || "Client",
+    }));
+  const rows = tab === "lead" ? leadRows : clientRows;
+
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
+        {(["lead", "client"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            className={cn(
+              // The same active pill the bucket tabs use. A white-on-near-white
+              // segmented control left the two states almost indistinguishable,
+              // so the list could show clients while Leads still looked chosen.
+              "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors",
+              tab === t
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-transparent bg-card text-muted-foreground hover:bg-muted",
+            )}
+          >
+            {t === "lead" ? `Leads (${leadRows.length})` : `Clients (${clientRows.length})`}
+          </button>
+        ))}
+      </div>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          className="h-11 pl-9"
+          placeholder={tab === "lead" ? "Search leads…" : "Search clients…"}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+      <div className="max-h-56 space-y-1 overflow-y-auto rounded-xl border p-1">
+        {loading ? (
+          <p className="p-3 text-sm text-muted-foreground">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="p-3 text-sm text-muted-foreground">
+            {query
+              ? `No ${tab}s match that search.`
+              : tab === "lead"
+                ? "No leads yet — create one first."
+                : "No clients yet."}
+          </p>
+        ) : (
+          rows.map((r) => (
+            <button
+              key={`${r.type}-${r.id}`}
+              type="button"
+              onClick={() => onChange(r)}
+              className="block w-full rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted"
+            >
+              <p className="truncate text-sm font-medium">{r.name}</p>
+              <p className="truncate text-xs text-muted-foreground">{r.detail}</p>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
 
 /** Searchable lead list — a plain filtered list beats a combobox on a phone. */
 function LeadPicker({
@@ -128,6 +283,9 @@ export function SalesQuickAdd({ onCreated }: { onCreated?: () => void }) {
   const [action, setAction] = useState<Action>(null);
   const [saving, setSaving] = useState(false);
   const [lead, setLead] = useState<SalesLead | null>(null);
+  // Call and Follow-Up work on either a lead or a client; Meeting still needs
+  // a lead, so the two states are kept apart rather than one being coerced.
+  const [subject, setSubject] = useState<Subject | null>(null);
 
   const [leadForm, setLeadForm] = useState({ name: "", company: "", phone: "", source: "", temperature: "warm" });
   const [callForm, setCallForm] = useState({
@@ -148,6 +306,7 @@ export function SalesQuickAdd({ onCreated }: { onCreated?: () => void }) {
   const close = () => {
     setAction(null);
     setLead(null);
+    setSubject(null);
   };
 
   const done = (message: string) => {
@@ -287,10 +446,10 @@ export function SalesQuickAdd({ onCreated }: { onCreated?: () => void }) {
             className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault();
-              if (!lead) { toast.error("Choose a lead first"); return; }
+              if (!subject) { toast.error("Choose a lead or client first"); return; }
               void guard(async () => {
                 await salesCallsApi.log({
-                  lead_id: lead.id,
+                  ...(subject.type === "lead" ? { lead_id: subject.id } : { client_id: subject.id }),
                   call_date: callForm.call_date,
                   call_time: callForm.call_time || undefined,
                   duration_minutes: callForm.duration_minutes ? Number(callForm.duration_minutes) : 0,
@@ -305,8 +464,8 @@ export function SalesQuickAdd({ onCreated }: { onCreated?: () => void }) {
             }}
           >
             <div className="space-y-1.5">
-              <Label>Lead *</Label>
-              <LeadPicker value={lead} onChange={setLead} />
+              <Label>Lead or client *</Label>
+              <SubjectPicker value={subject} onChange={setSubject} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -374,10 +533,10 @@ export function SalesQuickAdd({ onCreated }: { onCreated?: () => void }) {
             className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault();
-              if (!lead) { toast.error("Choose a lead first"); return; }
+              if (!subject) { toast.error("Choose a lead or client first"); return; }
               void guard(async () => {
                 await salesFollowupsApi.create({
-                  lead_id: lead.id,
+                  ...(subject.type === "lead" ? { lead_id: subject.id } : { client_id: subject.id }),
                   due_date: fupForm.due_date,
                   due_time: fupForm.due_time || undefined,
                   purpose: fupForm.purpose || undefined,
@@ -388,8 +547,8 @@ export function SalesQuickAdd({ onCreated }: { onCreated?: () => void }) {
             }}
           >
             <div className="space-y-1.5">
-              <Label>Lead *</Label>
-              <LeadPicker value={lead} onChange={setLead} />
+              <Label>Lead or client *</Label>
+              <SubjectPicker value={subject} onChange={setSubject} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">

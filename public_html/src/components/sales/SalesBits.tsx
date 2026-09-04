@@ -192,3 +192,42 @@ export function humanise(value: string | null | undefined): string {
   if (!value) return "—";
   return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+/**
+ * Where a call or follow-up's subject lives.
+ *
+ * These records used to belong to a lead and only a lead, so every screen built
+ * `/sales/leads/${lead_id}` by hand. One can now belong to a client instead,
+ * where that id is null and the hand-built path becomes "/sales/leads/null" —
+ * a page that loads and then reports the lead is missing. Asking here keeps the
+ * answer in one place, so a screen added later cannot get it wrong.
+ *
+ * A client opens its full record in the dashboard: that is where its projects,
+ * payments and its own follow-up list already are.
+ */
+export function subjectPath(subject: {
+  subject_type?: "lead" | "client";
+  lead_id?: number | null;
+  client_id?: number | null;
+}): string {
+  if (subject.subject_type === "client" && subject.client_id) {
+    return `/clients/${subject.client_id}`;
+  }
+  return subject.lead_id ? `/sales/leads/${subject.lead_id}` : "#";
+}
+
+/** The subject's display name, falling back for rows written before subjects existed. */
+export function subjectLabel(subject: {
+  subject_name?: string | null;
+  lead_company?: string | null;
+  lead_name?: string | null;
+  client_name?: string | null;
+}): string {
+  return (
+    subject.subject_name ||
+    subject.client_name ||
+    subject.lead_company ||
+    subject.lead_name ||
+    "—"
+  );
+}

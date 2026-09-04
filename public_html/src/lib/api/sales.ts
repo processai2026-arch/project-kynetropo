@@ -308,7 +308,9 @@ export const salesLeadsApi = {
 // ─── Calls ────────────────────────────────────────────────────────────────────
 
 export interface LogCallPayload {
-  lead_id: number;
+  /** Exactly one of these — a call is to a lead or to a client. */
+  lead_id?: number;
+  client_id?: number;
   call_date: string;
   call_time?: string;
   duration_minutes?: number;
@@ -354,7 +356,14 @@ export const salesFollowupsApi = {
       `/admin/sales/followups${qs({ bucket, ...extra })}`,
       { skipCache: true },
     )).data,
-  create: async (body: { lead_id: number; due_date: string; due_time?: string; purpose?: string }) =>
+  /** Exactly one of lead_id / client_id — the server refuses both and neither. */
+  create: async (body: {
+    lead_id?: number;
+    client_id?: number;
+    due_date: string;
+    due_time?: string;
+    purpose?: string;
+  }) =>
     (await apiFetch<Envelope<{ id: number; lead: SalesLead }>>("/admin/sales/followups", {
       method: "POST",
       body: JSON.stringify(body),

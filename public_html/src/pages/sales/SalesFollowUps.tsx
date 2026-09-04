@@ -16,7 +16,7 @@ import {
 import { CommentButton, CommentThreadDialog } from "@/components/sales/CommentThread";
 import { FollowupDetailDialog } from "@/components/sales/FollowupDetailDialog";
 import { FollowupCompleteDialog, OutcomeBadge } from "@/components/sales/FollowupCompleteDialog";
-import { TemperatureBadge, formatDate, formatTime, humanise } from "@/components/sales/SalesBits";
+import { TemperatureBadge, formatDate, formatTime, humanise, subjectLabel, subjectPath } from "@/components/sales/SalesBits";
 import type { FollowupBucket, SalesFollowup } from "@/types/sales";
 import { cn } from "@/lib/utils";
 
@@ -173,7 +173,7 @@ export default function SalesFollowUps() {
               <div
                 role="button"
                 tabIndex={0}
-                aria-label={`Follow-up with ${f.lead_company || f.lead_name} on ${formatDate(f.due_date)}`}
+                aria-label={`Follow-up with ${subjectLabel(f)} on ${formatDate(f.due_date)}`}
                 onClick={() => setViewing(f)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
@@ -185,15 +185,15 @@ export default function SalesFollowUps() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <Link
-                    to={`/sales/leads/${f.lead_id}`}
+                    to={subjectPath(f)}
                     className="min-w-0 hover:underline"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <p className="truncate font-semibold text-card-foreground">
-                      {f.lead_company || f.lead_name}
+                      {subjectLabel(f)}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {f.lead_contact_person || f.lead_name}
+                      {f.lead_contact_person || f.lead_name || ""}
                       {f.lead_phone ? ` · ${f.lead_phone}` : ""}
                     </p>
                   </Link>
@@ -310,7 +310,7 @@ export default function SalesFollowUps() {
             void load();
           }
         }}
-        title={thread ? `Follow-up — ${thread.lead_company || thread.lead_name}` : "Comments"}
+        title={thread ? `Follow-up — ${subjectLabel(thread)}` : "Comments"}
         entityType="followup"
         entityId={thread?.id ?? 0}
       />
