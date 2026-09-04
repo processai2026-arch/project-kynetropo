@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { reportsApi, type ReportColumn, type ReportResult } from "@/lib/api/reports";
+import { opsReportsApi, type ReportColumn, type ReportResult } from "@/lib/api/opsReports";
 import { ReportExportDialog } from "@/components/reports/ReportExportDialog";
 
 /** Formats one cell according to the type the report declared for its column. */
@@ -61,7 +61,7 @@ function cell(value: unknown, type: ReportColumn["type"]) {
  * The table is driven entirely by the columns the server sent with the report,
  * so this screen never needs to know which report it is showing.
  */
-export default function ReportView() {
+export default function OpsReportView() {
   const { id = "" } = useParams();
   const [result, setResult] = useState<ReportResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,7 +71,7 @@ export default function ReportView() {
   const load = useCallback(
     (r: { from: string; to: string }) => {
       setLoading(true);
-      reportsApi
+      opsReportsApi
         .run(id, { from: r.from || undefined, to: r.to || undefined, limit: 5000 })
         .then((res) => setResult(res.data))
         .catch((e) => toast.error(e?.message || "Could not run this report"))

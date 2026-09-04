@@ -1,51 +1,36 @@
-import { apiFetch } from "@/lib/api/client";
+/**
+ * Reports API — live backend.
+ * Endpoint: GET /admin/reports?module=<key>&from=YYYY-MM-DD&to=YYYY-MM-DD
+ */
+import { apiFetch } from "./client";
 
-/** How a value should be read, so the viewer and the export agree on it. */
-export type ReportColumnType = "text" | "number" | "money" | "date" | "datetime" | "badge";
+export type ReportModule = "sales" | "orders" | "payments" | "expenses" | "production" | "forecast";
 
-export interface ReportColumn {
-  key: string;
-  label: string;
-  type: ReportColumnType;
-}
-
-/** A report as the catalogue describes it, without any rows. */
-export interface ReportSummary {
-  id: string;
-  title: string;
+export interface ReportRow {
+  date: string;
+  reference: string;
   category: string;
-  description: string;
-  columns: ReportColumn[];
-  /** False for a current-state report, where a From/To range means nothing. */
-  has_dates: boolean;
+  party: string;
+  amount: number;
+  status: string;
 }
 
-export interface ReportResult {
-  report: ReportSummary;
-  rows: Record<string, unknown>[];
-  row_count: number;
-  /** True when the row limit cut the result short, so the page can say so. */
-  truncated: boolean;
-  range: { from: string | null; to: string | null };
+interface ApiResponse {
+  success: boolean;
+  data: {
+    module: ReportModule;
+    from: string;
+    to: string;
+    rows: ReportRow[];
+    total: number;
+    count: number;
+  };
 }
-
-const qs = (p?: Record<string, string | undefined>) => {
-  if (!p) return "";
-  const parts = Object.entries(p).filter(([, v]) => v !== undefined && v !== "");
-  return parts.length ? `?${new URLSearchParams(parts as [string, string][])}` : "";
-};
 
 export const reportsApi = {
-  /** Every report this system can run. */
-  catalogue: () => apiFetch<{ data: { reports: ReportSummary[] } }>("/admin/ops/reports"),
-
-  /** One report's rows. The id must be one the catalogue listed. */
-  run: (id: string, params?: { from?: string; to?: string; limit?: number }) =>
-    apiFetch<{ data: ReportResult }>(
-      `/admin/ops/reports/${id}${qs({
-        from: params?.from,
-        to: params?.to,
-        limit: params?.limit ? String(params.limit) : undefined,
-      })}`,
-    ),
+  async fetch(module: ReportModule, from: string, to: string): Promise<ReportRow[]> {
+    const q = `?module=${encodeURIComponent(module)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+    const res = await apiFetch<ApiResponse>("/admin/reports" + q);
+    return res.data?.rows ?? [];
+  },
 };

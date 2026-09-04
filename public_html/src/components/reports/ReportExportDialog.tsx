@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import type { ReportColumn } from "@/lib/api/reports";
+import type { ReportColumn } from "@/lib/api/opsReports";
 
 /** Row caps offered in the dropdown. */
 const ROW_LIMITS = [100, 500, 1000, 5000];
