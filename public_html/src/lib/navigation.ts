@@ -18,6 +18,7 @@ import {
   FileText,
   Phone,
   MoreHorizontal,
+  BarChart3,
 } from "lucide-react";
 
 export type MenuItem = { title: string; url: string; icon: typeof LayoutDashboard };
@@ -63,6 +64,14 @@ export const sections: MenuSection[] = [
     items: [
       { title: "Finance", url: "/finance", icon: IndianRupee },
       { title: "AMC",     url: "/amc",     icon: RefreshCcw },
+    ],
+  },
+  {
+    // Reports read across every module above, so they sit on their own rather
+    // than buried inside whichever one you happened to open first.
+    label: "Reports",
+    items: [
+      { title: "Reports", url: "/reports", icon: BarChart3 },
     ],
   },
   {

@@ -1214,6 +1214,8 @@ require_once ROOT_PATH . '/models/SalesTask.php';
 require_once ROOT_PATH . '/models/SalesLockout.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesDashboardController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesLeadController.php';
+require_once ROOT_PATH . '/models/ReportRegistry.php';
+require_once ROOT_PATH . '/controllers/admin/AdminOpsReportController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesCallController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesFollowupController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesMeetingController.php';
@@ -1404,6 +1406,10 @@ $router->get('/admin/sales/calls/meta',                  [AdminSalesCallControll
 $router->get('/admin/sales/calls/leads',                 [AdminSalesCallController::class, 'byLead'],            'admin');
 $router->get('/admin/sales/calls',                       [AdminSalesCallController::class, 'index'],             'admin');
 $router->post('/admin/sales/calls',                      [AdminSalesCallController::class, 'store'],             'admin');
+
+// Reports — a fixed catalogue; the id selects a query, it never supplies one.
+$router->get('/admin/ops/reports',                       [AdminOpsReportController::class, 'index'],             'admin');
+$router->get('/admin/ops/reports/{id}',                  [AdminOpsReportController::class, 'show'],              'admin');
 
 // Follow-ups
 $router->get('/admin/sales/followups',                   [AdminSalesFollowupController::class, 'index'],         'admin');

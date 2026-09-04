@@ -33,6 +33,8 @@ const AMC     = lazy(() => import("./pages/AMC"));
 
 // Growth
 const Pitches     = lazy(() => import("./pages/Pitches"));
+const Reports     = lazy(() => import("./pages/Reports"));
+const ReportView  = lazy(() => import("./pages/ReportView"));
 const PitchDetail = lazy(() => import("./pages/PitchDetail"));
 
 // Team
@@ -115,6 +117,8 @@ function ProtectedRoutes() {
           <Route path="/amc"             element={<AMC />} />
           {/* Growth */}
           <Route path="/pitches"         element={<Pitches />} />
+          <Route path="/reports"         element={<Reports />} />
+          <Route path="/reports/:id"     element={<ReportView />} />
           <Route path="/pitches/:id"     element={<PitchDetail />} />
           {/*
             Sales. SalesScope remounts the page when you switch to a colleague's

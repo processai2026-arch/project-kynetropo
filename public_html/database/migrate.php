@@ -255,6 +255,7 @@ $featureSchemas = [
     // After create_sales_module.sql above, which creates the tables they alter.
     'add_followup_outcome.sql',
     'add_client_to_calls_followups.sql',
+    'add_lead_quoted_amount.sql',
 ];
 foreach ($featureSchemas as $file) {
     $path = __DIR__ . '/' . $file;

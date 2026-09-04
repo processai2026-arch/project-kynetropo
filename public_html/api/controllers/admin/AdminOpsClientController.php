@@ -25,12 +25,27 @@ class AdminOpsClientController
         $health   = $request->query('health');
         $search   = $request->query('search');
 
+        // One row per client, always.
+        //
+        // Joining ops_projects on client_id alone fanned a client out into one
+        // row per project, so a client with two projects appeared in the list
+        // twice -- and twice in every picker built on this endpoint. The card
+        // only ever shows one project, so the join picks one: the newest. How
+        // many there are travels alongside as project_count, so a second
+        // project is something the UI can say rather than something it
+        // accidentally duplicates the client to show.
         $sql    = "SELECT c.*, p.name AS project_name, p.id AS project_id,
                           p.balance AS balance_due, p.health AS project_health,
                           p.quoted AS project_quoted, p.received AS project_received,
-                          p.payment_status AS project_payment_status
+                          p.payment_status AS project_payment_status,
+                          (SELECT COUNT(*) FROM ops_projects pc
+                            WHERE pc.client_id = c.id AND pc.tenant_id = c.tenant_id) AS project_count
                    FROM ops_clients c
-                   LEFT JOIN ops_projects p ON p.client_id = c.id AND p.tenant_id = c.tenant_id
+                   LEFT JOIN ops_projects p
+                          ON p.id = (SELECT p2.id FROM ops_projects p2
+                                      WHERE p2.client_id = c.id AND p2.tenant_id = c.tenant_id
+                                      ORDER BY p2.created_at DESC, p2.id DESC
+                                      LIMIT 1)
                    WHERE c.tenant_id = ?";
         $params = [$tenantId];
 
@@ -516,6 +531,9 @@ class AdminOpsClientController
             'switch_reason'    => $row['switch_reason'] ?? '',
             'project_name'    => $row['project_name'] ?? null,
             'project_id'      => isset($row['project_id']) ? (int)$row['project_id'] : null,
+            // How many projects this client has in total, so a card showing one
+            // of them can say so instead of the list showing the client twice.
+            'project_count'   => isset($row['project_count']) ? (int)$row['project_count'] : null,
             'balance_due'     => isset($row['balance_due']) ? (float)$row['balance_due'] : null,
             // The money, from the project. Null (not 0) when a client has no
             // project yet — "nothing quoted" and "quoted nothing" are different
