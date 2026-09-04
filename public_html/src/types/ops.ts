@@ -17,8 +17,17 @@ export interface OpsClient {
   project_name: string | null;
   project_id: number | null;
   balance_due: number | null;
+  /**
+   * The money, from the client's project. Null — not 0 — when there is no
+   * project yet: "nothing quoted" and "quoted nothing" are different facts.
+   */
+  quoted: number | null;
+  received: number | null;
+  payment_status: "pending" | "partial" | "paid" | "overdue" | null;
   days_since_contact: number | null;
   next_followup: string | null;
+  /** The sales lead this client was converted from, if it came through sales. */
+  sales_lead_id: number | null;
   created_at: string;
 }
 

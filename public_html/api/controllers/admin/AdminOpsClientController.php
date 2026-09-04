@@ -26,7 +26,9 @@ class AdminOpsClientController
         $search   = $request->query('search');
 
         $sql    = "SELECT c.*, p.name AS project_name, p.id AS project_id,
-                          p.balance AS balance_due, p.health AS project_health
+                          p.balance AS balance_due, p.health AS project_health,
+                          p.quoted AS project_quoted, p.received AS project_received,
+                          p.payment_status AS project_payment_status
                    FROM ops_clients c
                    LEFT JOIN ops_projects p ON p.client_id = c.id AND p.tenant_id = c.tenant_id
                    WHERE c.tenant_id = ?";
@@ -44,8 +46,31 @@ class AdminOpsClientController
         $sql .= ' ORDER BY c.created_at DESC';
         $rows = Database::fetchAll($sql, $params);
 
+        // Which of these clients came from a sales lead, in one query rather
+        // than one per row — the loop below is already N+1 and does not need
+        // help. Wrapped because the sales module is a separate schema file: a
+        // database without it should still be able to list clients.
+        $leadByClient = [];
+        $clientIds = array_map(static fn($r) => (int)$r['id'], $rows);
+        if ($clientIds) {
+            try {
+                $in = implode(',', array_fill(0, count($clientIds), '?'));
+                foreach (Database::fetchAll(
+                    "SELECT converted_client_id, MIN(id) AS lead_id
+                       FROM sales_leads
+                      WHERE tenant_id = ? AND converted_client_id IN ($in)
+                      GROUP BY converted_client_id",
+                    [$tenantId, ...$clientIds]
+                ) as $r) {
+                    $leadByClient[(int)$r['converted_client_id']] = (int)$r['lead_id'];
+                }
+            } catch (\Throwable $e) {
+                error_log('[OpsClient] sales lead lookup unavailable: ' . $e->getMessage());
+            }
+        }
+
         // Compute days since last contact from activity log
-        $result = array_map(function($row) use ($tenantId) {
+        $result = array_map(function($row) use ($tenantId, $leadByClient) {
             $last = Database::fetch(
                 "SELECT created_at FROM ops_activity_log
                  WHERE tenant_id = ? AND entity_type = 'client' AND entity_id = ?
@@ -66,6 +91,7 @@ class AdminOpsClientController
             return array_merge($this->format($row), [
                 'days_since_contact' => $daysSince,
                 'next_followup'      => $nextFollowup ? $nextFollowup['next_followup'] : null,
+                'sales_lead_id'      => $leadByClient[(int)$row['id']] ?? null,
             ]);
         }, $rows);
 
@@ -491,6 +517,12 @@ class AdminOpsClientController
             'project_name'    => $row['project_name'] ?? null,
             'project_id'      => isset($row['project_id']) ? (int)$row['project_id'] : null,
             'balance_due'     => isset($row['balance_due']) ? (float)$row['balance_due'] : null,
+            // The money, from the project. Null (not 0) when a client has no
+            // project yet — "nothing quoted" and "quoted nothing" are different
+            // facts, and a screen showing ₹0 for the first is simply wrong.
+            'quoted'          => isset($row['project_quoted'])   ? (float)$row['project_quoted']   : null,
+            'received'        => isset($row['project_received']) ? (float)$row['project_received'] : null,
+            'payment_status'  => $row['project_payment_status'] ?? null,
             'days_since_contact' => $row['days_since_contact'] ?? null,
             'next_followup'   => $row['next_followup'] ?? null,
             'created_at'      => $row['created_at'],
