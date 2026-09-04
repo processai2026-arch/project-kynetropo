@@ -23,8 +23,27 @@ interface ErrorBoundaryState {
  * a page that throws on render just throws again, which looks like the button
  * is broken.
  */
+/** Marks that this session has already tried a reload, so it happens only once. */
+const RETRY_KEY = "erp_chunk_reload";
+
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false, error: null, componentStack: null };
+  private clearRetryTimer?: ReturnType<typeof setTimeout>;
+
+  componentDidMount() {
+    // The reload guard exists to stop a loop, not to spend the whole session.
+    // If the app is still standing a few seconds after it mounted, the last
+    // reload worked, so a chunk that fails an hour from now gets its own retry.
+    // A page that throws again does so well inside this window, with the flag
+    // still set, and stops.
+    this.clearRetryTimer = setTimeout(() => {
+      try { sessionStorage.removeItem(RETRY_KEY); } catch { /* private mode */ }
+    }, 8000);
+  }
+
+  componentWillUnmount() {
+    if (this.clearRetryTimer) clearTimeout(this.clearRetryTimer);
+  }
 
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return { hasError: true, error };
@@ -33,6 +52,32 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("ErrorBoundary caught an error:", error, errorInfo);
     this.setState({ componentStack: errorInfo.componentStack ?? null });
+
+    // A route chunk that failed to download is not a broken page -- it is a
+    // request that did not arrive, usually on a weak connection or right after
+    // a deploy replaced the file the open tab was told to ask for. Reloading
+    // fetches the current index.html and the chunks it names, which fixes both.
+    // Once per session only: if the reload lands on the same error the page
+    // stays put and shows it, rather than looping.
+    if (ErrorBoundary.isChunkLoadError(error) && !ErrorBoundary.alreadyRetried()) {
+      try { sessionStorage.setItem(RETRY_KEY, "1"); } catch { /* private mode */ }
+      window.location.reload();
+    }
+  }
+
+  /** The several shapes browsers give a failed dynamic import. */
+  private static isChunkLoadError(error: Error): boolean {
+    const text = `${error?.name ?? ""} ${error?.message ?? ""}`;
+    return (
+      /Failed to fetch dynamically imported module/i.test(text) ||
+      /error loading dynamically imported module/i.test(text) ||
+      /Importing a module script failed/i.test(text) ||
+      /ChunkLoadError/i.test(text)
+    );
+  }
+
+  private static alreadyRetried(): boolean {
+    try { return sessionStorage.getItem(RETRY_KEY) === "1"; } catch { return false; }
   }
 
   /** Everything someone would otherwise have to read off the screen and retype. */

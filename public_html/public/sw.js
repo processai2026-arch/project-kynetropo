@@ -20,6 +20,12 @@
 const VERSION = 'kyn-v1';
 const SHELL_CACHE = `${VERSION}-shell`;
 const ASSET_CACHE = `${VERSION}-assets`;
+
+// Backoff between retries of a static asset. Three attempts in just over a
+// second and a half: long enough to ride out a mobile hiccup, short enough
+// that a genuinely offline user is not left staring at a blank route.
+const RETRY_DELAYS = [250, 600, 1200];
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const SHELL_URL = '/index.html';
 
 // Precache only the shell and the icons — everything else arrives on demand.
@@ -98,16 +104,38 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
-      return fetch(request)
-        .then((response) => {
-          // Never cache errors or opaque cross-origin responses.
-          if (response && response.ok && response.type === 'basic') {
-            const copy = response.clone();
-            caches.open(ASSET_CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
-          }
-          return response;
-        })
-        .catch(() => cached || Response.error());
+
+      // Retry before giving up.
+      //
+      // A lazy route chunk that fails to load does not degrade -- the dynamic
+      // import throws "Failed to fetch dynamically imported module" and the
+      // whole page falls to the error boundary. On a weak mobile connection a
+      // single dropped request was enough to do that, and the user was left on
+      // an error screen for a file that was sitting on the server the whole
+      // time. Assets are content-hashed and immutable, so asking again is
+      // always safe and always for the same bytes.
+      const attempt = (tries) =>
+        fetch(request)
+          .then((response) => {
+            if (response && response.ok && response.type === 'basic') {
+              const copy = response.clone();
+              caches.open(ASSET_CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
+              return response;
+            }
+            // A 5xx from a flaky edge is worth retrying; a 404 is not.
+            if (response && response.status >= 500 && tries > 0) {
+              return wait(RETRY_DELAYS[RETRY_DELAYS.length - tries]).then(() => attempt(tries - 1));
+            }
+            return response;
+          })
+          .catch((err) => {
+            if (tries > 0) {
+              return wait(RETRY_DELAYS[RETRY_DELAYS.length - tries]).then(() => attempt(tries - 1));
+            }
+            throw err;
+          });
+
+      return attempt(RETRY_DELAYS.length).catch(() => Response.error());
     }),
   );
 });
