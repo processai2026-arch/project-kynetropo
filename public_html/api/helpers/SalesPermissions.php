@@ -84,6 +84,12 @@ class SalesPermissions
             'sales.leads.view_all',
             'sales.leads.create',
             'sales.leads.edit',
+            // Closing is the job, so the whole team can move a lead into
+            // onboarding and convert it. Deleting a lead is still withheld
+            // (sales.leads.assign): converting is a step forward that Undo
+            // Convert reverses, while deleting takes a lead's history with it
+            // and nothing brings that back.
+            'sales.leads.convert',
             'sales.calls.view',
             'sales.calls.create',
             'sales.followups.view',
@@ -110,7 +116,6 @@ class SalesPermissions
     /** Permissions only an administrator of the sales module should hold. */
     public const ADMIN_ONLY = [
         'sales.leads.assign',
-        'sales.leads.convert',
         'sales.challenges.create',
         'sales.challenges.manage',
         'sales.tasks.manage',
