@@ -517,7 +517,7 @@ export function SalesQuickAdd({ onCreated }: { onCreated?: () => void }) {
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={close}>Cancel</Button>
-              <Button type="submit" disabled={saving || !lead}>{saving ? "Saving…" : "Save Call"}</Button>
+              <Button type="submit" disabled={saving || !subject}>{saving ? "Saving…" : "Save Call"}</Button>
             </div>
           </form>
         </DialogContent>
@@ -570,7 +570,7 @@ export function SalesQuickAdd({ onCreated }: { onCreated?: () => void }) {
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={close}>Cancel</Button>
-              <Button type="submit" disabled={saving || !lead}>{saving ? "Saving…" : "Add"}</Button>
+              <Button type="submit" disabled={saving || !subject}>{saving ? "Saving…" : "Add"}</Button>
             </div>
           </form>
         </DialogContent>
