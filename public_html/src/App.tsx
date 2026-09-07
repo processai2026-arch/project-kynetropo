@@ -55,6 +55,7 @@ const SalesActivity        = lazy(() => import("./pages/sales/SalesActivity"));
 const SalesAccessControl   = lazy(() => import("./pages/sales/SalesAccessControl"));
 const SalesTasks           = lazy(() => import("./pages/sales/SalesTasks"));
 const SalesMore            = lazy(() => import("./pages/sales/SalesMore"));
+const SalesAssistant       = lazy(() => import("./pages/sales/SalesAssistant"));
 const SalesMentions        = lazy(() => import("./pages/sales/SalesMentions"));
 
 // System
@@ -136,6 +137,7 @@ function ProtectedRoutes() {
           <Route path="/sales/challenges/:id"  element={<SalesScope><SalesChallengeDetail /></SalesScope>} />
           <Route path="/sales/calls"           element={<SalesScope><SalesCallHistory /></SalesScope>} />
           <Route path="/sales/activity"        element={<SalesScope><SalesActivity /></SalesScope>} />
+          <Route path="/sales/assistant"       element={<SalesScope><SalesAssistant /></SalesScope>} />
           <Route path="/sales/access-control"  element={<SalesAccessControl />} />
           <Route path="/sales/more"            element={<SalesScope><SalesMore /></SalesScope>} />
           {/* Deliberately outside SalesScope: your mentions are yours, and

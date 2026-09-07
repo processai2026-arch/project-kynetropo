@@ -252,6 +252,7 @@ $featureSchemas = [
     'create_sales_comments.sql',
     'create_sales_lockouts.sql',
     'create_sales_tasks.sql',
+    'create_sales_ai.sql',
     // After create_sales_module.sql above, which creates the tables they alter.
     'add_followup_outcome.sql',
     'add_client_to_calls_followups.sql',

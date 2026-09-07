@@ -1202,6 +1202,7 @@ require_once ROOT_PATH . '/controllers/admin/AdminOpsAiChatController.php';
 
 // ─── Kynetropo Sales Module ───────────────────────────────────────────────────
 require_once ROOT_PATH . '/helpers/SalesPermissions.php';
+require_once ROOT_PATH . '/controllers/admin/SalesAiChatController.php';
 require_once ROOT_PATH . '/helpers/SalesViewAs.php';
 require_once ROOT_PATH . '/models/SalesActivity.php';
 require_once ROOT_PATH . '/models/SalesLead.php';
@@ -1382,6 +1383,17 @@ $router->get('/admin/sales/lockouts',                    [AdminSalesAccessContro
 $router->post('/admin/sales/users/{id}/restore-access',  [AdminSalesAccessController::class, 'restoreAccess'],   'admin');
 
 $router->get('/admin/sales/assignable-users',            [AdminSalesAccessController::class, 'assignableUsers'], 'admin');
+
+// ─── Sales AI assistant ───────────────────────────────────────────────────────
+// A write-capable, conversational assistant. It answers questions from live
+// data and proposes actions (add lead / follow-up / meeting / call / task /
+// challenge) that only run after the user confirms — replayed through the
+// real REST API with the caller's own JWT, so every permission check applies.
+$router->post('/admin/sales-ai/message',                 [SalesAiChatController::class, 'message'],              'admin');
+$router->post('/admin/sales-ai/execute',                 [SalesAiChatController::class, 'execute'],              'admin');
+$router->get('/admin/sales-ai/conversations',            [SalesAiChatController::class, 'conversations'],        'admin');
+$router->get('/admin/sales-ai/conversations/{id}',       [SalesAiChatController::class, 'conversation'],         'admin');
+$router->delete('/admin/sales-ai/conversations/{id}',    [SalesAiChatController::class, 'deleteConversation'],   'admin');
 
 // Dashboard + activity
 $router->get('/admin/sales/dashboard',                   [AdminSalesDashboardController::class, 'index'],        'admin');
