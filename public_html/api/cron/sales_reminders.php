@@ -17,6 +17,7 @@ cron_log('--- start ---', $LOG_FILE);
 
 try {
     require_once ROOT_PATH . '/config/app.php';
+    require_once ROOT_PATH . '/config/tenancy.php';
     require_once ROOT_PATH . '/config/database.php';
     require_once ROOT_PATH . '/core/AppException.php';
     require_once ROOT_PATH . '/core/Database.php';

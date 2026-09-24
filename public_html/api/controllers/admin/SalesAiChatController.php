@@ -209,7 +209,7 @@ class SalesAiChatController
         // whitelisted query and hands the rows back. Bounded by MAX_READ_HOPS.
         $parsed = null;
         for ($hop = 0; $hop <= self::MAX_READ_HOPS; $hop++) {
-            $result = $this->callGroq($messages);
+            $result = $this->callModel($messages);
             if (!$result['ok']) {
                 Response::error($result['error'] ?? 'The assistant is unavailable right now.', 503);
             }
@@ -585,6 +585,19 @@ class SalesAiChatController
             }
         }
 
+        // Team members for task assignment
+        $teamLines = '(none)';
+        $users = Database::fetchAll(
+            "SELECT id, name, email FROM users WHERE tenant_id = ? AND is_active = 1 AND status = 'active' ORDER BY name LIMIT 20",
+            [$tenantId]
+        );
+        if ($users) {
+            $teamLines = '';
+            foreach ($users as $u) {
+                $teamLines .= "  {$u['id']}|" . $this->aiSafe((string)$u['name']) . '|' . $this->aiSafe((string)$u['email'], 40) . "\n";
+            }
+        }
+
         $datasetLines = [];
         foreach (self::READ_DATASETS as $name => $spec) {
             $f = array_keys($spec['filters'] ?? []);
@@ -619,6 +632,9 @@ FORMATS: date=YYYY-MM-DD | time=HH:MM | datetime="YYYY-MM-DD HH:MM:SS".
 
 LIVE LEADS (id|name|company|phone|status|temperature — use these REAL ids, never a placeholder):
 {$leadLines}
+
+TEAM MEMBERS (id|name|email — use for assigned_to in tasks):
+{$teamLines}
 
 READS — to answer any question about data you don't already have:
 {$datasetText}
@@ -1026,45 +1042,97 @@ SYSPROMPT;
         return json_decode($raw, true) ?? [];
     }
 
-    // ─── model provider (swappable; never named to the user) ─────────────────
-    private function callGroq(array $messages): array
+    // ─── model provider (multi-provider with fallback) ─────────────────────────
+    private const MODEL_TIMEOUT_S = 25;
+    private const MODEL_ATTEMPTS = 2;
+    private const RETRY_BACKOFF_US = 300000;
+    private const MODEL_BUDGET_S = 55;
+
+    private function callModel(array $messages): array
     {
-        $apiKey = $this->env('groq_api_key') ?: $this->env('GROQ_API_KEY');
-        if (!$apiKey) return ['ok' => false, 'error' => 'The assistant is not configured yet.'];
+        $deadline = microtime(true) + self::MODEL_BUDGET_S;
+        $provider = strtolower($this->env('AI_PROVIDER') ?: 'gemini');
+        $order = $provider === 'groq' ? ['groq', 'gemini'] : ['gemini', 'groq'];
+        $first = null;
+        foreach ($order as $p) {
+            if (microtime(true) >= $deadline) break;
+            $r = $p === 'groq' ? $this->callGroqProvider($messages, $deadline) : $this->callGemini($messages, $deadline);
+            if ($r['ok']) return $r;
+            $first ??= $r;
+        }
+        return $first ?? ['ok' => false, 'error' => 'The assistant is busy — try again in a moment.'];
+    }
 
-        $payload = json_encode([
-            'model'           => $this->env('groq_model') ?: 'llama-3.3-70b-versatile',
-            'messages'        => $messages,
-            'temperature'     => 0.1,
-            'max_tokens'      => 1200,
-            'response_format' => ['type' => 'json_object'],
-        ]);
-        $context = stream_context_create(['http' => [
-            'method'        => 'POST',
-            'header'        => implode("\r\n", [
-                'Content-Type: application/json',
-                'Authorization: Bearer ' . $apiKey,
-                'Content-Length: ' . strlen($payload),
-            ]),
-            'content'       => $payload,
-            'timeout'       => 25,
-            'ignore_errors' => true,
-        ]]);
+    private function remaining(float $deadline): int { return max(1, (int)floor($deadline - microtime(true))); }
 
-        $response = @file_get_contents('https://api.groq.com/openai/v1/chat/completions', false, $context);
-        if ($response === false) return ['ok' => false, 'error' => 'The assistant could not be reached. Please try again.'];
+    private function callGemini(array $messages, float $deadline): array
+    {
+        $apiKey = $this->env('GEMINI_API_KEY');
+        if (!$apiKey) return ['ok' => false, 'error' => 'Gemini not configured.'];
+        $primary = $this->env('GEMINI_MODEL') ?: 'gemini-2.0-flash-lite';
+        $fallback = $this->env('GEMINI_FALLBACK_MODEL') ?: 'gemini-1.5-flash';
+        $last = ['ok' => false, 'error' => 'The assistant could not answer that.'];
+        foreach (array_values(array_unique([$primary, $fallback])) as $mi => $model) {
+            for ($attempt = 1; $attempt <= self::MODEL_ATTEMPTS; $attempt++) {
+                if (microtime(true) >= $deadline) return $last;
+                $r = $this->geminiOnce($messages, $model, $apiKey, $deadline);
+                if ($r['ok']) return $r;
+                $last = $r;
+                if (empty($r['retryable'])) break;
+                if ($attempt < self::MODEL_ATTEMPTS) usleep(self::RETRY_BACKOFF_US * $attempt);
+            }
+        }
+        return $last;
+    }
 
+    private function geminiOnce(array $messages, string $model, string $apiKey, float $deadline): array
+    {
+        $system = ''; $contents = [];
+        foreach ($messages as $m) {
+            if ($m['role'] === 'system') { $system = $m['content']; continue; }
+            $contents[] = ['role' => $m['role'] === 'assistant' ? 'model' : 'user', 'parts' => [['text' => $m['content']]]];
+        }
+        $body = ['contents' => $contents, 'generationConfig' => ['temperature' => 0.1, 'maxOutputTokens' => 4096, 'responseMimeType' => 'application/json']];
+        if ($system !== '') $body['systemInstruction'] = ['parts' => [['text' => $system]]];
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent?key=' . urlencode($apiKey);
+        $response = $this->httpPostJson($url, $body, [], min(self::MODEL_TIMEOUT_S, $this->remaining($deadline)));
+        if ($response === null) return ['ok' => false, 'retryable' => true, 'error' => 'The assistant could not be reached.'];
+        $json = json_decode($response, true);
+        $text = null;
+        foreach ($json['candidates'][0]['content']['parts'] ?? [] as $part) {
+            if (!empty($part['thought']) || !isset($part['text'])) continue;
+            $text = ($text ?? '') . $part['text'];
+        }
+        if ($text === null) {
+            $detail = (string)($json['error']['message'] ?? ''); $code = (int)($json['error']['code'] ?? 0);
+            error_log('[SalesAi] Gemini error (model=' . $model . ', code=' . $code . '): ' . mb_substr($detail, 0, 400));
+            if ($code === 503 || $code === 429 || stripos($detail, 'quota') !== false) return ['ok' => false, 'retryable' => true, 'error' => 'The assistant is busy.'];
+            return ['ok' => false, 'retryable' => false, 'error' => 'The assistant could not answer.'];
+        }
+        return $this->parseModelJson($text);
+    }
+
+    private function callGroqProvider(array $messages, float $deadline): array
+    {
+        $apiKey = $this->env('GROQ_API_KEY') ?: $this->env('groq_api_key');
+        if (!$apiKey) return ['ok' => false, 'error' => 'Groq not configured.'];
+        $response = $this->httpPostJson('https://api.groq.com/openai/v1/chat/completions',
+            ['model' => $this->env('GROQ_MODEL') ?: 'llama-3.1-70b-versatile', 'messages' => $messages, 'temperature' => 0.1, 'max_tokens' => 1400, 'response_format' => ['type' => 'json_object']],
+            ['Authorization: Bearer ' . $apiKey], min(self::MODEL_TIMEOUT_S, $this->remaining($deadline)));
+        if ($response === null) return ['ok' => false, 'error' => 'Groq unreachable.'];
         $json = json_decode($response, true);
         $text = $json['choices'][0]['message']['content'] ?? null;
-        if ($text === null) {
-            $detail = (string)($json['error']['message'] ?? '');
-            error_log('[SalesAi] provider error: ' . mb_substr($detail, 0, 500));
-            if (preg_match('/try again in ([\d]+m[\d.]+s|[\d.]+s)/i', $detail, $m)) {
-                return ['ok' => false, 'error' => 'The assistant is busy — try again in ' . $m[1] . '.'];
-            }
-            return ['ok' => false, 'error' => 'The assistant could not answer that. Please try again.'];
-        }
+        if ($text === null) { error_log('[SalesAi] Groq error: ' . mb_substr($json['error']['message'] ?? '', 0, 300)); return ['ok' => false, 'error' => 'Groq failed.']; }
         return $this->parseModelJson((string)$text);
+    }
+
+    private function httpPostJson(string $url, array $body, array $extraHeaders, int $timeout = 15): ?string
+    {
+        $payload = json_encode($body);
+        $headers = array_merge(['Content-Type: application/json', 'Content-Length: ' . strlen($payload)], $extraHeaders);
+        $ctx = stream_context_create(['http' => ['method' => 'POST', 'header' => implode("\r\n", $headers), 'content' => $payload, 'timeout' => $timeout, 'ignore_errors' => true]]);
+        $raw = @file_get_contents($url, false, $ctx);
+        return $raw === false ? null : $raw;
     }
 
     /** Models sometimes fence their JSON or wrap it in prose. Dig it out. */

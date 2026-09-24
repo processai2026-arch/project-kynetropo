@@ -19,6 +19,7 @@ import {
   Phone,
   MoreHorizontal,
   BarChart3,
+  Sparkles,
 } from "lucide-react";
 
 export type MenuItem = { title: string; url: string; icon: typeof LayoutDashboard };
@@ -49,6 +50,7 @@ export const sections: MenuSection[] = [
       { title: "Tasks",           url: "/sales/tasks",          icon: ClipboardList },
       { title: "Challenges",      url: "/sales/challenges",     icon: Trophy },
       { title: "Team Activity",   url: "/sales/activity",       icon: History },
+      { title: "AI Assistant",    url: "/sales/assistant",      icon: Sparkles },
       { title: "Access Control",  url: "/sales/access-control", icon: ShieldCheck },
     ],
   },
@@ -103,11 +105,13 @@ export const sections: MenuSection[] = [
 const EXTRA_ROUTE_TITLES: Record<string, string> = {
   "/user-management": "User Management",
   "/sales/more": "More",
+  "/sales/assistant": "AI Assistant",
 };
 
 const EXTRA_ROUTE_ICONS: Record<string, MenuItem["icon"]> = {
   "/user-management": UserCog,
   "/sales/more": MoreHorizontal,
+  "/sales/assistant": Sparkles,
 };
 
 /** Strip one trailing slash, so "/clients/" and "/clients" answer the same. */
