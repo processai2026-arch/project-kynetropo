@@ -1,0 +1,449 @@
+/*
+ * The record-detail skin.
+ *
+ * ## What this is
+ *
+ * The Operator page was designed first and set the house style for reading one
+ * record: a deeper blue than the rest of the app, panels with a soft gradient
+ * heading, and fields written as label-beside-value rather than label-above.
+ * Every other detail page was built from the generic page kit instead, so the
+ * system had two different-looking ways to show one record depending on which
+ * module you had arrived from.
+ *
+ * This file is that Operator language, lifted out of `OperatorDetail.css` and
+ * re-scoped so any page can wear it. `OperatorDetail.css` is untouched and
+ * still owns the Operator page — this is a copy of its decisions, not a
+ * dependency on it, so the protected page can never be broken from here.
+ *
+ * ## How it is scoped
+ *
+ * Everything hangs off `.record-detail`, which only `RecordDetailPage` sets.
+ * Nothing outside a detail page can be reached by these rules, so list pages,
+ * forms and dashboards are unaffected — which is why the selectors are allowed
+ * to be as broad as they are.
+ *
+ * Structural hooks are `data-*` attributes on the shared components rather than
+ * their Tailwind classes. A class like `.p-4` is a coincidence of how the
+ * component is written today; `[data-panel-head]` is a promise about what the
+ * element IS, and it survives the next restyle of that component.
+ */
+
+.record-detail {
+  /*
+   * The dark blue. The app runs on a lighter sky (200 70% 52%); a record page
+   * goes deeper and more saturated, which is what separates "reading one thing"
+   * from "browsing a list of them".
+   *
+   * Set as a token rather than as colours, so every `bg-primary`,
+   * `text-primary` and `border-primary` inside a detail page follows it without
+   * a single one of them being rewritten.
+   */
+  --primary: 213 96% 49%;
+  --ring: 213 96% 49%;
+
+  width: 100%;
+  min-width: 0;
+  color: hsl(var(--foreground));
+}
+
+/* An icon in a flex row must never be the thing that gets squashed. */
+.record-detail svg { flex-shrink: 0; }
+
+/* ── The profile block at the top ─────────────────────────────────────────── */
+
+/*
+ * The header is a field, not a card.
+ *
+ * Operators and Customers open with the identity sitting straight on the page
+ * under a soft wash of the brand blue, and the wash reaching past where a card
+ * edge would be is the whole effect — box it and it reads as a panel with a
+ * gradient in it. So inside a detail page the header drops its card chrome and
+ * becomes the shell those two pages already use.
+ *
+ * `isolation: isolate` keeps the negative z-indexes below in their own stacking
+ * context; without it they slide behind the page background and vanish.
+ */
+.record-detail [data-profile] {
+  position: relative;
+  isolation: isolate;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding-bottom: 1.4rem;
+}
+
+.record-detail [data-profile]::before {
+  content: "";
+  position: absolute;
+  z-index: -2;
+  inset: -1.5rem -1.5rem 0;
+  background: radial-gradient(ellipse at 78% 0%, hsl(var(--primary) / 0.07), transparent 65%);
+  pointer-events: none;
+}
+
+.record-detail [data-profile-waves] {
+  position: absolute;
+  z-index: -1;
+  top: -1.8rem;
+  right: 6%;
+  width: 52%;
+  height: 11.875rem;
+  stroke: hsl(var(--primary) / 0.08);
+  stroke-width: 0.7;
+  pointer-events: none;
+}
+
+/* No card means no internal rule to divide it from. */
+.record-detail [data-profile-toolbar] {
+  border-bottom: 0;
+  padding-inline: 0;
+  padding-top: 0;
+  margin-bottom: 0.4rem;
+}
+
+/* The identity sat inside card padding; on an open field it starts at the margin. */
+.record-detail [data-profile-body] {
+  padding-inline: 0;
+  padding-top: 0;
+}
+
+/*
+ * An aside is still an object even when the header around it is not.
+ *
+ * With no card left to bleed into, `asideBleed`'s flat top corners would leave
+ * a map hanging off nothing. It keeps its own frame instead — the prop now
+ * means "give this the wide half", which is the part still worth having.
+ */
+.record-detail [data-profile-aside] {
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+/*
+ * A record's mark is a disc, the way Operator and Customer draw it. On a plain
+ * field a rounded square reads as one more panel; a circle reads as an identity.
+ */
+.record-detail [data-profile-mark] {
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: 50%;
+}
+.record-detail [data-profile-mark] svg { width: 1.9rem; height: 1.9rem; }
+
+/* The waves are decoration and must never widen the page. */
+.record-detail { overflow-x: clip; }
+
+@media (max-width: 640px) {
+  .record-detail [data-profile-waves] { right: 0; width: 70%; }
+  .record-detail [data-profile]::before { inset-inline: -1rem; }
+}
+
+/*
+ * The Operator avatar, generalised. A person gets initials on this gradient and
+ * a hub gets a building, but the mark is the same object in both cases — it is
+ * what makes a record page recognisable from across the room.
+ */
+.record-detail [data-profile-mark] {
+  background: linear-gradient(145deg, hsl(207 100% 75%), hsl(var(--primary)) 80%);
+  color: #fff;
+  box-shadow: inset 0 1px 4px hsl(0 0% 100% / 0.45);
+}
+
+.record-detail [data-profile-title] {
+  letter-spacing: -0.7px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.record-detail [data-profile-crumb] button:hover { color: hsl(var(--primary)); }
+
+/*
+ * The contact strip: a fact reads as an icon and two lines, not as a bordered
+ * box. Dropping the box is what lets four facts sit in a row without the header
+ * turning into a second card grid.
+ */
+.record-detail [data-profile-fact] {
+  gap: 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 0;
+}
+.record-detail [data-profile-fact]:hover { background: transparent; }
+.record-detail [data-profile-fact] > span:first-child {
+  width: 37px;
+  height: 37px;
+  flex: 0 0 37px;
+  border-radius: 10px;
+  border: 1px solid hsl(var(--primary) / 0.06);
+  background: hsl(var(--primary) / 0.055);
+  color: hsl(var(--primary));
+}
+.record-detail [data-profile-fact] > span:first-child svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.6;
+}
+.record-detail [data-profile-fact] dd { font-size: 12px; font-weight: 500; }
+.record-detail [data-profile-fact] dt { font-size: 11px; }
+.record-detail a[data-profile-fact]:hover dd { color: hsl(var(--primary)); }
+
+/* ── Panels ───────────────────────────────────────────────────────────────── */
+
+.record-detail [data-panel] {
+  border-radius: 9px;
+  border-color: hsl(var(--border) / 0.8);
+  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.03);
+  overflow: hidden;
+}
+
+/*
+ * The heading is the one piece of chrome that tells you a panel has started.
+ * A flat rule does it quietly; the gradient does it without a second border.
+ */
+.record-detail [data-panel-head] {
+  padding: 8px 14px;
+  min-height: 43px;
+  background: linear-gradient(110deg, hsl(var(--muted) / 0.5), hsl(var(--muted) / 0.12));
+  border-bottom-color: hsl(var(--border) / 0.4);
+}
+.record-detail [data-panel-head] h2 { font-size: 13px; font-weight: 600; }
+.record-detail [data-panel-head] h2 > svg {
+  width: 18px;
+  height: 18px;
+  color: hsl(var(--primary));
+}
+.record-detail [data-panel-head] p { font-size: 10px; line-height: 1.5; }
+
+/* A panel's own button is a footnote to its heading, never a page action. */
+.record-detail [data-panel-head] button {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 10px;
+  font-weight: 400;
+  gap: 6px;
+  border-radius: 5px;
+  box-shadow: none;
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--card));
+  border-color: hsl(var(--border) / 0.7);
+}
+.record-detail [data-panel-head] button svg { width: 12px; height: 12px; }
+
+.record-detail [data-panel-body] { padding: 12px 16px 18px; }
+/* Tables and lists bring their own padding; forcing ours would double it. */
+.record-detail [data-panel-body][data-panel-flush] { padding: 0; }
+
+/* ── Fields ───────────────────────────────────────────────────────────────── */
+
+/*
+ * Label beside value, not above it.
+ *
+ * Stacked pairs make every field two lines tall, so an eight-field card runs
+ * past the fold and the eye has to re-find the left margin on every row. Beside
+ * puts all the labels in one column and all the values in another, which is how
+ * a record actually gets read: down the labels until the wanted one, then once
+ * across.
+ */
+.record-detail [data-field-grid] { gap: 9px 22px; }
+/* The label column is CAPPED, not a fraction of whatever width is going.
+
+   It was `minmax(80px, 0.8fr)`, which is proportional: the wider the card, the
+   wider the label track, and the further the value drifts from the word it
+   belongs to. On a card that fills the page — roughly 1700px — each field cell
+   is ~850px, so the label track took ~340px and "Employee" sat with 270px of
+   nothing between it and the name. The pair stopped reading as a pair.
+
+   150px comfortably fits the longest label in the app at this size
+   ("Measured against", "Account holder"), and minmax lets it shrink toward
+   80px in a narrow card, so nothing is clipped where space is genuinely tight.
+   The value column takes what is left, which keeps the columns of a two- or
+   three-up grid aligned with each other. */
+.record-detail [data-field] {
+  display: grid;
+  grid-template-columns: minmax(80px, 150px) minmax(0, 1fr);
+  column-gap: 12px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.record-detail [data-field] dt {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.record-detail [data-field] dd {
+  margin-top: 0;
+  font-size: 12px;
+  color: hsl(var(--card-foreground));
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .record-detail [data-field] { grid-template-columns: minmax(72px, 0.85fr) minmax(0, 1.15fr); }
+  .record-detail [data-panel-body] { padding: 12px 14px 16px; }
+}
+
+/* ── How many columns a field grid actually gets ──────────────────────────────
+ *
+ * `DetailFieldGrid` asks for its columns with Tailwind's `sm:` and `xl:`, and
+ * those are VIEWPORT breakpoints. That is the bug the sidebar cards were
+ * showing: on a wide screen the page is past `xl`, so a card sitting in the
+ * narrow right-hand column of a three-column layout still split itself into two
+ * or three columns. Two label-and-value pairs inside 480px leaves each value
+ * about forty pixels, and `overflow-wrap: anywhere` then does as it is told —
+ * which is how "8 Sep 2026, 7:43 pm" came out as a vertical strip one character
+ * wide.
+ *
+ * The question was never how wide the WINDOW is. It is how wide this card is.
+ * So the panel body becomes a size container and the grid answers to that,
+ * which fixes every card at once — the ones reported and the ones that would
+ * have gone the same way next time a page put a field grid in a sidebar.
+ *
+ * These override the Tailwind classes on specificity (two compound selectors
+ * against one class), so the call sites keep working untouched and a page that
+ * asks for three columns still gets three wherever there is room for three.
+ */
+.record-detail [data-panel-body] { container-type: inline-size; }
+
+/* Under 400px there is not room for a label track and a value side by side at
+   all, let alone two of them. One pair per row, and the label goes above the
+   value — the one place stacking beats reading across. */
+@container (max-width: 400px) {
+  .record-detail [data-field-grid] { grid-template-columns: minmax(0, 1fr); }
+  .record-detail [data-field] { grid-template-columns: minmax(0, 1fr); row-gap: 1px; }
+}
+
+/* The usual sidebar card. One pair per row, still label-beside-value. */
+@container (min-width: 400.01px) and (max-width: 620px) {
+  .record-detail [data-field-grid] { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Wide enough for two, not for three. */
+@container (min-width: 620.01px) and (max-width: 980px) {
+  .record-detail [data-field-grid] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ── Focus ────────────────────────────────────────────────────────────────── */
+
+.record-detail :is(a, button, summary):focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .record-detail *,
+  .record-detail *::before {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* ── Raymond additions: the rest of the Operator page ─────────────────────────
+ *
+ * The profile block above came across from mpTV's shared skin. The Operator
+ * page itself goes further — a 104px avatar, a larger title, flat tinted
+ * figures, an icon tab strip and a main/side workspace — and those live in
+ * `OperatorDetail.css`, which only that page loads. These are the same numbers,
+ * re-scoped to the data hooks our shared components set.
+ */
+
+.record-detail [data-profile-mark][data-mark-size="lg"] {
+  width: 6.5rem;
+  height: 6.5rem;
+  font-size: 2.1rem;
+  font-weight: 600;
+}
+.record-detail [data-profile-mark] { font-size: 1.35rem; font-weight: 600; }
+.record-detail [data-profile-mark] :is(img, [data-photo]) { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.record-detail [data-profile-title] { font-size: clamp(21px, 1.9vw, 29px); font-weight: 700; }
+.record-detail [data-profile-subtitle] svg { width: 15px; height: 15px; color: hsl(var(--primary)); }
+.record-detail [data-profile-state] > div { font-size: 10px; line-height: 18px; padding: 0 8px; }
+.record-detail [data-profile-actions] button { height: 34px; font-size: 12px; gap: 7px; border-radius: 6px; box-shadow: none; }
+.record-detail [data-profile-actions] button svg { width: 15px; height: 15px; }
+.record-detail [data-profile-link] { box-shadow: 0 2px 5px hsl(var(--foreground) / 0.02); }
+
+/* Four figures, four subjects: sky, violet, teal, amber, flat and borderless. */
+.record-detail [data-detail-stats] { gap: 15px; }
+.record-detail [data-detail-stats] > div {
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 18px;
+  padding: 16px 18px;
+  border: 0;
+  border-radius: 10px;
+  box-shadow: none;
+}
+.record-detail [data-detail-stats] > div:nth-child(4n + 1) { background: hsl(var(--primary) / 0.055); }
+.record-detail [data-detail-stats] > div:nth-child(4n + 2) { background: hsl(267 94% 97%); }
+.record-detail [data-detail-stats] > div:nth-child(4n + 3) { background: hsl(161 67% 96%); }
+.record-detail [data-detail-stats] > div:nth-child(4n + 4) { background: hsl(40 100% 97%); }
+.record-detail [data-detail-stats] > div > div:first-child { display: flex; flex-direction: column; }
+.record-detail [data-detail-stats] > div > div:first-child p:first-child { order: 2; font-size: 12px; font-weight: 500; margin-top: 3px; color: hsl(var(--foreground) / 0.8); }
+.record-detail [data-detail-stats] > div > div:first-child p:nth-child(2) { order: 1; font-size: 23px; margin: 0; line-height: 1; }
+.record-detail [data-detail-stats] > div > div:first-child p:last-child { order: 3; font-size: 10px; margin-top: 4px; white-space: normal; }
+.record-detail [data-detail-stats] > div > div:last-child { padding: 16px; border-radius: 14px; }
+.record-detail [data-detail-stats] > div > div:last-child svg { width: 29px; height: 29px; stroke-width: 2; }
+.dark .record-detail [data-detail-stats] > div:nth-child(4n + 2) { background: hsl(267 60% 50% / 0.1); }
+.dark .record-detail [data-detail-stats] > div:nth-child(4n + 3) { background: hsl(161 67% 40% / 0.1); }
+.dark .record-detail [data-detail-stats] > div:nth-child(4n + 4) { background: hsl(40 90% 50% / 0.1); }
+
+/* The icon tab strip. */
+.record-detail [data-detail-tabs] { height: 46px; border-color: hsl(var(--border) / 0.8); border-radius: 8px; }
+.record-detail [data-detail-tabs] > button { gap: 9px; padding: 0 16px; font-size: 11.5px; }
+.record-detail [data-detail-tabs] > button svg { width: 15px; height: 15px; }
+
+/* Tabs and their content beside a narrower column of related panels. */
+.record-detail [data-detail-workspace] { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.record-detail [data-detail-workspace][data-has-side] { grid-template-columns: minmax(0, 2.1fr) minmax(300px, 1fr); }
+
+/* A panel's heading chip. */
+.record-detail [data-panel-icon] { width: 27px; height: 27px; border-radius: 8px; background: hsl(var(--primary) / 0.055); }
+.record-detail [data-panel-icon] svg { width: 17px; height: 17px; stroke-width: 2.4; }
+
+/* Tables inside a panel (OperatorDetail.css): one furniture everywhere. */
+.record-detail [data-panel] table { width: 100%; border-collapse: collapse; }
+.record-detail [data-panel] table th {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.5);
+  color: hsl(var(--muted-foreground));
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.record-detail [data-panel] table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid hsl(var(--border));
+  color: hsl(var(--card-foreground));
+  vertical-align: middle;
+}
+.record-detail [data-panel] table tbody tr:last-child td { border-bottom: 0; }
+.record-detail [data-panel] table tbody tr:hover { background: hsl(var(--primary) / 0.03); }
+.record-detail [data-panel] table td[colspan] { text-align: center; color: hsl(var(--muted-foreground)); }
+
+@media (max-width: 1200px) {
+  .record-detail [data-profile-mark][data-mark-size="lg"] { width: 5.5rem; height: 5.5rem; font-size: 1.8rem; }
+  .record-detail [data-detail-stats] > div { padding: 16px 12px; gap: 12px; }
+  .record-detail [data-detail-stats] > div > div:last-child { padding: 12px; }
+  .record-detail [data-detail-workspace][data-has-side] { grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); }
+}
+@media (max-width: 950px) {
+  .record-detail [data-detail-workspace][data-has-side] { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .record-detail [data-profile-mark][data-mark-size="lg"] { width: 4.1rem; height: 4.1rem; font-size: 1.5rem; }
+  .record-detail [data-detail-stats] { gap: 10px; }
+  .record-detail [data-detail-stats] > div { padding: 14px 10px; gap: 10px; align-items: flex-start; }
+  .record-detail [data-detail-stats] > div > div:last-child { padding: 10px; }
+  .record-detail [data-detail-stats] > div > div:last-child svg { width: 21px; height: 21px; }
+  .record-detail [data-detail-stats] > div > div:first-child p:nth-child(2) { font-size: 21px; }
+  .record-detail [data-detail-tabs] > button { min-height: 44px; }
+}
+
+/* The facts strip already closes the header; the page's own space-y-6 is the gap to the figures. */
+.record-detail [data-profile] { padding-bottom: 0.25rem; }
+.record-detail [data-profile-facts] { padding-top: 0.9rem; }

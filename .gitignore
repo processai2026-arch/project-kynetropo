@@ -1,5 +1,5 @@
-# Secrets — never commit. The root .env holds live DB credentials, the JWT
-# secret and API keys. public_html/.gitignore covers the one inside that folder.
+# Secrets — never commit. .env holds live DB credentials, the JWT secret and
+# API keys; api/config reads it from the project root.
 .env
 .env.*
 !.env.example
@@ -12,9 +12,24 @@ dist/
 dist-customer/
 dist-dealer/
 
+# Packaged deployables (node scripts/build-release.mjs)
+release/
+release-*/
+
 # Logs
 *.log
 error_log
+api/cron/cron.log
+
+# Runtime files written by the API — customer data and backups, not source.
+api/uploads/*
+!api/uploads/.gitkeep
+api/storage/
+api/backups/
+
+# Deployment artifacts — contain secrets, never commit
+deploy/
+api/run_migrate.php
 
 # OS / editor
 .DS_Store

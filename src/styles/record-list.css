@@ -1,0 +1,454 @@
+/*
+ * The record-list skin.
+ *
+ * ## What this is
+ *
+ * The Operators register was designed first and set the house style for a list
+ * of records: a bordered card holding a filter bar, a taller row than the
+ * default table gives, a tinted disc for anything with a name, and a fact with
+ * its qualifier set underneath it rather than in a column of its own. Every
+ * other list was still on the generic table kit, so the same job looked like
+ * two different products depending on which module you came from.
+ *
+ * This is that vocabulary, lifted out of `Operators.css` and re-scoped so any
+ * list can wear it. `Operators.css` is untouched and still owns that page — a
+ * copy of its decisions, not a dependency on it.
+ *
+ * ## How it is scoped
+ *
+ * Everything hangs off `.record-list`, which only `RecordListPage` sets, so a
+ * detail page, a form or a dashboard can never be reached by these rules.
+ *
+ * Most of it deliberately styles plain `table` / `th` / `td` rather than data
+ * hooks, because the lists it has to reach already render exactly that markup
+ * with Tailwind padding on it. `.record-list td` outranks `.py-3`, so those
+ * pages get the row size without a single one of them being rewritten. The
+ * data hooks are only for the parts that ARE new — the disc, the stacked cell.
+ */
+
+.record-list {
+  width: 100%;
+  min-width: 0;
+  padding-bottom: 2rem;
+}
+
+/* ── Page header ──────────────────────────────────────────────────────────── */
+
+.record-list h1 {
+  font-size: clamp(1.55rem, 2.2vw, 2rem);
+  font-weight: 760;
+  line-height: 1.1;
+}
+
+/* ── The register ─────────────────────────────────────────────────────────── */
+
+/*
+ * One card holds the filters, the rows and the pager, so a list reads as a
+ * single object. Separated, the filter bar floats above nothing and the
+ * pagination looks like it belongs to the page rather than to the table.
+ */
+.record-list [data-list-card] {
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.78rem;
+  background: hsl(var(--card));
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.025);
+}
+
+/*
+ * `data-list-filters` deliberately sets NO layout.
+ *
+ * Every bar that carries it already lays itself out — some are one flex line,
+ * some stack a title above their controls, and the bespoke registers (Hubs,
+ * Tickets, Recharge) have bar geometry tuned to their own columns. A `display`
+ * here would outrank all of it and quietly flatten three good designs into one
+ * mediocre one. What the skin standardises is how a CONTROL is typed and
+ * coloured, so a filter reads the same in Billing as it does in CRM; where the
+ * controls sit is the page's business.
+ */
+/*
+ * Padding and a bottom rule belong to a filter bar that IS the head of the
+ * register card. A few lists float theirs above the card instead, where an
+ * inset would misalign it with the table and the rule would be drawing the
+ * underside of nothing.
+ */
+.record-list [data-list-card] > [data-list-filters] {
+  min-height: 4.65rem;
+  padding: 0.9rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+/*
+ * A control strip, not a caption.
+ *
+ * The trigger lays itself out `justify-between`, which strands a leading icon
+ * at the far left with its label adrift in the middle of the button. Pack the
+ * two together and pin only the chevron to the right edge.
+ *
+ * These labels are read at a glance and then acted on, so they carry the
+ * page's text colour and enough weight to hold against the table beneath them.
+ * The chevron stays quiet: it is affordance, not information, and making it as
+ * loud as the label would flatten the difference between them.
+ */
+.record-list [data-list-filters] button[role="combobox"] {
+  height: 2.55rem;
+  flex: none;
+  justify-content: flex-start;
+  gap: 0.45rem;
+  background: hsl(var(--background));
+  padding-inline: 0.72rem;
+  color: hsl(var(--foreground));
+  font-size: 0.78rem;
+  font-weight: 600;
+
+  /*
+   * Sized by its label, not by a number somebody guessed.
+   *
+   * Filters were given fixed widths — w-40, w-44 — chosen when the options were
+   * shorter than they ended up being, so "Settled and outstanding" arrived on
+   * screen as "Settled and…" and "Everyone with history" as "Everyone with…".
+   * A filter whose current value you cannot read is worse than no filter: you
+   * cannot tell what the list in front of you is showing. Content width with a
+   * floor keeps the row even when the labels are short, and lets a long one
+   * have the space it needs. The ceiling stops one hub name with a very long
+   * name from pushing the search box off the bar.
+   */
+  width: auto;
+  min-width: 9.5rem;
+  max-width: 18rem;
+}
+.record-list [data-list-filters] button[role="combobox"] > span {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+/* Every icon in the strip, including the search field's magnifier. */
+.record-list [data-list-filters] svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  color: hsl(var(--foreground));
+  stroke-width: 2.25;
+}
+.record-list [data-list-filters] button[role="combobox"] > svg:last-child {
+  margin-left: auto;
+  color: hsl(var(--muted-foreground));
+  stroke-width: 2;
+}
+
+/* The search field is a sibling of the dropdowns and has to measure like one. */
+.record-list [data-list-filters] input {
+  height: 2.55rem;
+  color: hsl(var(--foreground));
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.record-list [data-list-filters] input::placeholder {
+  color: hsl(var(--muted-foreground));
+  font-weight: 500;
+}
+
+/* ── Tabs above a register ────────────────────────────────────────────────── */
+
+/*
+ * Two lists that answer different questions, one at a time.
+ *
+ * Stacking them costs the second one its place: it sits below a table of
+ * unknown length, so on a busy day you scroll past a screen of rows to reach
+ * it, and on a quiet day the first one vanishes entirely and the page looks
+ * like it lost a section. A tab keeps both at the same address and makes which
+ * one you are looking at a thing you chose rather than a thing you scrolled to.
+ *
+ * The strip sits ON the card it belongs to — square where they meet — so the
+ * tab and its table read as one object rather than as a control floating above
+ * a panel.
+ */
+.record-list [data-list-tabs] {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.record-list [data-list-tabs] > [role="tablist"] {
+  display: flex;
+  width: fit-content;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-bottom: 0;
+  border-radius: 0.6rem 0.6rem 0 0;
+  background: hsl(var(--muted) / 0.55);
+}
+.record-list [data-list-tabs] [role="tab"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-width: 8.5rem;
+  border: 0;
+  background: transparent;
+  padding: 0.63rem 1rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.record-list [data-list-tabs] [role="tab"]:hover { color: hsl(var(--foreground)); }
+.record-list [data-list-tabs] [role="tab"][aria-selected="true"] {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+/* The count is what decides which tab to open, so it travels with the label. */
+.record-list [data-list-tab-count] {
+  border-radius: 999px;
+  background: hsl(var(--foreground) / 0.08);
+  padding: 0.07rem 0.42rem;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+.record-list [role="tab"][aria-selected="true"] [data-list-tab-count] {
+  background: hsl(0 0% 100% / 0.24);
+}
+
+/* The corner the strip covers. */
+.record-list [data-list-tabs] + [data-list-card] { border-top-left-radius: 0; }
+
+/* ── Rows ─────────────────────────────────────────────────────────────────── */
+
+.record-list table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.record-list thead th {
+  background: hsl(var(--muted) / 0.52);
+  color: hsl(var(--muted-foreground));
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.record-list thead th,
+.record-list thead th > button:not([role="checkbox"]) {
+  padding: 0.7rem 0.85rem;
+}
+.record-list thead th > button:not([role="checkbox"]) {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.035em;
+}
+
+/*
+ * A row you can read across without losing the line.
+ *
+ * The default 12px cell is sized for data you scan; a register is read one
+ * record at a time, and the extra height is what lets a name carry its code
+ * underneath without the row feeling crowded.
+ */
+.record-list tbody td {
+  height: 4.15rem;
+  padding: 0.7rem 0.85rem;
+  border-top: 1px solid hsl(var(--border));
+  border-bottom: 0;
+  color: hsl(var(--foreground));
+  vertical-align: middle;
+  white-space: nowrap;
+}
+/*
+ * No base background here on purpose.
+ *
+ * A row is transparent over the card, which is already the colour this rule
+ * used to paint — so it bought nothing, and `.record-list tbody tr` outranks
+ * the single-class row states a page defines for itself. It was quietly
+ * erasing the red wash on an overdue ticket and the amber on an escalated
+ * one: information, not decoration. The skin sets the row's SIZE and TYPE and
+ * leaves what a row MEANS to the page that knows.
+ */
+.record-list tbody tr:hover { background: hsl(var(--primary) / 0.025); }
+
+/* An empty state is prose, not a record: it should not be 4rem tall. */
+.record-list tbody td[colspan] { height: auto; white-space: normal; }
+
+/* ── The disc ─────────────────────────────────────────────────────────────── */
+
+/*
+ * Colour here is an index, not a meaning.
+ *
+ * The tint is picked from the record's id, so the same operator is the same
+ * colour every time the list loads and the eye can use it to keep its place
+ * while scrolling. It says nothing about status — that is the pill's job, and
+ * mixing the two would make a colour mean two things at once.
+ */
+.record-list [data-list-avatar] {
+  display: grid;
+  width: 2.4rem;
+  height: 2.4rem;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+.record-list [data-list-avatar="0"] { background: rgb(224 242 254); color: rgb(2 132 199); }
+.record-list [data-list-avatar="1"] { background: rgb(237 233 254); color: rgb(109 40 217); }
+.record-list [data-list-avatar="2"] { background: rgb(209 250 229); color: rgb(5 150 105); }
+.record-list [data-list-avatar="3"] { background: rgb(255 228 230); color: rgb(225 29 72); }
+.record-list [data-list-avatar="4"] { background: rgb(254 243 199); color: rgb(180 83 9); }
+.record-list [data-list-avatar="5"] { background: rgb(243 232 255); color: rgb(147 51 234); }
+
+/* ── Cells ────────────────────────────────────────────────────────────────── */
+
+/*
+ * A fact and the thing that confirms it, in one column.
+ *
+ * The code under the name, the taluk under the area. As its own column the
+ * second value cost width that pushed Status and Actions off a laptop screen,
+ * and it was never the value anybody scanned for.
+ */
+.record-list [data-list-cell] {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.68rem;
+}
+.record-list [data-list-cell] > svg {
+  width: 0.92rem;
+  height: 0.92rem;
+  flex: none;
+  color: hsl(var(--muted-foreground));
+}
+.record-list [data-list-cell] p { min-width: 0; margin: 0; }
+.record-list [data-list-cell] strong,
+.record-list [data-list-cell] small { display: block; }
+.record-list [data-list-cell] strong {
+  max-width: 13rem;
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+.record-list [data-list-cell] small {
+  margin-top: 0.1rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.7rem;
+}
+/* A cell led by an icon is a detail, not the record's name. */
+.record-list [data-list-cell="quiet"] strong { font-weight: 500; font-size: 0.78rem; }
+.record-list [data-list-cell="quiet"] small { font-size: 0.68rem; }
+.record-list [data-list-cell="quiet"] { gap: 0.5rem; }
+
+.record-list [data-list-num] { text-align: center; font-variant-numeric: tabular-nums; }
+
+/* ── Status ───────────────────────────────────────────────────────────────── */
+
+.record-list tbody td .badge,
+.record-list tbody td [data-list-status] {
+  min-width: 5.2rem;
+  justify-content: center;
+}
+
+/* ── Row actions ──────────────────────────────────────────────────────────── */
+
+.record-list [data-list-actions] { width: 4.5rem; text-align: center; }
+.record-list [data-list-actions] > button {
+  display: grid;
+  width: 1.85rem;
+  height: 1.85rem;
+  margin: auto;
+  place-items: center;
+  border: 0;
+  border-radius: 0.42rem;
+  background: transparent;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+}
+.record-list [data-list-actions] > button:hover { background: hsl(var(--muted)); }
+.record-list [data-list-actions] > button svg { width: 0.9rem; height: 0.9rem; }
+
+/* ── Pager ────────────────────────────────────────────────────────────────── */
+
+.record-list [data-list-pager] {
+  min-height: 3.8rem;
+  padding: 0.55rem 0.9rem;
+  border-top: 1px solid hsl(var(--border));
+}
+.record-list [data-list-pager] span { font-size: 0.75rem; }
+.record-list [data-list-pager] button { width: 2.1rem; height: 2.1rem; font-size: 0.75rem; }
+.record-list [data-list-pager] [role="combobox"] { width: auto; height: 2.1rem; font-size: 0.75rem; }
+
+/*
+ * The pager is the last thing in the card, so it draws its own top rule and
+ * the card must not add padding under it. Pages that wrapped the bar in their
+ * own padded div keep that div; the rule below flattens it so the bar still
+ * meets both edges of the card.
+ */
+.record-list [data-list-card] > div:has(> [data-list-pager]) { padding: 0; }
+
+@media (max-width: 48rem) {
+  .record-list [data-list-filters] button[role="combobox"] { width: calc(50% - 0.35rem); }
+  .record-list [data-list-pager] > div { align-items: flex-start; flex-direction: column; }
+}
+
+/* ── Raymond additions ────────────────────────────────────────────────────── */
+
+/* The Operators pill: a dot of its own colour before the label. */
+.record-list tbody td [data-list-status] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.36rem;
+  border-radius: 999px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.record-list tbody td [data-list-status]::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+}
+.record-list tbody td [data-list-status] + [data-list-status],
+.record-list tbody td div:has(> [data-list-status]) + div { margin-top: 0.3rem; }
+
+/* A toggle or date in the filter strip measures like a dropdown beside it. */
+.record-list [data-list-filters] > button:not([role="combobox"]):not([aria-label^="Clear"]) {
+  height: 2.55rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.record-list [data-list-filters] label { font-size: 0.72rem; font-weight: 500; }
+.record-list [data-list-filters] input[type="date"] { background: hsl(var(--background)); }
+
+.record-list thead th[data-list-actions] { text-align: center; }
+
+/* ── Raymond additions: worksheets on the list skin ───────────────────────────
+ *
+ * The dashboard, reports, the work queue and the outward / inward screens are
+ * registers with panels around them. Their panels take the Operator heading —
+ * a soft gradient and an icon chip — so a worksheet reads like the rest of the
+ * app rather than like the generic card kit.
+ */
+.record-list [data-panel] {
+  overflow: hidden;
+  border-radius: 0.78rem;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.025);
+}
+.record-list [data-panel-head] {
+  min-height: 3.1rem;
+  padding: 0.6rem 0.9rem;
+  background: linear-gradient(110deg, hsl(var(--muted) / 0.5), hsl(var(--muted) / 0.12));
+  border-bottom-color: hsl(var(--border) / 0.6);
+}
+.record-list [data-panel-head] h2 { font-size: 0.9rem; font-weight: 650; }
+.record-list [data-panel-head] p { font-size: 0.72rem; }
+.record-list [data-panel-icon] { width: 1.85rem; height: 1.85rem; border-radius: 0.55rem; background: hsl(var(--primary) / 0.08); }
+.record-list [data-panel-icon] svg { width: 1.05rem; height: 1.05rem; stroke-width: 2.3; }
+
+/* A table read at a glance — a dashboard section, a side panel — not record by record. */
+.record-list table[data-list-compact] tbody td { height: 2.9rem; padding-block: 0.45rem; }
+/* Side panels are narrow: tighter gutters, and a heading may take two lines rather than clip. */
+.record-list table[data-list-compact] :is(th, td) { padding-inline: 0.6rem; }
+.record-list table[data-list-compact] thead th { white-space: normal; }
