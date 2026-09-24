@@ -36,6 +36,7 @@ $_allowedOrigins[] = 'http://localhost:8080';
 $_allowedOrigins[] = 'http://localhost:8081';
 $_allowedOrigins[] = 'https://krish-agencies.kynetropo.com';
 $_allowedOrigins[] = 'http://localhost:5173';          // local dev
+$_allowedOrigins[] = 'https://project.kynetropo.com';
 $_requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
 $_corsHeader = in_array($_requestOrigin, $_allowedOrigins, true) ? $_requestOrigin : ($_allowedOrigins[0] ?? 'https://api.kynetropo.com');
 header('Access-Control-Allow-Origin: ' . $_corsHeader);

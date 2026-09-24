@@ -18,8 +18,9 @@
 | `60_chat.php` | Chat widget |
 | `61_krish_portals.php` | Krish customers and employees (User Management), plus the Krish portal endpoints, which the web app no longer calls |
 | `70_ops.php` | Ops: dashboard, clients, projects, bugs, meetings, finance, AMC, pitches, hiring, employees |
-| `71_sales.php` | Sales module, push notifications, ops reports |
+| `71_sales.php` | Sales module, Sales AI assistant, push notifications, ops reports |
 | `72_search.php` | Global search |
+| `73_sales_ai_actions.php` | CRM and invoice routes that only the Sales AI assistant calls (see `api/ai/sales-endpoint-catalog.json`) |
 
 Only the routes the web app calls are registered. The other modules (products, procurement, inventory, invoicing, GST, accounting, HR, invoice processing and the Krish Agencies CRM) were removed from the routes along with their pages.
 

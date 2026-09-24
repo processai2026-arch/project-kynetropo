@@ -8,7 +8,7 @@ CGIPassAuth On
 SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1
 
 # Block direct access to all non-public directories
-RewriteRule ^(config|core|models|helpers|middleware|database|controllers|routes|services|cron|backups|storage)/ - [F,L]
+RewriteRule ^(config|core|models|helpers|middleware|database|controllers|routes|services|cron|backups|storage|ai)/ - [F,L]
 RewriteRule \.(sql|env|log|md)$ - [F,L]
 
 # Route all requests to index.php

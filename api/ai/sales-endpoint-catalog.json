@@ -1,0 +1,244 @@
+{
+  "POST /admin/sales/leads": {
+    "label": "Add a lead",
+    "module": "leads",
+    "description": "Create a new sales lead. The name is the only thing truly required; everything else fills in as it is learned.",
+    "required": {
+      "name": { "type": "string", "label": "lead name" }
+    },
+    "optional": {
+      "company": { "type": "string", "label": "company" },
+      "contact_person": { "type": "string", "label": "contact person" },
+      "phone": { "type": "string", "label": "phone" },
+      "email": { "type": "email", "label": "email" },
+      "source": { "type": "enum", "label": "source", "values": ["website","referral","cold_call","email","social","event","walk_in","partner","other"] },
+      "status": { "type": "enum", "label": "status", "values": ["new","contacted","qualified","meeting_scheduled","proposal","onboarding","converted","lost"] },
+      "temperature": { "type": "enum", "label": "temperature", "values": ["hot","warm","cold"] },
+      "notes": { "type": "string", "label": "notes" }
+    }
+  },
+  "PUT /admin/sales/leads/{id}": {
+    "label": "Edit a lead",
+    "module": "leads",
+    "description": "Update fields on an existing lead. id comes from the URL.",
+    "required": {},
+    "optional": {
+      "name": { "type": "string", "label": "lead name" },
+      "company": { "type": "string", "label": "company" },
+      "contact_person": { "type": "string", "label": "contact person" },
+      "phone": { "type": "string", "label": "phone" },
+      "email": { "type": "email", "label": "email" },
+      "source": { "type": "enum", "label": "source", "values": ["website","referral","cold_call","email","social","event","walk_in","partner","other"] },
+      "status": { "type": "enum", "label": "status", "values": ["new","contacted","qualified","meeting_scheduled","proposal","onboarding","converted","lost"] },
+      "temperature": { "type": "enum", "label": "temperature", "values": ["hot","warm","cold"] },
+      "notes": { "type": "string", "label": "notes" }
+    }
+  },
+  "PUT /admin/sales/leads/{id}/temperature": {
+    "label": "Change lead temperature",
+    "module": "leads",
+    "description": "Mark a lead hot, warm or cold. id comes from the URL.",
+    "required": {
+      "temperature": { "type": "enum", "label": "temperature", "values": ["hot","warm","cold"] }
+    },
+    "optional": {
+      "notes": { "type": "string", "label": "reason" }
+    }
+  },
+  "POST /admin/sales/calls": {
+    "label": "Log a call",
+    "module": "calls",
+    "description": "Record a call against a lead, with its outcome. Optionally schedule the next follow-up in the same step by supplying next_followup_date.",
+    "required": {
+      "lead_id": { "type": "ref", "label": "lead", "table": "sales_leads" },
+      "outcome": { "type": "enum", "label": "outcome", "values": ["interested","follow_up_required","meeting_required","proposal_required","not_interested","no_response","call_back_later","converted","other"] }
+    },
+    "optional": {
+      "call_date": { "type": "date", "label": "call date" },
+      "call_time": { "type": "time", "label": "call time" },
+      "duration_minutes": { "type": "int", "label": "duration in minutes", "min": 0, "max": 1440 },
+      "notes": { "type": "string", "label": "notes" },
+      "temperature_after": { "type": "enum", "label": "temperature after the call", "values": ["hot","warm","cold"] },
+      "next_followup_date": { "type": "date", "label": "next follow-up date" },
+      "next_followup_time": { "type": "time", "label": "next follow-up time" },
+      "next_followup_purpose": { "type": "string", "label": "next follow-up purpose" }
+    }
+  },
+  "POST /admin/sales/followups": {
+    "label": "Schedule a follow-up",
+    "module": "followups",
+    "description": "Add a follow-up on a lead for a given date. A follow-up belongs to a lead (lead_id).",
+    "required": {
+      "lead_id": { "type": "ref", "label": "lead", "table": "sales_leads" },
+      "due_date": { "type": "date", "label": "follow-up date" }
+    },
+    "optional": {
+      "due_time": { "type": "time", "label": "follow-up time" },
+      "purpose": { "type": "string", "label": "purpose" }
+    }
+  },
+  "POST /admin/sales/followups/{id}/complete": {
+    "label": "Complete a follow-up",
+    "module": "followups",
+    "description": "Mark a pending follow-up done. id comes from the URL. Record the outcome, and optionally schedule the next follow-up with next_followup_date. If outcome is not_picked_up, a next_followup_date is required. If outcome is not_interested, outcome_notes is required.",
+    "required": {},
+    "optional": {
+      "outcome": { "type": "enum", "label": "outcome", "values": ["interested","not_interested","not_picked_up","completed"] },
+      "outcome_notes": { "type": "string", "label": "what came of it" },
+      "next_followup_date": { "type": "date", "label": "next follow-up date" },
+      "next_followup_time": { "type": "time", "label": "next follow-up time" }
+    }
+  },
+  "POST /admin/sales/meetings": {
+    "label": "Schedule a meeting",
+    "module": "meetings",
+    "description": "Book a meeting on a lead. meeting_type defaults to virtual. A VIRTUAL meeting REQUIRES a meeting_link (a URL); a PHYSICAL meeting REQUIRES a place. Ask for the link or the place if the user did not give it.",
+    "required": {
+      "lead_id": { "type": "ref", "label": "lead", "table": "sales_leads" },
+      "title": { "type": "string", "label": "meeting title" },
+      "meeting_date": { "type": "date", "label": "meeting date" }
+    },
+    "optional": {
+      "meeting_type": { "type": "enum", "label": "meeting type", "values": ["physical","virtual"] },
+      "meeting_time": { "type": "time", "label": "meeting time" },
+      "place": { "type": "string", "label": "place" },
+      "meeting_link": { "type": "string", "label": "meeting link" },
+      "participants": { "type": "string", "label": "participants" },
+      "notes": { "type": "string", "label": "notes" }
+    }
+  },
+  "POST /admin/sales/tasks": {
+    "label": "Create a task",
+    "module": "tasks",
+    "description": "Assign a piece of sales work to someone. A task must be given to a specific person (assigned_to). If the user did not say who, ask.",
+    "required": {
+      "title": { "type": "string", "label": "task title" },
+      "assigned_to": { "type": "ref", "label": "person to assign it to", "table": "users" }
+    },
+    "optional": {
+      "description": { "type": "string", "label": "description" },
+      "due_date": { "type": "date", "label": "due date" },
+      "priority": { "type": "enum", "label": "priority", "values": ["low","normal","high","critical"] },
+      "lead_id": { "type": "ref", "label": "lead", "table": "sales_leads" }
+    }
+  },
+  "POST /admin/sales/challenges": {
+    "label": "Create a challenge",
+    "module": "challenges",
+    "description": "Post a sales challenge with a deadline for the team to accept.",
+    "required": {
+      "title": { "type": "string", "label": "challenge title" },
+      "deadline": { "type": "datetime", "label": "deadline" }
+    },
+    "optional": {
+      "description": { "type": "string", "label": "description" },
+      "priority": { "type": "enum", "label": "priority", "values": ["low","normal","high","critical"] },
+      "lead_id": { "type": "ref", "label": "lead", "table": "sales_leads" }
+    }
+  },
+  "POST /admin/crm/leads": {
+    "label": "Add a CRM lead",
+    "module": "crm",
+    "description": "Create a lead in the CRM pipeline. Only the name is required.",
+    "required": {
+      "name": { "type": "string", "label": "lead name" }
+    },
+    "optional": {
+      "company_name": { "type": "string", "label": "company" },
+      "email": { "type": "email", "label": "email" },
+      "phone": { "type": "string", "label": "phone" },
+      "source": { "type": "string", "label": "source" },
+      "status": { "type": "enum", "label": "status", "values": ["new","contacted","qualified","lost"] },
+      "notes": { "type": "string", "label": "notes" }
+    }
+  },
+  "PUT /admin/crm/leads/{id}": {
+    "label": "Edit a CRM lead",
+    "module": "crm",
+    "description": "Update fields on an existing CRM lead. id comes from the URL.",
+    "required": {},
+    "optional": {
+      "name": { "type": "string", "label": "lead name" },
+      "company_name": { "type": "string", "label": "company" },
+      "email": { "type": "email", "label": "email" },
+      "phone": { "type": "string", "label": "phone" },
+      "source": { "type": "string", "label": "source" },
+      "status": { "type": "enum", "label": "status", "values": ["new","contacted","qualified","lost"] },
+      "notes": { "type": "string", "label": "notes" }
+    }
+  },
+  "POST /admin/crm/deals": {
+    "label": "Create a deal",
+    "module": "crm",
+    "description": "Open a deal in the CRM. Only the title is required; value is in rupees.",
+    "required": {
+      "title": { "type": "string", "label": "deal title" }
+    },
+    "optional": {
+      "value": { "type": "float", "label": "deal value", "min": 0 },
+      "stage": { "type": "enum", "label": "stage", "values": ["qualification","proposal","negotiation","won","lost"] },
+      "expected_close_date": { "type": "date", "label": "expected close date" },
+      "probability": { "type": "int", "label": "probability %", "min": 0, "max": 100 },
+      "notes": { "type": "string", "label": "notes" }
+    }
+  },
+  "PUT /admin/crm/deals/{id}": {
+    "label": "Edit a deal",
+    "module": "crm",
+    "description": "Update a deal. id comes from the URL.",
+    "required": {},
+    "optional": {
+      "title": { "type": "string", "label": "deal title" },
+      "value": { "type": "float", "label": "deal value", "min": 0 },
+      "stage": { "type": "enum", "label": "stage", "values": ["qualification","proposal","negotiation","won","lost"] },
+      "expected_close_date": { "type": "date", "label": "expected close date" },
+      "probability": { "type": "int", "label": "probability %", "min": 0, "max": 100 },
+      "notes": { "type": "string", "label": "notes" }
+    }
+  },
+  "PUT /admin/crm/deals/{id}/stage": {
+    "label": "Move a deal to a stage",
+    "module": "crm",
+    "description": "Move a deal along the pipeline. id comes from the URL.",
+    "required": {
+      "stage": { "type": "enum", "label": "stage", "values": ["qualification","proposal","negotiation","won","lost"] }
+    },
+    "optional": {}
+  },
+  "POST /admin/crm/activities": {
+    "label": "Log a CRM activity",
+    "module": "crm",
+    "description": "Record a call, meeting, task or note against a lead, deal or customer. related_type says which kind of record, related_id is its id.",
+    "required": {
+      "subject": { "type": "string", "label": "subject" },
+      "related_type": { "type": "enum", "label": "what it relates to", "values": ["lead","deal","customer"] },
+      "related_id": { "type": "int", "label": "the related record id", "min": 1 }
+    },
+    "optional": {
+      "type": { "type": "enum", "label": "activity type", "values": ["call","meeting","task","note"] },
+      "notes": { "type": "string", "label": "notes" },
+      "due_at": { "type": "datetime", "label": "due date/time" }
+    }
+  },
+  "POST /admin/invoices/{id}/payments": {
+    "label": "Record an invoice payment",
+    "module": "invoices",
+    "description": "Record money received against an invoice. id (the invoice) comes from the URL. amount is in rupees and must not exceed the balance due. payment_mode is required.",
+    "required": {
+      "amount": { "type": "float", "label": "amount", "min": 0.01 },
+      "payment_mode": { "type": "enum", "label": "payment mode", "values": ["Cash","Bank Transfer","UPI","Cheque","Card"] }
+    },
+    "optional": {
+      "payment_date": { "type": "date", "label": "payment date" },
+      "reference": { "type": "string", "label": "reference number" },
+      "notes": { "type": "string", "label": "notes" }
+    }
+  },
+  "POST /admin/invoices/{id}/reminders": {
+    "label": "Send a payment reminder",
+    "module": "invoices",
+    "description": "Email the customer a reminder for an unpaid invoice. id (the invoice) comes from the URL. Takes no other fields — the invoice must have an outstanding balance.",
+    "required": {},
+    "optional": {}
+  }
+}

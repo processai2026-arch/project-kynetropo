@@ -23,7 +23,7 @@ describe("route registry", () => {
         "/reports", "/reports/:id",
         "/sales", "/sales/leads", "/sales/leads/:id", "/sales/clients", "/sales/followups",
         "/sales/meetings", "/sales/tasks", "/sales/challenges", "/sales/challenges/:id",
-        "/sales/calls", "/sales/activity", "/sales/access-control", "/sales/more", "/sales/mentions",
+        "/sales/calls", "/sales/activity", "/sales/assistant", "/sales/access-control", "/sales/more", "/sales/mentions",
         "/hiring", "/employees",
         "/user-management", "/settings",
       ].sort(),
@@ -35,6 +35,6 @@ describe("route registry", () => {
     expect(scoped.every((p) => p.startsWith("/sales"))).toBe(true);
     expect(scoped).not.toContain("/sales/access-control");
     expect(scoped).not.toContain("/sales/mentions");
-    expect(scoped).toHaveLength(12);
+    expect(scoped).toHaveLength(13);
   });
 });

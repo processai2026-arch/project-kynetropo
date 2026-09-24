@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { AtSign, Bell, CalendarDays, ChevronRight, ClipboardList, History, Phone, Settings, ShieldCheck, Trophy, User } from "lucide-react";
+import { AtSign, Bell, CalendarDays, ChevronRight, ClipboardList, History, Phone, Settings, ShieldCheck, Sparkles, Trophy, User } from "lucide-react";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -43,6 +43,7 @@ export default function SalesMore() {
       show: can("sales.comments.view"),
       badge: unreadMentions,
     },
+    { to: "/sales/assistant", label: "AI Assistant", icon: Sparkles, show: can("sales.dashboard.view") },
     { to: "/sales/meetings", label: "Meetings", icon: CalendarDays, show: can("sales.meetings.view") },
     { to: "/sales/calls", label: "Call History", icon: Phone, show: can("sales.calls.view") },
     { to: "/sales/activity", label: "Team Activity", icon: History, show: can("sales.dashboard.view") },

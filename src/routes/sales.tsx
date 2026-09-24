@@ -15,6 +15,7 @@ const SalesActivity = lazy(() => import("@/pages/sales/SalesActivity"));
 const SalesAccessControl = lazy(() => import("@/pages/sales/SalesAccessControl"));
 const SalesTasks = lazy(() => import("@/pages/sales/SalesTasks"));
 const SalesMore = lazy(() => import("@/pages/sales/SalesMore"));
+const SalesAssistant = lazy(() => import("@/pages/sales/SalesAssistant"));
 const SalesMentions = lazy(() => import("@/pages/sales/SalesMentions"));
 
 export const routes: RouteDef[] = [
@@ -30,6 +31,7 @@ export const routes: RouteDef[] = [
   { path: "/sales/challenges/:id", element: SalesChallengeDetail, salesScope: true },
   { path: "/sales/calls", element: SalesCallHistory, salesScope: true },
   { path: "/sales/activity", element: SalesActivity, salesScope: true },
+  { path: "/sales/assistant", element: SalesAssistant, salesScope: true },
   { path: "/sales/access-control", element: SalesAccessControl },
   { path: "/sales/more", element: SalesMore, salesScope: true },
   // Deliberately outside SalesScope: your mentions are yours, and looking at a
