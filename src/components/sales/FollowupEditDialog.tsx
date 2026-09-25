@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useEffect, useState } from "react";
 import { PencilLine } from "lucide-react";
 import { Button } from "@/components/ui/button";

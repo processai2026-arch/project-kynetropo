@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useEffect, useState } from "react";
 import { ActionDialog } from "@/components/ActionDialog";
 import { Field, NativeSelect } from "@/components/Field";

@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+/* eslint-disable react-refresh/only-export-components */
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { apiFetch, BASE_URL } from "@/lib/api/client";
 
 const SESSION_DURATION = 24 * 60 * 60 * 1000;
@@ -50,16 +51,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(STORAGE_KEY);
   };
 
-  const applySession = (data: Record<string, string>) => {
+  const applySession = useCallback((data: Record<string, string>) => {
     setIsAuthenticated(true);
     setAdminEmail(data.email || "");
     setUserName(data.name || "");
     setCompanyName(data.company_name || "");
     setRole((data.role as AuthRole) || "admin");
-  };
+  }, []);
 
   // Attempt to renew session using the stored refresh token
-  const tryRestore = async (stored: Record<string, string>) => {
+  const tryRestore = useCallback(async (stored: Record<string, string>) => {
     try {
       const res = await fetch(`${BASE_URL}/auth/refresh`, {
         method: "POST",
@@ -81,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       localStorage.removeItem(STORAGE_KEY);
     }
-  };
+  }, [applySession]);
 
   // Restore session on page load
   useEffect(() => {
@@ -106,7 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     init();
-  }, []);
+  }, [applySession, tryRestore]);
 
   // Listen for 401 responses dispatched by apiFetch (refresh also failed)
   useEffect(() => {

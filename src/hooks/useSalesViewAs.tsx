@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useMemo, useState, Fragment, type ReactNode } from "react";
 import { setSalesViewAs } from "@/lib/api/sales";
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -69,7 +69,7 @@ export default function BugDetail() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [localScreenshots, setLocalScreenshots] = useState<{ id: number; file_path: string; name: string }[]>([]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     try {
@@ -83,9 +83,9 @@ export default function BugDetail() {
       );
     } catch { toast.error("Failed to load bug"); }
     finally  { setLoading(false); }
-  };
+  }, [id]);
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); }, [load]);
 
   const handleSendComment = async () => {
     if (!comment.trim() || !bug) return;

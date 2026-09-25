@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,7 +43,7 @@ export default function Employees() {
   const [form, setForm]           = useState<Partial<OpsEmployee>>(EMPTY);
   const [saving, setSaving]       = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const params: Record<string, string> = {};
@@ -52,9 +52,9 @@ export default function Employees() {
       setItems(res.data ?? []);
     } catch { toast.error("Failed to load employees"); }
     finally  { setLoading(false); }
-  };
+  }, [statusFilter]);
 
-  useEffect(() => { load(); }, [statusFilter]);
+  useEffect(() => { load(); }, [load]);
 
   const set = (k: keyof OpsEmployee, v: unknown) => setForm(f => ({ ...f, [k]: v }));
   const openCreate = () => { setEditing(null); setForm(EMPTY); setFormOpen(true); };

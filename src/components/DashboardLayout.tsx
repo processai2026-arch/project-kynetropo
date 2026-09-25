@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { useEffect, useState, createContext } from "react";
 import { useLocation } from "react-router-dom";
 import { SidebarProvider } from "@/components/ui/sidebar";

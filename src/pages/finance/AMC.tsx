@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,7 +37,7 @@ export default function AMC() {
   const [saving, setSaving]     = useState(false);
   const [markingId, setMarkingId] = useState<number | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const params: Record<string, string> = {};
@@ -46,9 +46,9 @@ export default function AMC() {
       setItems(res.data ?? []);
     } catch { toast.error("Failed to load AMC records"); }
     finally  { setLoading(false); }
-  };
+  }, [statusFilter]);
 
-  useEffect(() => { load(); }, [statusFilter]);
+  useEffect(() => { load(); }, [load]);
   useEffect(() => {
     opsClientsApi.list().then(r => setClients(r.data ?? [])).catch(() => {});
     opsProjectsApi.list().then(r => setProjects(r.data ?? [])).catch(() => {});

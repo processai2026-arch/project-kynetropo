@@ -74,7 +74,8 @@ export default function OpsReportView() {
     [id],
   );
 
-  useEffect(() => { load(range); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(range); }, [load]);
 
   const report = result?.report;
   const rows   = result?.rows ?? [];

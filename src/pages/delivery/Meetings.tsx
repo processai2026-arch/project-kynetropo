@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,7 +38,7 @@ export default function Meetings() {
   const [form, setForm]         = useState<Partial<OpsMeeting>>(EMPTY);
   const [saving, setSaving]     = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const params: Record<string, string> = {};
@@ -49,9 +49,9 @@ export default function Meetings() {
       setItems(res.data ?? []);
     } catch { toast.error("Failed to load meetings"); }
     finally  { setLoading(false); }
-  };
+  }, [clientFilter, dateFrom, dateTo]);
 
-  useEffect(() => { load(); }, [clientFilter, dateFrom, dateTo]);
+  useEffect(() => { load(); }, [load]);
   useEffect(() => {
     opsClientsApi.list().then(r => setClients(r.data ?? [])).catch(() => {});
     opsProjectsApi.list().then(r => setProjects(r.data ?? [])).catch(() => {});
