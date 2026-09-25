@@ -321,8 +321,19 @@ SYSPROMPT;
         if (!$apiKey) $apiKey = getenv('groq_api_key') ?: getenv('GROQ_API_KEY') ?: '';
         if (!$apiKey) return ['ok' => false, 'error' => 'GROQ API key not configured'];
 
+        $model = '';
+        if (file_exists($envPath)) {
+            foreach (file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+                if (str_starts_with(trim($line), '#') || !str_contains($line, '=')) continue;
+                [$k, $v] = array_map('trim', explode('=', $line, 2));
+                if ($k === 'GROQ_MODEL') { $model = trim($v, '"\''); break; }
+            }
+        }
+        if (!$model) $model = getenv('GROQ_MODEL') ?: '';
+        if (!$model) $model = 'llama-3.1-70b-versatile';
+
         $payload = json_encode([
-            'model'           => 'llama-3.3-70b-versatile',
+            'model'           => $model,
             'messages'        => $messages,
             'temperature'     => 0.2,
             'max_tokens'      => 600,

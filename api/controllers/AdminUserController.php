@@ -97,7 +97,7 @@ class AdminUserController
         }
 
         // Sort
-        $allowedSort = ['created_at' => 'u.created_at', 'name' => 'u.name', 'total_orders' => 'total_orders'];
+        $allowedSort = ['created_at' => 'u.created_at', 'name' => 'u.name'];
         $sortField = $allowedSort[$request->query('sort', 'created_at')] ?? 'u.created_at';
         $sortDir = strtoupper($request->query('order', 'desc')) === 'ASC' ? 'ASC' : 'DESC';
 
@@ -111,15 +111,10 @@ class AdminUserController
                     $staffRoleSelect
                     u.company_name, u.address, u.city, u.state, u.pincode,
                     u.udyam_number, u.gst_number, u.is_active, u.created_at,
-                    COUNT(DISTINCT o.order_id)       AS total_orders,
-                    COALESCE(SUM(o.total_amount), 0) AS total_spent,
-                    COALESCE(u.last_order_at, MAX(o.created_at)) AS last_order_at,
                     chs.health_score, chs.segment, chs.is_at_risk, chs.is_high_value
              FROM users u
-             LEFT JOIN orders o ON o.user_id = u.user_id AND o.tenant_id = u.tenant_id
              LEFT JOIN customer_health_scores chs ON chs.customer_id = u.user_id AND chs.tenant_id = u.tenant_id
              WHERE $whereClause
-             GROUP BY u.user_id
              ORDER BY $sortField $sortDir
              LIMIT ? OFFSET ?",
             [...$params, $limit, $offset]
@@ -127,8 +122,6 @@ class AdminUserController
 
         foreach ($rows as &$r) {
             $r['is_active'] = (bool) $r['is_active'];
-            $r['total_orders'] = (int) $r['total_orders'];
-            $r['total_spent'] = (float) $r['total_spent'];
             $r['health_score'] = $r['health_score'] !== null ? (float) $r['health_score'] : null;
             $r['is_at_risk'] = $r['is_at_risk'] !== null ? (bool) $r['is_at_risk'] : false;
             $r['is_high_value'] = $r['is_high_value'] !== null ? (bool) $r['is_high_value'] : false;
