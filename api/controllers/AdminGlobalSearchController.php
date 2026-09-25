@@ -100,8 +100,8 @@ class AdminGlobalSearchController
 
         // ── Bugs ────────────────────────────────────────────────────────────
         $rows = $this->safeFetch(
-            "SELECT id, title, status, priority FROM ops_bugs
-              WHERE tenant_id = ? AND title LIKE ?
+            "SELECT id, LEFT(description, 80) AS title, status, priority FROM ops_bugs
+              WHERE tenant_id = ? AND description LIKE ?
               ORDER BY id DESC LIMIT " . self::LIMIT,
             [$tenantId, $like]
         );
@@ -130,8 +130,8 @@ class AdminGlobalSearchController
 
         // ── Employees ───────────────────────────────────────────────────────
         $rows = $this->safeFetch(
-            "SELECT employee_id AS id, name, designation, phone FROM employees
-              WHERE tenant_id = ? AND (name LIKE ? OR designation LIKE ? OR phone LIKE ?)
+            "SELECT id, name, role, phone FROM ops_employees
+              WHERE tenant_id = ? AND (name LIKE ? OR role LIKE ? OR phone LIKE ?)
               ORDER BY name ASC LIMIT " . self::LIMIT,
             [$tenantId, $like, $like, $like]
         );
@@ -139,7 +139,7 @@ class AdminGlobalSearchController
             'id'       => (int)$r['id'],
             'title'    => (string)$r['name'],
             'subtitle' => (string)($r['phone'] ?? ''),
-            'meta'     => (string)($r['designation'] ?? ''),
+            'meta'     => (string)($r['role'] ?? ''),
             // No employee detail route — the list page filters on the query.
             'url'      => '/employees',
         ], $rows));
