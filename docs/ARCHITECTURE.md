@@ -11,12 +11,12 @@
 |---|---|
 | `00_platform_billing.php` | Signup |
 | `01_auth.php` | Login, refresh, sign-out, current user |
-| `02_storefront.php` | Change password (`PUT /users/{id}/password`). Its `UserController` is not in this build, so this call fails today |
+| `02_storefront.php` | Change password (`PUT /users/{id}/password`) via `UserController` |
 | `10_admin_users_customers.php` | Admin users, customer health and merge |
 | `22_notifications_reports_quotes.php` | Notifications, reports |
 | `30_settings_data_insights.php` | Settings |
 | `60_chat.php` | Chat widget |
-| `61_krish_portals.php` | Krish customers and employees (User Management), plus the Krish portal endpoints, which the web app no longer calls |
+| `61_krish_portals.php` | Krish customers (`/admin/customers`) and employees (`/admin/employees`) used by User Management |
 | `70_ops.php` | Ops: dashboard, clients, projects, bugs, meetings, finance, AMC, pitches, hiring, employees |
 | `71_sales.php` | Sales module, Sales AI assistant, push notifications, ops reports |
 | `72_search.php` | Global search |
