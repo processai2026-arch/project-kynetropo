@@ -37,7 +37,7 @@ export default function Pitches() {
     setLoading(true);
     try {
       const res = await opsPitchesApi.list();
-      setItems((res as any).data ?? []);
+      setItems(res.data ?? []);
     } catch { toast.error("Failed to load pitches"); }
     finally  { setLoading(false); }
   };

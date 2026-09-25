@@ -182,7 +182,7 @@ export function getMockResponse(path: string, method: string, body?: unknown): u
     if (!project) return { success: false, message: "Not found" };
     return ok({ ...project, stage_history: [], bugs: BUGS.filter(b => b.project_id === id), meetings: MEETINGS.filter(m => m.project_id === id), payments: PAYMENTS.filter(p => p.project_id === id), activity_log: [] });
   }
-  if (url === "/admin/ops/projects" && method === "POST") return ok({ ...(body as object), id: 99, received: 0, balance: (body as any).quoted ?? 0, payment_status: "pending", created_at: TODAY });
+  if (url === "/admin/ops/projects" && method === "POST") return ok({ ...(body as object), id: 99, received: 0, balance: (body as { quoted?: number }).quoted ?? 0, payment_status: "pending", created_at: TODAY });
   if (url.match(/^\/admin\/ops\/projects\/\d+$/) && method === "PUT") return ok({ ...(body as object) });
 
   // Bugs
@@ -217,7 +217,7 @@ export function getMockResponse(path: string, method: string, body?: unknown): u
   }
   if (url === "/admin/ops/bugs" && method === "POST") return ok({ ...(body as object), id: 99, status: "open", created_at: TODAY });
   if (url.match(/^\/admin\/ops\/bugs\/\d+$/) && method === "PUT") return ok({ ...(body as object) });
-  if (url.match(/^\/admin\/ops\/bugs\/\d+\/comments$/)) return ok({ id: 99, comment: (body as any).comment, added_by: "", created_at: TODAY });
+  if (url.match(/^\/admin\/ops\/bugs\/\d+\/comments$/)) return ok({ id: 99, comment: (body as { comment: string }).comment, added_by: "", created_at: TODAY });
 
   // Meetings
   if (url === "/admin/ops/meetings" && method === "GET") return ok([...MEETINGS]);

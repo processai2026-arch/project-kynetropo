@@ -46,15 +46,15 @@ export default function Meetings() {
       if (dateFrom) params.date_from = dateFrom;
       if (dateTo)   params.date_to   = dateTo;
       const res = await opsMeetingsApi.list(params);
-      setItems((res as any).data ?? []);
+      setItems(res.data ?? []);
     } catch { toast.error("Failed to load meetings"); }
     finally  { setLoading(false); }
   };
 
   useEffect(() => { load(); }, [clientFilter, dateFrom, dateTo]);
   useEffect(() => {
-    opsClientsApi.list().then(r => setClients((r as any).data ?? [])).catch(() => {});
-    opsProjectsApi.list().then(r => setProjects((r as any).data ?? [])).catch(() => {});
+    opsClientsApi.list().then(r => setClients(r.data ?? [])).catch(() => {});
+    opsProjectsApi.list().then(r => setProjects(r.data ?? [])).catch(() => {});
   }, []);
 
   const set = (k: keyof OpsMeeting, v: unknown) => setForm(f => ({ ...f, [k]: v }));

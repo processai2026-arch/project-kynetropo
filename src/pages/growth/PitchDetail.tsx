@@ -33,7 +33,7 @@ export default function PitchDetail() {
   useEffect(() => {
     if (!id) return;
     opsPitchesApi.get(Number(id))
-      .then(res => setData((res as any).data))
+      .then(res => setData(res.data))
       .catch(() => toast.error("Failed to load pitch"))
       .finally(() => setLoading(false));
   }, [id]);
@@ -106,10 +106,10 @@ export default function PitchDetail() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(data.leads as any[] ?? []).length === 0 && (
+                  {(data.leads ?? []).length === 0 && (
                     <tr><td colSpan={6} className="px-6 py-8 text-center text-muted-foreground text-sm">No leads from this pitch yet</td></tr>
                   )}
-                  {(data.leads as any[] ?? []).map((lead: any) => (
+                  {(data.leads ?? []).map((lead) => (
                     <tr key={lead.id} className="border-b hover:bg-muted/30 transition-colors">
                       <td className="py-3 px-4">
                         <Link to={`/clients/${lead.id}`} className="font-medium text-primary hover:underline">{lead.name}</Link>

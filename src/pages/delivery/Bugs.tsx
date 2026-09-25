@@ -64,15 +64,15 @@ export default function Bugs() {
       if (statusFilter !== "all")   params.status = statusFilter;
       if (priorityFilter !== "all") params.priority = priorityFilter;
       const res = await opsBugsApi.list(params);
-      setItems((res as any).data ?? []);
+      setItems(res.data ?? []);
     } catch { toast.error("Failed to load bugs"); }
     finally  { setLoading(false); }
   };
 
   useEffect(() => { load(); }, [projectFilter, statusFilter, priorityFilter]);
   useEffect(() => {
-    opsProjectsApi.list().then(r => setProjects((r as any).data ?? [])).catch(() => {});
-    opsEmployeesApi.list().then(r => setEmployees((r as any).data ?? [])).catch(() => {});
+    opsProjectsApi.list().then(r => setProjects(r.data ?? [])).catch(() => {});
+    opsEmployeesApi.list().then(r => setEmployees(r.data ?? [])).catch(() => {});
   }, []);
 
   const set = (k: keyof OpsBug, v: unknown) => setForm(f => ({ ...f, [k]: v }));

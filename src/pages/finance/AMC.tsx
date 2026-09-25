@@ -43,15 +43,15 @@ export default function AMC() {
       const params: Record<string, string> = {};
       if (statusFilter !== "all") params.status = statusFilter;
       const res = await opsAmcApi.list(params);
-      setItems((res as any).data ?? []);
+      setItems(res.data ?? []);
     } catch { toast.error("Failed to load AMC records"); }
     finally  { setLoading(false); }
   };
 
   useEffect(() => { load(); }, [statusFilter]);
   useEffect(() => {
-    opsClientsApi.list().then(r => setClients((r as any).data ?? [])).catch(() => {});
-    opsProjectsApi.list().then(r => setProjects((r as any).data ?? [])).catch(() => {});
+    opsClientsApi.list().then(r => setClients(r.data ?? [])).catch(() => {});
+    opsProjectsApi.list().then(r => setProjects(r.data ?? [])).catch(() => {});
   }, []);
 
   const clientProjects = form.client_id ? projects.filter(p => p.client_id === form.client_id) : projects;
@@ -89,7 +89,7 @@ export default function AMC() {
   const handleMarkPaid = async (id: number) => {
     setMarkingId(id);
     try {
-      await opsAmcApi.update(id, { status: "paid" } as any);
+      await opsAmcApi.update(id, { status: "paid" });
       toast.success("AMC marked as paid — payment logged automatically");
       load();
     } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); }

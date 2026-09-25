@@ -74,7 +74,7 @@ export default function BugDetail() {
     setLoading(true);
     try {
       const res = await opsBugsApi.get(Number(id));
-      const data = (res as any).data as BugDetail;
+      const data = res.data as BugDetail;
       setBug(data);
       setNewStatus(data.status);
       setStepsValue(data.steps_to_repro ?? "");

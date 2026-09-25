@@ -49,7 +49,7 @@ export default function Employees() {
       const params: Record<string, string> = {};
       if (statusFilter !== "all") params.status = statusFilter;
       const res = await opsEmployeesApi.list(params);
-      setItems((res as any).data ?? []);
+      setItems(res.data ?? []);
     } catch { toast.error("Failed to load employees"); }
     finally  { setLoading(false); }
   };

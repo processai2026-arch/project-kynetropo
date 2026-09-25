@@ -46,3 +46,16 @@ Number a new migration below 100 only if the tenant pass must stamp a table it c
 - `src/pages/<module>/` holds the pages: `dashboard`, `crm`, `delivery`, `finance`, `invoicing`, `growth`, `reports`, `sales`, `team`, `inventory`, `admin`, plus the `customer`, `employee` and `platform` portals. `Login`, `NotFound`, `Signup` and `Index` sit at the top of `src/pages/`.
 - `src/lib/api/` has one file per API area, all built on `client.ts`.
 - `src/routes/routes.test.ts` checks the registry: every path once, the exact page list, and which sales pages use the colleague view.
+
+### Page layout pattern
+
+All pages use the same two-layer structure:
+
+1. **Wrapper** — `RecordListPage` (for list/overview pages) or `RecordDetailPage` (for single-record pages). Both are thin CSS wrappers (`record-list space-y-6` / `record-detail space-y-6`).
+2. **Header** — `PageHeader` from `@/components/PageHeader`: `{ title, subtitle?, action? }`. Always the first child inside the wrapper.
+
+Content inside the wrapper uses:
+- `Panel` — titled card with optional `flush` mode for full-bleed tables.
+- `SectionCard` — similar card with an optional icon; `bodyPadding=""` for flush tables.
+
+Sales pages add a third layer: `SalesLayout` is the outer shell, and `RecordListPage`/`RecordDetailPage` sits inside it. Sales list pages use a mobile-first card layout (`rounded-2xl border bg-card p-4 shadow-sm` cards) in addition to desktop tables.

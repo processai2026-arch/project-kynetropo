@@ -51,17 +51,17 @@ export default function Finance() {
         opsFinanceApi.payments({ month }),
         opsFinanceApi.expenses({ month }),
       ]);
-      setSummary((sumRes as any).data);
-      setPayments((payRes as any).data ?? []);
-      setExpenses((expRes as any).data ?? []);
+      setSummary(sumRes.data);
+      setPayments(payRes.data ?? []);
+      setExpenses(expRes.data ?? []);
     } catch { toast.error("Failed to load finance data"); }
     finally  { setLoading(false); }
   };
 
   useEffect(() => { loadAll(); }, [month]);
   useEffect(() => {
-    opsClientsApi.list().then(r => setClients((r as any).data ?? [])).catch(() => {});
-    opsProjectsApi.list().then(r => setProjects((r as any).data ?? [])).catch(() => {});
+    opsClientsApi.list().then(r => setClients(r.data ?? [])).catch(() => {});
+    opsProjectsApi.list().then(r => setProjects(r.data ?? [])).catch(() => {});
   }, []);
 
   const clientProjects = payForm.client_id ? projects.filter(p => p.client_id === payForm.client_id) : projects;
@@ -246,7 +246,9 @@ export default function Finance() {
                     <td className="py-3 px-4 capitalize text-card-foreground">{e.category}</td>
                     <td className="py-3 px-4 text-card-foreground">{e.description || "—"}</td>
                     <td className="py-3 px-4 font-medium text-red-600">{fmt(e.amount)}</td>
-                    <td className="py-3 px-4 text-card-foreground">{(e as any).project_name ?? "—"}</td>
+                    <td className="py-3 px-4 text-card-foreground">
+                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                      {(e as any).project_name ?? "—"}</td>
                     <td className="py-3 px-4 text-card-foreground">{e.added_by || "—"}</td>
                     <td className="py-3 px-4">
                       <Button variant="ghost" size="icon" onClick={() => handleDeleteExpense(e.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
@@ -346,7 +348,7 @@ export default function Finance() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Category</Label>
-                <Select value={expForm.category} onValueChange={v => setExpForm(f => ({ ...f, category: v as any }))}>
+                <Select value={expForm.category} onValueChange={v => setExpForm(f => ({ ...f, category: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {["hosting","tools","travel","marketing","salary","pitch","other"].map(c => <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>)}

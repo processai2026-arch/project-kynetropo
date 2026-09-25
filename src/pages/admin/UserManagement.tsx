@@ -12,7 +12,7 @@ import { Panel } from "@/components/Panel";
 import { apiFetch } from "@/lib/api/client";
 import { customersApi, employeesApi } from "@/lib/api/krish";
 import type { Customer, Employee } from "@/types/krish";
-import { Users, UserPlus, Loader2 } from "lucide-react";
+import { UserPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 const EMPTY_FORM = { name: "", email: "", phone: "", password: "" };
@@ -32,8 +32,8 @@ export default function UserManagement() {
     setLoading(true);
     try {
       const [cRes, eRes] = await Promise.all([customersApi.list(), employeesApi.list()]);
-      setCustomers((cRes as any).data ?? []);
-      setEmployees((eRes as any).data ?? []);
+      setCustomers(cRes.data ?? []);
+      setEmployees(eRes.data ?? []);
     } catch {
       toast.error("Failed to load records");
     } finally {
@@ -64,11 +64,11 @@ export default function UserManagement() {
         method: "POST",
         body: JSON.stringify({ name: form.name, email: form.email, phone: form.phone, password: form.password, user_type: targetType }),
       });
-      const newUserId = (res as any).data?.id ?? (res as any).id;
+      const newUserId = res.data.id;
       if (targetType === "customer" && targetId) {
         await customersApi.update(targetId, { user_id: newUserId });
       } else if (targetType === "employee" && targetId) {
-        await employeesApi.update(targetId, { user_id: newUserId } as any);
+        await employeesApi.update(targetId, { user_id: newUserId });
       }
       toast.success("Login account created successfully");
       setFormOpen(false);

@@ -43,7 +43,7 @@ export default function Hiring() {
       const params: Record<string, string> = {};
       if (decisionFilter !== "all") params.decision = decisionFilter;
       const res = await opsHiringApi.list(params);
-      setItems((res as any).data ?? []);
+      setItems(res.data ?? []);
     } catch { toast.error("Failed to load candidates"); }
     finally  { setLoading(false); }
   };

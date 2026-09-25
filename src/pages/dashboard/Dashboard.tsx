@@ -10,8 +10,7 @@ import { cn } from "@/lib/utils";
 import { opsDashboardApi } from "@/lib/api/ops";
 import type { OpsDashboardStats } from "@/types/ops";
 import {
-  IndianRupee, FolderKanban, CalendarDays, AlertCircle,
-  RefreshCcw, Users, Sparkles, TrendingUp, Clock,
+  IndianRupee, AlertCircle, TrendingUp, Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,7 +26,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     opsDashboardApi.stats()
-      .then(res => setData((res as any).data))
+      .then(res => setData(res.data))
       .catch(() => toast.error("Failed to load dashboard"))
       .finally(() => setLoading(false));
   }, []);

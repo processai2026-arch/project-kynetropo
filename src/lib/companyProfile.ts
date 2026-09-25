@@ -16,7 +16,7 @@ const FALLBACK: CompanyProfile = {
 
 let cache: CompanyProfile | null = null;
 
-type Env = { success: boolean; data: any };
+type Env = { success: boolean; data: Record<string, string | undefined> };
 
 /** Fetch & cache the current tenant's company profile (call once after login). */
 export async function loadCompanyProfile(): Promise<CompanyProfile> {
