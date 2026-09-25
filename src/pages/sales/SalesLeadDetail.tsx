@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
-  ArrowLeft, Building2, CalendarClock, CalendarPlus, CalendarX, CheckCircle2,
-  Mail, MessageSquareQuote, MonitorCog, Pencil, Phone, Thermometer, Trash2, Undo2, UserCheck,
+  Building2, CalendarClock, CalendarPlus, CalendarX, CheckCircle2,
+  Mail, MessageSquareQuote, MonitorCog, Pencil, Phone, Thermometer, Trash2, Undo2, UserCheck, Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,7 +36,12 @@ import type {
   CommentEntityType, LeadTemperature, SalesFollowup, SalesMeeting,
   SalesLeadDetail as LeadDetail,
 } from "@/types/sales";
-import { cn } from "@/lib/utils";
+import { RecordProfileHeader } from "@/components/RecordProfileHeader";
+import type { ProfileFact } from "@/components/RecordProfileHeader";
+import { DetailStats } from "@/components/DetailStats";
+import { StatCard } from "@/components/StatCard";
+import { DetailTimeline } from "@/components/DetailTimeline";
+import type { TimelineItem } from "@/components/DetailTimeline";
 
 /**
  * Today, from the local clock. toISOString() is UTC, which east of Greenwich
@@ -273,9 +278,9 @@ export default function SalesLeadDetail() {
     return (
       <SalesLayout>
         <RecordDetailPage>
-        <Skeleton className="h-8 w-40" />
-        <Skeleton className="h-40 w-full rounded-2xl" />
-        <Skeleton className="h-32 w-full rounded-2xl" />
+          <RecordProfileHeader backTo="/sales/leads" backLabel="Leads" crumb="Lead" icon={Users} title="Lead" loading />
+          <Skeleton className="h-24 w-full rounded-2xl" />
+          <Skeleton className="h-32 w-full rounded-2xl" />
         </RecordDetailPage>
       </SalesLayout>
     );
@@ -285,13 +290,10 @@ export default function SalesLeadDetail() {
     return (
       <SalesLayout>
         <RecordDetailPage>
-        <Button variant="ghost" size="sm" onClick={() => navigate("/sales/leads")}>
-          <ArrowLeft className="mr-1.5 h-4 w-4" />
-          Back to leads
-        </Button>
-        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center text-sm text-destructive">
-          {error ?? "Lead not found"}
-        </div>
+          <RecordProfileHeader backTo="/sales/leads" backLabel="Leads" crumb="Lead" icon={Users} title="Lead" />
+          <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center text-sm text-destructive">
+            {error ?? "Lead not found"}
+          </div>
         </RecordDetailPage>
       </SalesLayout>
     );
@@ -300,116 +302,109 @@ export default function SalesLeadDetail() {
   const pendingFollowups = lead.followups.filter((f) => f.status === "pending");
   const scheduledMeetings = lead.meetings.filter((m) => m.status === "scheduled");
 
+  const initials = (lead.company || lead.name).split(/\s+/).slice(0, 2).map((w: string) => w[0]?.toUpperCase() ?? "").join("");
+  const eyebrow = [lead.lead_code, lead.source ? humanise(lead.source) : null, `added ${formatDate(lead.acquired_on ?? lead.created_at)}`].filter(Boolean).join(" · ");
+  const factsData: Array<ProfileFact | null> = [
+    lead.phone ? { icon: Phone, label: "Phone", value: lead.phone, href: `tel:${lead.phone}` } : null,
+    lead.email ? { icon: Mail, label: "Email", value: lead.email, href: `mailto:${lead.email}` } : null,
+    lead.company ? { icon: Building2, label: "Company", value: lead.company } : null,
+    lead.contact_person ? { icon: UserCheck, label: "Contact", value: lead.contact_person } : null,
+  ];
+  const facts = factsData.filter((f): f is ProfileFact => f !== null);
+
+  const timelineItems: TimelineItem[] = lead.timeline.map((a) => ({
+    label: a.title,
+    at: a.occurred_at,
+    by: a.actor_name || undefined,
+    description: a.description || undefined,
+    tone: (a.activity_type === "lead_converted" ? "done" : a.activity_type === "call_logged" ? "active" : "done") as TimelineItem["tone"],
+  }));
+
   return (
     <SalesLayout>
       <RecordDetailPage>
-      <Button variant="ghost" size="sm" className="-ml-2 w-fit" onClick={() => navigate("/sales/leads")}>
-        <ArrowLeft className="mr-1.5 h-4 w-4" />
-        Leads
-      </Button>
+      <RecordProfileHeader
+        backTo="/sales/leads"
+        backLabel="Leads"
+        crumb={lead.company || lead.name}
+        icon={Users}
+        mark={initials}
+        eyebrow={eyebrow}
+        status={<span className="flex gap-2"><LeadStatusBadge value={lead.status} /><TemperatureBadge value={lead.temperature} /></span>}
+        title={lead.company || lead.name}
+        subtitle={lead.assigned_to_name ? <span className="inline-flex items-center gap-1.5"><UserCheck className="h-4 w-4 shrink-0" />{lead.assigned_to_name}</span> : undefined}
+        facts={facts}
+      />
 
-      {/* Lead information */}
-      <section className="rounded-2xl border bg-card p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-bold text-card-foreground">{lead.company || lead.name}</h1>
-            <p className="truncate text-sm text-muted-foreground">{lead.contact_person || lead.name}</p>
-          </div>
-          <TemperatureBadge value={lead.temperature} />
+      <DetailStats>
+        <StatCard title="Calls" value={String(lead.calls?.length ?? 0)} icon={Phone} accent="sky" />
+        <StatCard title="Follow-ups" value={String(lead.followups.length)} subtitle={`${pendingFollowups.length} open`} icon={CalendarClock} accent="violet" subtitleColor={pendingFollowups.length > 0 ? "primary" : "muted"} />
+        <StatCard title="Meetings" value={String(lead.meetings.length)} subtitle={`${scheduledMeetings.length} scheduled`} icon={CalendarPlus} accent="teal" />
+      </DetailStats>
+
+      {(lead.current_software || lead.switch_reason) && (
+        <section className="space-y-3 rounded-2xl border bg-card p-4 shadow-sm">
+          {lead.current_software && (
+            <div className="flex items-start gap-2.5">
+              <MonitorCog className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Using now</p>
+                <p className="break-words text-sm text-card-foreground">{lead.current_software}</p>
+              </div>
+            </div>
+          )}
+          {lead.switch_reason && (
+            <div className="flex items-start gap-2.5">
+              <MessageSquareQuote className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Why they came to us</p>
+                <p className="whitespace-pre-wrap break-words text-sm text-card-foreground">{lead.switch_reason}</p>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {(lead.next_followup_at || lead.next_meeting_at) && (
+        <div className="grid gap-2 rounded-xl bg-muted/50 p-3 sm:grid-cols-2">
+          {lead.next_followup_at && (
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Next follow-up</p>
+              <p className="text-sm font-medium">{formatDateTime(lead.next_followup_at)}</p>
+            </div>
+          )}
+          {lead.next_meeting_at && (
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Next meeting</p>
+              <p className="text-sm font-medium">{formatDateTime(lead.next_meeting_at)}</p>
+            </div>
+          )}
         </div>
+      )}
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <LeadStatusBadge value={lead.status} />
-          <span className="text-[11px] text-muted-foreground">{lead.lead_code}</span>
-          {lead.source && <span className="text-[11px] text-muted-foreground">· {humanise(lead.source)}</span>}
-          {/*
-            How long we have actually had them. Falls back to the day the
-            record was made, which is what a lead with no stated date means.
-          */}
-          <span className="text-[11px] text-muted-foreground">
-            · Client since {formatDate(lead.acquired_on ?? lead.created_at)}
-          </span>
+      {lead.notes && <p className="whitespace-pre-wrap text-sm text-muted-foreground">{lead.notes}</p>}
+
+      {lead.status === "converted" && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm">
+          <p className="font-medium text-emerald-800">Converted to Customer</p>
+          <p className="text-emerald-700">Conversion date: {formatDate(lead.converted_at)}</p>
+          {lead.converted_client_id && (
+            <Link
+              to={`/clients/${lead.converted_client_id}`}
+              className="mt-1 inline-block text-xs font-medium text-emerald-800 underline"
+            >
+              Open customer record #{lead.converted_client_id} in the project system
+            </Link>
+          )}
+          {can("sales.leads.convert") && (
+            <p className="mt-2 text-xs text-emerald-700">
+              Converted by mistake? "Undo Convert" returns the lead to onboarding and removes the
+              customer record it created — unless that customer already existed or has work
+              attached to it by now.
+            </p>
+          )}
         </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Field icon={Phone} label="Phone" value={lead.phone} />
-          <Field icon={Mail} label="Email" value={lead.email} />
-          <Field icon={Building2} label="Company" value={lead.company} />
-          <Field icon={UserCheck} label="Assigned to" value={lead.assigned_to_name} />
-        </div>
-
-        {/* Only when there is something to say — an empty pair of headings on
-            every older lead would be worse than not asking. */}
-        {(lead.current_software || lead.switch_reason) && (
-          <div className="space-y-3 rounded-2xl border bg-card p-4 shadow-sm">
-            {lead.current_software && (
-              <div className="flex items-start gap-2.5">
-                <MonitorCog className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Using now
-                  </p>
-                  <p className="break-words text-sm text-card-foreground">{lead.current_software}</p>
-                </div>
-              </div>
-            )}
-            {lead.switch_reason && (
-              <div className="flex items-start gap-2.5">
-                <MessageSquareQuote className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Why they came to us
-                  </p>
-                  <p className="whitespace-pre-wrap break-words text-sm text-card-foreground">
-                    {lead.switch_reason}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {(lead.next_followup_at || lead.next_meeting_at) && (
-          <div className="mt-4 grid gap-2 rounded-xl bg-muted/50 p-3 sm:grid-cols-2">
-            {lead.next_followup_at && (
-              <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Next follow-up</p>
-                <p className="text-sm font-medium">{formatDateTime(lead.next_followup_at)}</p>
-              </div>
-            )}
-            {lead.next_meeting_at && (
-              <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Next meeting</p>
-                <p className="text-sm font-medium">{formatDateTime(lead.next_meeting_at)}</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {lead.notes && <p className="mt-4 whitespace-pre-wrap text-sm text-muted-foreground">{lead.notes}</p>}
-
-        {lead.status === "converted" && (
-          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm">
-            <p className="font-medium text-emerald-800">Converted to Customer</p>
-            <p className="text-emerald-700">Conversion date: {formatDate(lead.converted_at)}</p>
-            {lead.converted_client_id && (
-              <Link
-                to={`/clients/${lead.converted_client_id}`}
-                className="mt-1 inline-block text-xs font-medium text-emerald-800 underline"
-              >
-                Open customer record #{lead.converted_client_id} in the project system
-              </Link>
-            )}
-            {can("sales.leads.convert") && (
-              <p className="mt-2 text-xs text-emerald-700">
-                Converted by mistake? "Undo Convert" returns the lead to onboarding and removes the
-                customer record it created — unless that customer already existed or has work
-                attached to it by now.
-              </p>
-            )}
-          </div>
-        )}
-      </section>
+      )}
 
       {/* Primary actions — sticky on mobile so they are always one thumb away. */}
       <section className="sticky bottom-16 z-30 -mx-1 rounded-2xl border bg-card/95 p-3 shadow-lg backdrop-blur md:static md:bottom-auto md:mx-0 md:shadow-sm">
@@ -594,36 +589,7 @@ export default function SalesLeadDetail() {
       {/* Activity timeline */}
       <section className="space-y-3">
         <h2 className="text-base font-semibold">Activity Timeline</h2>
-        {lead.timeline.length === 0 ? (
-          <div className="rounded-2xl border border-dashed bg-card/50 p-6 text-center text-sm text-muted-foreground">
-            No activity recorded yet.
-          </div>
-        ) : (
-          <ol className="relative space-y-4 border-l pl-5">
-            {lead.timeline.map((a) => (
-              <li key={a.id} className="relative">
-                <span
-                  className={cn(
-                    "absolute -left-[26px] top-1.5 h-2.5 w-2.5 rounded-full ring-4 ring-background",
-                    a.activity_type === "lead_converted"
-                      ? "bg-emerald-500"
-                      : a.activity_type === "call_logged"
-                        ? "bg-primary"
-                        : "bg-muted-foreground/50",
-                  )}
-                />
-                <p className="text-sm font-medium text-card-foreground">{a.title}</p>
-                {a.description && (
-                  <p className="mt-0.5 whitespace-pre-wrap text-sm text-muted-foreground">{a.description}</p>
-                )}
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {formatDateTime(a.occurred_at)}
-                  {a.actor_name ? ` · ${a.actor_name}` : ""}
-                </p>
-              </li>
-            ))}
-          </ol>
-        )}
+        <DetailTimeline items={timelineItems} empty="No activity recorded yet." />
       </section>
 
       {/* Team discussion — anyone who can see the lead can talk about it here. */}

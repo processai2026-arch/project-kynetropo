@@ -1,12 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { Building2, CalendarClock, Lock, Search, User } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "sonner";
 import { opsClientsApi } from "@/lib/api/ops";
+import { useClientList } from "@/hooks/useClientList";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { RecordListPage } from "@/components/RecordListPage";
 import { PageHeader } from "@/components/PageHeader";
@@ -142,51 +140,26 @@ function ClientCard({ client }: { client: OpsClient }) {
 }
 
 export default function SalesClients() {
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  const [items, setItems] = useState<OpsClient[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState(searchParams.get("search") ?? "");
-  const [stage, setStage] = useState(searchParams.get("stage") ?? "all");
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await opsClientsApi.list(search ? { search } : undefined);
-      setItems(res.data ?? []);
-      setError(null);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Could not load clients";
-      setError(message);
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  }, [search]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    const next = new URLSearchParams();
-    if (search) next.set("search", search);
-    if (stage !== "all") next.set("stage", stage);
-    setSearchParams(next, { replace: true });
-  }, [search, stage, setSearchParams]);
-
-  // Stages come from the data rather than a fixed list, so a stage renamed in
-  // the dashboard does not quietly disappear from this filter.
-  const stages = useMemo(
-    () => [...new Set(items.map((c) => c.stage).filter(Boolean))].sort(),
-    [items],
+  const list = useClientList<OpsClient>(
+    async () => (await opsClientsApi.list()).data ?? [],
+    {
+      searchText: (c) => [c.name, c.phone, c.email, c.client_code, c.owner],
+      filters: {
+        stage: (c, v) => c.stage === v,
+      },
+    },
   );
-  const shown = stage === "all" ? items : items.filter((c) => c.stage === stage);
+
+  // Stages come from the loaded data rather than a fixed list, so a stage
+  // renamed in the dashboard does not quietly disappear from this filter.
+  const stages = useMemo(
+    () => [...new Set(list.source.map((c) => c.stage).filter(Boolean))].sort(),
+    [list.source],
+  );
 
   const totals = useMemo(
     () =>
-      shown.reduce(
+      list.allRows.reduce(
         (a, c) => ({
           quoted: a.quoted + (c.quoted ?? 0),
           received: a.received + (c.received ?? 0),
@@ -194,91 +167,84 @@ export default function SalesClients() {
         }),
         { quoted: 0, received: 0, balance: 0 },
       ),
-    [shown],
+    [list.allRows],
   );
 
   return (
     <SalesLayout>
       <RecordListPage>
-      <PageHeader title="Clients" />
+        <PageHeader title="Clients" />
 
-      <p className="inline-flex items-center gap-1.5 rounded-lg border bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
-        <Lock className="h-3 w-3 shrink-0" />
-        Read-only — client details and figures are edited in the admin dashboard.
-      </p>
+        <p className="inline-flex items-center gap-1.5 rounded-lg border bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+          <Lock className="h-3 w-3 shrink-0" />
+          Read-only — client details and figures are edited in the admin dashboard.
+        </p>
 
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          className="h-12 pl-9"
-          placeholder="Search name, email, phone…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-
-      {stages.length > 1 && (
-        <Select value={stage} onValueChange={setStage}>
-          <SelectTrigger className="h-12">
-            <SelectValue placeholder="All stages" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All stages</SelectItem>
-            {stages.map((s) => (
-              <SelectItem key={s} value={s}>
-                {s}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-
-      {loading ? (
         <div className="space-y-3">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-52 w-full rounded-2xl" />
-          ))}
-        </div>
-      ) : error ? (
-        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center text-sm text-destructive">
-          {error}
-          <div className="mt-3">
-            <Button variant="outline" size="sm" onClick={() => void load()}>
-              Try again
-            </Button>
-          </div>
-        </div>
-      ) : shown.length === 0 ? (
-        <div className="rounded-2xl border border-dashed bg-card/50 p-10 text-center">
-          <Building2 className="mx-auto h-7 w-7 text-muted-foreground" />
-          <p className="mt-3 text-sm text-muted-foreground">
-            {search || stage !== "all" ? "No clients match these filters." : "No clients yet."}
-          </p>
-        </div>
-      ) : (
-        <>
-          <div className="rounded-2xl border bg-card p-4 shadow-sm">
-            <p className="text-xs text-muted-foreground">
-              {shown.length} client{shown.length === 1 ? "" : "s"}
-            </p>
-            <div className="mt-2 grid grid-cols-3 gap-3">
-              <Money label="Amount" value={totals.quoted} />
-              <Money label="Paid" value={totals.received} tone="text-emerald-700" />
-              <Money
-                label="Balance"
-                value={totals.balance}
-                tone={totals.balance > 0 ? "text-red-600" : undefined}
-              />
-            </div>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-12 pl-9"
+              placeholder="Search name, email, phone…"
+              value={list.search}
+              onChange={(e) => list.setSearch(e.target.value)}
+            />
           </div>
 
-          <div className="space-y-3 md:grid md:grid-cols-2 md:gap-3 md:space-y-0 xl:grid-cols-3">
-            {shown.map((c) => (
-              <ClientCard key={c.id} client={c} />
+          {stages.length > 1 && (
+            <Select value={list.filters.stage ?? ""} onValueChange={(v) => list.setFilter("stage", v)}>
+              <SelectTrigger className="h-12">
+                <SelectValue placeholder="All stages" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All stages</SelectItem>
+                {stages.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {list.initialLoading ? (
+          <div className="space-y-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-52 w-full animate-pulse rounded-2xl bg-muted" />
             ))}
           </div>
-        </>
-      )}
+        ) : list.allRows.length === 0 ? (
+          <div className="rounded-2xl border border-dashed bg-card/50 p-10 text-center">
+            <Building2 className="mx-auto h-7 w-7 text-muted-foreground" />
+            <p className="mt-3 text-sm text-muted-foreground">
+              {list.isFiltered ? "No clients match these filters." : "No clients yet."}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="rounded-2xl border bg-card p-4 shadow-sm">
+              <p className="text-xs text-muted-foreground">
+                {list.allRows.length} client{list.allRows.length === 1 ? "" : "s"}
+              </p>
+              <div className="mt-2 grid grid-cols-3 gap-3">
+                <Money label="Amount" value={totals.quoted} />
+                <Money label="Paid" value={totals.received} tone="text-emerald-700" />
+                <Money
+                  label="Balance"
+                  value={totals.balance}
+                  tone={totals.balance > 0 ? "text-red-600" : undefined}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3 md:grid md:grid-cols-2 md:gap-3 md:space-y-0 xl:grid-cols-3">
+              {list.allRows.map((c) => (
+                <ClientCard key={c.id} client={c} />
+              ))}
+            </div>
+          </>
+        )}
       </RecordListPage>
     </SalesLayout>
   );
