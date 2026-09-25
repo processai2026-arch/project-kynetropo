@@ -10,6 +10,8 @@ import { salesLeadsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { useTeamMembers, namesakeHint } from "@/hooks/useTeamMembers";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
 import { LeadStatusBadge, TemperatureBadge, formatDate, formatTime } from "@/components/sales/SalesBits";
 import { LeadFormDialog } from "@/components/sales/LeadFormDialog";
 import { useConfirm } from "@/components/ConfirmDialog";
@@ -246,15 +248,16 @@ export default function SalesLeads() {
 
   return (
     <SalesLayout>
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-foreground">Leads</h1>
-        {can("sales.leads.create") && (
+      <RecordListPage>
+      <PageHeader
+        title="Leads"
+        action={can("sales.leads.create") ? (
           <Button onClick={openAdd} size="sm" className="h-9">
             <Plus className="mr-1.5 h-4 w-4" />
             Add Lead
           </Button>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       <div className="space-y-3">
         <div className="relative">
@@ -395,6 +398,7 @@ export default function SalesLeads() {
           }
         }}
       />
+      </RecordListPage>
     </SalesLayout>
   );
 }

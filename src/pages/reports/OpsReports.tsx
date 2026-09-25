@@ -5,15 +5,9 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { opsReportsApi, type ReportSummary } from "@/lib/api/opsReports";
 import { cn } from "@/lib/utils";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
 
-/**
- * The report catalogue: everything the system can tell you about itself, in one
- * place, grouped by the part of the business it answers for.
- *
- * The list comes from the server rather than being written out here, so a report
- * added to the registry appears on this page without anyone remembering to add
- * a card for it.
- */
 export default function OpsReports() {
   const [reports, setReports] = useState<ReportSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,11 +26,8 @@ export default function OpsReports() {
   const grouped = useMemo(() => {
     const q = query.trim().toLowerCase();
     const matched = q
-      ? reports.filter((r) =>
-          `${r.title} ${r.description} ${r.category}`.toLowerCase().includes(q),
-        )
+      ? reports.filter((r) => `${r.title} ${r.description} ${r.category}`.toLowerCase().includes(q))
       : reports;
-    // Insertion order is the registry's order, which groups by area already.
     const out = new Map<string, ReportSummary[]>();
     for (const r of matched) {
       if (!out.has(r.category)) out.set(r.category, []);
@@ -48,26 +39,17 @@ export default function OpsReports() {
   const total = reports.length;
 
   return (
-    <div className="space-y-8 p-4 sm:p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {loading
-              ? "Loading…"
-              : `${total} report${total === 1 ? "" : "s"} across the pipeline, your clients and the money.`}
-          </p>
-        </div>
-        <div className="relative w-full sm:max-w-xs">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            className="h-11 pl-9"
-            placeholder="Find a report…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-      </div>
+    <RecordListPage>
+      <PageHeader
+        title="Reports"
+        subtitle={loading ? "Loading…" : `${total} report${total === 1 ? "" : "s"} across the pipeline, your clients and the money.`}
+        action={
+          <div className="relative w-full sm:w-[240px]">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input className="h-9 pl-9" placeholder="Find a report…" value={query} onChange={(e) => setQuery(e.target.value)} />
+          </div>
+        }
+      />
 
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -77,9 +59,7 @@ export default function OpsReports() {
         </div>
       ) : grouped.length === 0 ? (
         <div className="rounded-2xl border border-dashed p-12 text-center">
-          <p className="text-sm text-muted-foreground">
-            No report matches “{query}”.
-          </p>
+          <p className="text-sm text-muted-foreground">No report matches "{query}".</p>
         </div>
       ) : (
         grouped.map(([category, items]) => (
@@ -110,6 +90,6 @@ export default function OpsReports() {
           </section>
         ))
       )}
-    </div>
+    </RecordListPage>
   );
 }

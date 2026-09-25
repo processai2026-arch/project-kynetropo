@@ -15,6 +15,8 @@ import {
   User, Calendar, FolderKanban, Check, Upload, X, Plus,
 } from "lucide-react";
 import { toast } from "sonner";
+import { RecordDetailPage } from "@/components/RecordDetailPage";
+import { SectionCard } from "@/components/SectionCard";
 
 const priorityStyles: Record<string, string> = {
   p0_critical: "bg-red-50 text-red-600 border-red-200",
@@ -61,11 +63,9 @@ export default function BugDetail() {
   const [sending, setSending]   = useState(false);
   const [newStatus, setNewStatus] = useState("");
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  // Steps to reproduce editing
   const [editingSteps, setEditingSteps] = useState(false);
   const [stepsValue, setStepsValue]     = useState("");
   const [savingSteps, setSavingSteps]   = useState(false);
-  // Screenshot upload
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [localScreenshots, setLocalScreenshots] = useState<{ id: number; file_path: string; name: string }[]>([]);
 
@@ -125,7 +125,6 @@ export default function BugDetail() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
-    // In mock mode: create object URLs so images render immediately
     const newScreenshots = files.map((file, i) => ({
       id: Date.now() + i,
       file_path: URL.createObjectURL(file),
@@ -133,7 +132,6 @@ export default function BugDetail() {
     }));
     setLocalScreenshots(prev => [...prev, ...newScreenshots]);
     toast.success(`${files.length} screenshot${files.length > 1 ? "s" : ""} added`);
-    // Reset input so same file can be re-selected
     e.target.value = "";
   };
 
@@ -142,7 +140,6 @@ export default function BugDetail() {
     toast.success("Screenshot removed");
   };
 
-  // Merge history entries and comments into a single chronological timeline
   const timeline = bug ? [
     ...(bug.history ?? []).map(h => ({
       type: "status" as const,
@@ -161,7 +158,7 @@ export default function BugDetail() {
   ].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()) : [];
 
   if (loading) return (
-    <div className="space-y-6">
+    <RecordDetailPage>
       <Skeleton className="h-8 w-64" />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
@@ -170,7 +167,7 @@ export default function BugDetail() {
         </div>
         <Skeleton className="h-64 w-full" />
       </div>
-    </div>
+    </RecordDetailPage>
   );
 
   if (!bug) return <div className="p-8 text-muted-foreground">Bug not found</div>;
@@ -178,7 +175,7 @@ export default function BugDetail() {
   const currentStatusIdx = statusOrder.indexOf(bug.status);
 
   return (
-    <div className="space-y-6">
+    <RecordDetailPage>
       {/* Header */}
       <div className="flex items-start gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="shrink-0 mt-0.5">
@@ -207,9 +204,7 @@ export default function BugDetail() {
               </Link>
             </span>
             {bug.module && (
-              <span className="flex items-center gap-1">
-                <Bug className="h-3 w-3" />{bug.module}
-              </span>
+              <span className="flex items-center gap-1"><Bug className="h-3 w-3" />{bug.module}</span>
             )}
             <span className="flex items-center gap-1">
               <User className="h-3 w-3" />Reported by {bug.reported_by || "—"}
@@ -228,7 +223,7 @@ export default function BugDetail() {
       </div>
 
       {/* Status progress bar */}
-      <div className="bg-card rounded-xl border shadow-sm p-4">
+      <SectionCard bodyPadding="p-4">
         <div className="flex items-center gap-1">
           {statusOrder.map((s, idx) => {
             const done    = idx < currentStatusIdx;
@@ -237,9 +232,7 @@ export default function BugDetail() {
               <div key={s} className="flex-1 flex flex-col items-center gap-1">
                 <div className={cn(
                   "w-full h-2 rounded-full transition-colors",
-                  done    ? "bg-emerald-500" :
-                  current ? "bg-primary" :
-                            "bg-muted",
+                  done ? "bg-emerald-500" : current ? "bg-primary" : "bg-muted",
                 )} />
                 <span className={cn(
                   "text-xs capitalize hidden sm:block",
@@ -249,19 +242,16 @@ export default function BugDetail() {
             );
           })}
         </div>
-      </div>
+      </SectionCard>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left — main content */}
         <div className="lg:col-span-2 space-y-5">
-
-          {/* Steps to reproduce */}
-          <div className="bg-card rounded-xl border shadow-sm p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-card-foreground flex items-center gap-2">
-                <Bug className="h-4 w-4 text-primary" />Steps to Reproduce
-              </h2>
-              {!editingSteps
+          <SectionCard
+            title="Steps to Reproduce"
+            icon={Bug}
+            headerAction={
+              !editingSteps
                 ? <Button size="sm" variant="outline" onClick={() => setEditingSteps(true)}>
                     <Pencil className="h-3.5 w-3.5 mr-1" />Edit
                   </Button>
@@ -273,8 +263,8 @@ export default function BugDetail() {
                       Cancel
                     </Button>
                   </div>
-              }
-            </div>
+            }
+          >
             {editingSteps ? (
               <Textarea
                 value={stepsValue}
@@ -296,27 +286,20 @@ export default function BugDetail() {
                 </Button>
               </div>
             )}
-          </div>
+          </SectionCard>
 
-          {/* Screenshots */}
-          <div className="bg-card rounded-xl border shadow-sm p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-card-foreground flex items-center gap-2">
-                <ImageIcon className="h-4 w-4 text-primary" />
-                Screenshots ({localScreenshots.length})
-              </h2>
-              <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>
-                <Upload className="h-3.5 w-3.5 mr-1" />Upload
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={handleFileChange}
-              />
-            </div>
+          <SectionCard
+            title={`Screenshots (${localScreenshots.length})`}
+            icon={ImageIcon}
+            headerAction={
+              <>
+                <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                  <Upload className="h-3.5 w-3.5 mr-1" />Upload
+                </Button>
+                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileChange} />
+              </>
+            }
+          >
             {localScreenshots.length === 0 ? (
               <button
                 onClick={() => fileInputRef.current?.click()}
@@ -329,20 +312,17 @@ export default function BugDetail() {
                 {localScreenshots.map(s => (
                   <div key={s.id} className="group relative aspect-video rounded-lg overflow-hidden border bg-muted">
                     <img src={s.file_path} alt={s.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                    {/* Remove button */}
                     <button
                       onClick={() => handleRemoveScreenshot(s.id)}
                       className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
                       title="Remove">
                       <X className="h-3 w-3" />
                     </button>
-                    {/* Name on hover */}
                     <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity truncate">
                       {s.name}
                     </div>
                   </div>
                 ))}
-                {/* Add more tile */}
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   className="aspect-video rounded-lg border-2 border-dashed border-border flex flex-col items-center justify-center text-muted-foreground hover:border-primary hover:text-primary transition-colors text-xs gap-1">
@@ -351,17 +331,10 @@ export default function BugDetail() {
                 </button>
               </div>
             )}
-          </div>
+          </SectionCard>
 
-          {/* Comments + Timeline */}
-          <div className="bg-card rounded-xl border shadow-sm">
-            <div className="p-4 border-b flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold text-card-foreground">
-                Activity &amp; Comments ({timeline.length})
-              </h2>
-            </div>
-            <div className="p-4 space-y-4">
+          <SectionCard title={`Activity & Comments (${timeline.length})`} icon={MessageSquare}>
+            <div className="space-y-4">
               {timeline.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4">No activity yet</p>
               )}
@@ -399,7 +372,6 @@ export default function BugDetail() {
                 </div>
               ))}
 
-              {/* Add comment box */}
               <div className="border-t pt-4 space-y-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Your name</Label>
@@ -417,9 +389,7 @@ export default function BugDetail() {
                     placeholder="Describe what you found, what was done, or ask a question…"
                     value={comment}
                     onChange={e => setComment(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSendComment();
-                    }}
+                    onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSendComment(); }}
                   />
                   <p className="text-xs text-muted-foreground">Ctrl+Enter to submit</p>
                 </div>
@@ -429,19 +399,15 @@ export default function BugDetail() {
                 </Button>
               </div>
             </div>
-          </div>
+          </SectionCard>
         </div>
 
         {/* Right — metadata + actions */}
         <div className="space-y-4">
-          {/* Update status */}
-          <div className="bg-card rounded-xl border shadow-sm p-4">
-            <h3 className="text-sm font-semibold text-card-foreground mb-3">Update Status</h3>
+          <SectionCard title="Update Status">
             <div className="space-y-3">
               <Select value={newStatus} onValueChange={handleStatusChange} disabled={updatingStatus}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {["open","in_progress","fixed","retest","closed","wont_fix"].map(s => (
                     <SelectItem key={s} value={s} className="capitalize">{s.replace("_", " ")}</SelectItem>
@@ -450,47 +416,47 @@ export default function BugDetail() {
               </Select>
               <p className="text-xs text-muted-foreground">Changing status logs it to the activity timeline.</p>
             </div>
-          </div>
+          </SectionCard>
 
-          {/* Bug details */}
-          <div className="bg-card rounded-xl border shadow-sm p-4 space-y-3 text-sm">
-            <h3 className="font-semibold text-card-foreground">Details</h3>
-            {[
-              ["Project",    <Link to={`/projects/${bug.project_id}`} className="text-primary hover:underline">{bug.project_name ?? "—"}</Link>],
-              ["Module",     bug.module || "—"],
-              ["Type",       <span className="capitalize">{bug.type.replace("_", " ")}</span>],
-              ["Priority",   <Badge className={cn("border text-xs", priorityStyles[bug.priority])}>{priorityLabels[bug.priority]}</Badge>],
-              ["Reported by",bug.reported_by || "—"],
-              ["Developer",  bug.developer_name || "Unassigned"],
-              ["QA",         bug.qa_name        || "Unassigned"],
-              ["Target date",bug.target_date    || "—"],
-              ["Opened",     new Date(bug.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })],
-            ].map(([label, val]) => (
-              <div key={String(label)} className="flex justify-between items-start gap-2">
-                <span className="text-muted-foreground shrink-0">{label}</span>
-                <span className="text-card-foreground text-right">{val as React.ReactNode}</span>
-              </div>
-            ))}
-          </div>
+          <SectionCard title="Details">
+            <div className="space-y-3 text-sm">
+              {[
+                ["Project",    <Link to={`/projects/${bug.project_id}`} className="text-primary hover:underline">{bug.project_name ?? "—"}</Link>],
+                ["Module",     bug.module || "—"],
+                ["Type",       <span className="capitalize">{bug.type.replace("_", " ")}</span>],
+                ["Priority",   <Badge className={cn("border text-xs", priorityStyles[bug.priority])}>{priorityLabels[bug.priority]}</Badge>],
+                ["Reported by",bug.reported_by || "—"],
+                ["Developer",  bug.developer_name || "Unassigned"],
+                ["QA",         bug.qa_name        || "Unassigned"],
+                ["Target date",bug.target_date    || "—"],
+                ["Opened",     new Date(bug.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })],
+              ].map(([label, val]) => (
+                <div key={String(label)} className="flex justify-between items-start gap-2">
+                  <span className="text-muted-foreground shrink-0">{label}</span>
+                  <span className="text-card-foreground text-right">{val as React.ReactNode}</span>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
 
-          {/* Quick actions */}
-          <div className="bg-card rounded-xl border shadow-sm p-4 space-y-2">
-            <h3 className="text-sm font-semibold text-card-foreground mb-3">Quick Actions</h3>
-            <Button
-              variant="outline" size="sm" className="w-full justify-start"
-              onClick={() => navigate(`/bugs?project_id=${bug.project_id}`)}
-            >
-              <Bug className="h-3.5 w-3.5 mr-2" />All bugs in this project
-            </Button>
-            <Button
-              variant="outline" size="sm" className="w-full justify-start"
-              onClick={() => navigate(`/projects/${bug.project_id}`)}
-            >
-              <FolderKanban className="h-3.5 w-3.5 mr-2" />Go to project
-            </Button>
-          </div>
+          <SectionCard title="Quick Actions">
+            <div className="space-y-2">
+              <Button
+                variant="outline" size="sm" className="w-full justify-start"
+                onClick={() => navigate(`/bugs?project_id=${bug.project_id}`)}
+              >
+                <Bug className="h-3.5 w-3.5 mr-2" />All bugs in this project
+              </Button>
+              <Button
+                variant="outline" size="sm" className="w-full justify-start"
+                onClick={() => navigate(`/projects/${bug.project_id}`)}
+              >
+                <FolderKanban className="h-3.5 w-3.5 mr-2" />Go to project
+              </Button>
+            </div>
+          </SectionCard>
         </div>
       </div>
-    </div>
+    </RecordDetailPage>
   );
 }

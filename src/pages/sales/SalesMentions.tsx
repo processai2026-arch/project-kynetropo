@@ -6,6 +6,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { salesMentionsApi } from "@/lib/api/sales";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
 import { formatDateTime } from "@/components/sales/SalesBits";
 import type { SalesMention } from "@/types/sales";
 import { cn } from "@/lib/utils";
@@ -61,12 +63,8 @@ export default function SalesMentions() {
 
   return (
     <SalesLayout>
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Mentioned</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          When someone writes your name in a comment, it lands here.
-        </p>
-      </div>
+      <RecordListPage>
+      <PageHeader title="Mentioned" subtitle="When someone writes your name in a comment, it lands here." />
 
       {loading ? (
         <div className="space-y-3">
@@ -132,6 +130,7 @@ export default function SalesMentions() {
           })}
         </div>
       )}
+      </RecordListPage>
     </SalesLayout>
   );
 }

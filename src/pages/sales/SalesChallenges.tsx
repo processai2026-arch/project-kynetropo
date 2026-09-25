@@ -14,6 +14,8 @@ import { salesChallengesApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { useTeamMembers, namesakeHint } from "@/hooks/useTeamMembers";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
 import { ChallengeStatusBadge, formatDateTime } from "@/components/sales/SalesBits";
 import { ChallengeTimer } from "@/components/sales/ChallengeTimer";
 import type { ChallengeCounts, ChallengeStatus, SalesChallenge } from "@/types/sales";
@@ -102,15 +104,16 @@ export default function SalesChallenges() {
 
   return (
     <SalesLayout>
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-foreground">Challenges</h1>
-        {can("sales.challenges.create") && (
+      <RecordListPage>
+      <PageHeader
+        title="Challenges"
+        action={can("sales.challenges.create") ? (
           <Button size="sm" className="h-9" onClick={() => setFormOpen(true)}>
             <Plus className="mr-1.5 h-4 w-4" />
             New
           </Button>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
         {FILTERS.map((f) => (
@@ -314,6 +317,7 @@ export default function SalesChallenges() {
           </form>
         </DialogContent>
       </Dialog>
+      </RecordListPage>
     </SalesLayout>
   );
 }

@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { opsClientsApi } from "@/lib/api/ops";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
 import { formatDate } from "@/components/sales/SalesBits";
 import type { OpsClient } from "@/types/ops";
 import { cn } from "@/lib/utils";
@@ -197,7 +199,8 @@ export default function SalesClients() {
 
   return (
     <SalesLayout>
-      <h1 className="text-2xl font-bold tracking-tight">Clients</h1>
+      <RecordListPage>
+      <PageHeader title="Clients" />
 
       <p className="inline-flex items-center gap-1.5 rounded-lg border bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
         <Lock className="h-3 w-3 shrink-0" />
@@ -276,6 +279,7 @@ export default function SalesClients() {
           </div>
         </>
       )}
+      </RecordListPage>
     </SalesLayout>
   );
 }

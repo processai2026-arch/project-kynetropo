@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { salesAiApi } from "@/lib/api/salesAi";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { RecordListPage } from "@/components/RecordListPage";
 import { cn } from "@/lib/utils";
 import type {
   SalesAiChatMessage,
@@ -162,6 +163,7 @@ export default function SalesAssistant() {
 
   return (
     <SalesLayout>
+      <RecordListPage>
       <div className="flex h-[calc(100dvh-8rem)] gap-4">
         {/* History rail (desktop) */}
         <aside className="hidden w-64 shrink-0 flex-col rounded-2xl border bg-card md:flex">
@@ -284,6 +286,7 @@ export default function SalesAssistant() {
           </footer>
         </section>
       </div>
+      </RecordListPage>
     </SalesLayout>
   );
 }

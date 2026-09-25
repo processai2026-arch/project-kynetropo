@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { salesAccessApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
 import type { SalesAccessUser } from "@/types/sales";
 
 const STAFF_ROLES = ["sales", "owner", "accountant", "hr", "store_keeper"] as const;
@@ -188,6 +190,7 @@ export default function SalesAccessControl() {
   if (!accessLoading && !allowed) {
     return (
       <SalesLayout>
+        <RecordListPage>
         <div className="rounded-2xl border bg-card p-8 text-center shadow-sm">
           <ShieldCheck className="mx-auto h-7 w-7 text-muted-foreground" />
           <h1 className="mt-3 text-lg font-semibold">Access Control</h1>
@@ -195,25 +198,24 @@ export default function SalesAccessControl() {
             Only a sales administrator can manage sales permissions.
           </p>
         </div>
+        </RecordListPage>
       </SalesLayout>
     );
   }
 
   return (
     <SalesLayout>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Sales Access Control</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Create the logins your team uses to sign in to the Kynetropo app — on a phone or on
-            the desktop — and grant their permissions. Owners always hold every sales permission.
-          </p>
-        </div>
-        <Button className="h-10 shrink-0" onClick={() => setCreateOpen(true)}>
-          <UserPlus className="mr-1.5 h-4 w-4" />
-          Add Sales User
-        </Button>
-      </div>
+      <RecordListPage>
+      <PageHeader
+        title="Sales Access Control"
+        subtitle="Create the logins your team uses to sign in to the Kynetropo app — on a phone or on the desktop — and grant their permissions. Owners always hold every sales permission."
+        action={
+          <Button className="h-10 shrink-0" onClick={() => setCreateOpen(true)}>
+            <UserPlus className="mr-1.5 h-4 w-4" />
+            Add Sales User
+          </Button>
+        }
+      />
 
       {loading || accessLoading ? (
         <div className="space-y-3">
@@ -518,6 +520,7 @@ export default function SalesAccessControl() {
           </div>
         </DialogContent>
       </Dialog>
+      </RecordListPage>
     </SalesLayout>
   );
 }

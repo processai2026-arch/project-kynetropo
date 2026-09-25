@@ -13,6 +13,8 @@ import { salesTasksApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
 import { TaskDialog } from "@/components/sales/TaskDialog";
 import { CommentButton, CommentThread } from "@/components/sales/CommentThread";
 import { formatDate, formatDateTime, formatTime, humanise } from "@/components/sales/SalesBits";
@@ -257,30 +259,29 @@ export default function SalesTasks() {
   if (!can("sales.tasks.view")) {
     return (
       <SalesLayout>
-        <h1 className="text-2xl font-bold text-foreground">Tasks</h1>
+        <RecordListPage>
+        <PageHeader title="Tasks" />
         <div className="rounded-2xl border border-dashed bg-card/50 p-10 text-center text-sm text-muted-foreground">
           You do not have access to tasks. Ask your administrator.
         </div>
+        </RecordListPage>
       </SalesLayout>
     );
   }
 
   return (
     <SalesLayout onCreated={() => void load()}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Tasks</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Work you owe, and work you are waiting on.
-          </p>
-        </div>
-        {can("sales.tasks.create") && (
+      <RecordListPage>
+      <PageHeader
+        title="Tasks"
+        subtitle="Work you owe, and work you are waiting on."
+        action={can("sales.tasks.create") ? (
           <Button className="h-10 shrink-0" onClick={() => { setEditing(null); setDialogOpen(true); }}>
             <Plus className="mr-1.5 h-4 w-4" />
             Give a task
           </Button>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
         {TABS.map((t) => (
@@ -534,6 +535,7 @@ export default function SalesTasks() {
           else void load();
         }}
       />
+      </RecordListPage>
     </SalesLayout>
   );
 }

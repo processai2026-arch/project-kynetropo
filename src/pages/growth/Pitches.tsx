@@ -9,9 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
+import { Panel } from "@/components/Panel";
 import { opsPitchesApi } from "@/lib/api/ops";
 import type { OpsPitch } from "@/types/ops";
-import { Megaphone, Plus, Pencil, Eye, TrendingUp } from "lucide-react";
+import { Plus, Pencil, Eye } from "lucide-react";
 import { toast } from "sonner";
 
 const typeLabels: Record<string, string> = {
@@ -42,7 +45,6 @@ export default function Pitches() {
   useEffect(() => { load(); }, []);
 
   const set = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }));
-
   const openCreate = () => { setEditing(null); setForm(EMPTY); setFormOpen(true); };
   const openEdit   = (p: OpsPitch) => {
     setEditing(p);
@@ -69,18 +71,18 @@ export default function Pitches() {
   const totalLeads   = items.reduce((s, p) => s + p.leads_count, 0);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Pitches &amp; Marketing</h1>
-        <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Add Pitch</Button>
-      </div>
+    <RecordListPage>
+      <PageHeader
+        title="Pitches &amp; Marketing"
+        action={<Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Add Pitch</Button>}
+      />
 
       {!loading && items.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { label: "Total Events", value: String(items.length) },
-            { label: "Total Leads", value: String(totalLeads) },
-            { label: "Total Spend", value: "₹" + totalSpend.toLocaleString("en-IN") },
+            { label: "Total Events",  value: String(items.length) },
+            { label: "Total Leads",   value: String(totalLeads) },
+            { label: "Total Spend",   value: "₹" + totalSpend.toLocaleString("en-IN") },
             { label: "Total Revenue", value: "₹" + totalRevenue.toLocaleString("en-IN") },
           ].map(s => (
             <div key={s.label} className="bg-card rounded-xl border shadow-sm p-5">
@@ -91,59 +93,53 @@ export default function Pitches() {
         </div>
       )}
 
-      <div className="bg-card rounded-xl border shadow-sm">
-        <div className="p-4 border-b flex items-center gap-2">
-          <Megaphone className="h-4 w-4 text-primary" />
-          <h2 className="text-base font-semibold text-card-foreground">All Pitch Events ({items.length})</h2>
-        </div>
-        <div className="p-4">
-          <div className="overflow-x-auto eco-float-scroll">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  {["Event","Date","City","Type","Spend","Leads","Converted","Conv %","Revenue","ROI",""].map(h => (
-                    <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
-                  ))}
+      <Panel title={`All Pitch Events (${items.length})`} flush>
+        <div className="overflow-x-auto eco-float-scroll">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                {["Event","Date","City","Type","Spend","Leads","Converted","Conv %","Revenue","ROI",""].map(h => (
+                  <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading && Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} className="border-b">{Array.from({ length: 11 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-14" /></td>)}</tr>
+              ))}
+              {!loading && items.length === 0 && (
+                <tr><td colSpan={11} className="px-6 py-8 text-center text-muted-foreground text-sm">No pitch events yet</td></tr>
+              )}
+              {!loading && items.map(p => (
+                <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
+                  <td className="py-3 px-4 font-medium text-card-foreground">{p.name}</td>
+                  <td className="py-3 px-4 text-card-foreground">{p.date}</td>
+                  <td className="py-3 px-4 text-card-foreground">{p.city ?? "—"}</td>
+                  <td className="py-3 px-4">
+                    <Badge variant="outline" className="text-xs">{typeLabels[p.type] ?? p.type}</Badge>
+                  </td>
+                  <td className="py-3 px-4 text-card-foreground">₹{Number(p.spend).toLocaleString("en-IN")}</td>
+                  <td className="py-3 px-4 text-card-foreground">{p.leads_count}</td>
+                  <td className="py-3 px-4 text-card-foreground">{p.converted}</td>
+                  <td className="py-3 px-4 text-card-foreground">{p.conversion_pct}%</td>
+                  <td className="py-3 px-4 text-emerald-700 font-medium">₹{Number(p.revenue).toLocaleString("en-IN")}</td>
+                  <td className="py-3 px-4">
+                    {p.roi != null ? (
+                      <span className={cn("font-medium", p.roi >= 0 ? "text-emerald-700" : "text-red-600")}>
+                        {p.roi >= 0 ? "+" : ""}{p.roi}%
+                      </span>
+                    ) : "—"}
+                  </td>
+                  <td className="py-3 px-4 flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => openEdit(p)}><Pencil className="h-4 w-4" /></Button>
+                    <Link to={`/pitches/${p.id}`}><Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button></Link>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {loading && Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="border-b">{Array.from({ length: 11 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-14" /></td>)}</tr>
-                ))}
-                {!loading && items.length === 0 && (
-                  <tr><td colSpan={11} className="px-6 py-8 text-center text-muted-foreground text-sm">No pitch events yet</td></tr>
-                )}
-                {!loading && items.map(p => (
-                  <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
-                    <td className="py-3 px-4 font-medium text-card-foreground">{p.name}</td>
-                    <td className="py-3 px-4 text-card-foreground">{p.date}</td>
-                    <td className="py-3 px-4 text-card-foreground">{p.city ?? "—"}</td>
-                    <td className="py-3 px-4">
-                      <Badge variant="outline" className="text-xs">{typeLabels[p.type] ?? p.type}</Badge>
-                    </td>
-                    <td className="py-3 px-4 text-card-foreground">₹{Number(p.spend).toLocaleString("en-IN")}</td>
-                    <td className="py-3 px-4 text-card-foreground">{p.leads_count}</td>
-                    <td className="py-3 px-4 text-card-foreground">{p.converted}</td>
-                    <td className="py-3 px-4 text-card-foreground">{p.conversion_pct}%</td>
-                    <td className="py-3 px-4 text-emerald-700 font-medium">₹{Number(p.revenue).toLocaleString("en-IN")}</td>
-                    <td className="py-3 px-4">
-                      {p.roi != null ? (
-                        <span className={cn("font-medium", p.roi >= 0 ? "text-emerald-700" : "text-red-600")}>
-                          {p.roi >= 0 ? "+" : ""}{p.roi}%
-                        </span>
-                      ) : "—"}
-                    </td>
-                    <td className="py-3 px-4 flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(p)}><Pencil className="h-4 w-4" /></Button>
-                      <Link to={`/pitches/${p.id}`}><Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button></Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
+      </Panel>
 
       <Dialog open={formOpen} onOpenChange={v => { if (!saving) setFormOpen(v); }}>
         <DialogContent className="max-w-lg" onInteractOutside={e => e.preventDefault()}>
@@ -191,6 +187,6 @@ export default function Pitches() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </RecordListPage>
   );
 }

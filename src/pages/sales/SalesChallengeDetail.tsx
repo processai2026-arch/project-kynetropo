@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { salesChallengesApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { RecordDetailPage } from "@/components/RecordDetailPage";
 import { ChallengeStatusBadge, formatDateTime, humanise } from "@/components/sales/SalesBits";
 import { CommentThread } from "@/components/sales/CommentThread";
 import { ChallengeTimer } from "@/components/sales/ChallengeTimer";
@@ -119,8 +120,10 @@ export default function SalesChallengeDetail() {
   if (loading) {
     return (
       <SalesLayout>
+        <RecordDetailPage>
         <Skeleton className="h-8 w-40" />
         <Skeleton className="h-48 w-full rounded-2xl" />
+        </RecordDetailPage>
       </SalesLayout>
     );
   }
@@ -128,6 +131,7 @@ export default function SalesChallengeDetail() {
   if (error || !challenge) {
     return (
       <SalesLayout>
+        <RecordDetailPage>
         <Button variant="ghost" size="sm" onClick={() => navigate("/sales/challenges")}>
           <ArrowLeft className="mr-1.5 h-4 w-4" />
           Challenges
@@ -135,6 +139,7 @@ export default function SalesChallengeDetail() {
         <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center text-sm text-destructive">
           {error ?? "Challenge not found"}
         </div>
+        </RecordDetailPage>
       </SalesLayout>
     );
   }
@@ -297,6 +302,7 @@ export default function SalesChallengeDetail() {
 
   return (
     <SalesLayout>
+      <RecordDetailPage>
       <Button variant="ghost" size="sm" className="-ml-2 w-fit" onClick={() => navigate("/sales/challenges")}>
         <ArrowLeft className="mr-1.5 h-4 w-4" />
         Challenges
@@ -388,6 +394,7 @@ export default function SalesChallengeDetail() {
           {shell}
         </ChallengeExpiredAnimation>
       )}
+      </RecordDetailPage>
     </SalesLayout>
   );
 }

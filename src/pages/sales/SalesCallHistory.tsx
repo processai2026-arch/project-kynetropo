@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import { salesCallsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
 import { CommentButton, CommentThread } from "@/components/sales/CommentThread";
 import { TemperatureBadge, formatDate, formatTime, humanise, subjectLabel, subjectPath } from "@/components/sales/SalesBits";
 import type { LeadCallSummary, SalesCall } from "@/types/sales";
@@ -249,15 +251,11 @@ export default function SalesCallHistory() {
 
   return (
     <SalesLayout>
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Call History</h1>
-        {!loading && !error && leads.length > 0 && (
-          <p className="mt-1 text-sm text-muted-foreground">
-            {totalCalls} {totalCalls === 1 ? "call" : "calls"} across {leads.length}{" "}
-            {leads.length === 1 ? "lead" : "leads"}
-          </p>
-        )}
-      </div>
+      <RecordListPage>
+      <PageHeader
+        title="Call History"
+        subtitle={!loading && !error && leads.length > 0 ? `${totalCalls} ${totalCalls === 1 ? "call" : "calls"} across ${leads.length} ${leads.length === 1 ? "lead" : "leads"}` : undefined}
+      />
 
       {loading ? (
         <div className="space-y-3">
@@ -350,6 +348,7 @@ export default function SalesCallHistory() {
           load();
         }}
       />
+      </RecordListPage>
     </SalesLayout>
   );
 }

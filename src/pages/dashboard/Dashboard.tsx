@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { StatCard } from "@/components/StatCard";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
+import { Panel } from "@/components/Panel";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -32,10 +35,9 @@ export default function Dashboard() {
   const fmt = (n: number) => "₹" + n.toLocaleString("en-IN");
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">Morning Command Center</h1>
+    <RecordListPage>
+      <PageHeader title="Morning Command Center" />
 
-      {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {loading ? Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="bg-card rounded-xl border shadow-sm p-5">
@@ -51,13 +53,8 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Today's Actions */}
-        <div className="bg-card rounded-xl border shadow-sm lg:col-span-1">
-          <div className="p-4 border-b flex items-center gap-2">
-            <CalendarDays className="h-4 w-4 text-primary" />
-            <h2 className="text-base font-semibold text-card-foreground">Today's Actions</h2>
-          </div>
-          <div className="p-4 space-y-3">
+        <Panel title="Today's Actions" className="lg:col-span-1">
+          <div className="space-y-3">
             {loading ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />) : <>
               {(data?.today_actions.followups_today ?? []).length > 0 && (
                 <div>
@@ -97,95 +94,75 @@ export default function Dashboard() {
               )}
             </>}
           </div>
-        </div>
+        </Panel>
 
-        {/* At-risk Projects */}
-        <div className="bg-card rounded-xl border shadow-sm">
-          <div className="p-4 border-b flex items-center gap-2">
-            <FolderKanban className="h-4 w-4 text-primary" />
-            <h2 className="text-base font-semibold text-card-foreground">At-Risk Projects</h2>
-          </div>
-          <div className="p-4">
-            <div className="overflow-x-auto eco-float-scroll">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    {["Project","Client","Health","Stage"].map(h => (
-                      <th key={h} className="text-left py-2 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
-                    ))}
+        <Panel title="At-Risk Projects" flush>
+          <div className="overflow-x-auto eco-float-scroll">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  {["Project","Client","Health","Stage"].map(h => (
+                    <th key={h} className="text-left py-2 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading && Array.from({ length: 3 }).map((_, i) => (
+                  <tr key={i} className="border-b"><td colSpan={4} className="py-2 px-3"><Skeleton className="h-4 w-full" /></td></tr>
+                ))}
+                {!loading && (data?.project_health.at_risk_projects ?? []).length === 0 && (
+                  <tr><td colSpan={4} className="py-6 text-center text-sm text-muted-foreground">No at-risk projects</td></tr>
+                )}
+                {!loading && (data?.project_health.at_risk_projects ?? []).map(p => (
+                  <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
+                    <td className="py-2 px-3">
+                      <Link to={`/projects/${p.id}`} className="font-medium text-primary hover:underline">{p.name}</Link>
+                    </td>
+                    <td className="py-2 px-3 text-card-foreground">{p.client_name}</td>
+                    <td className="py-2 px-3">
+                      <Badge className={cn("border capitalize text-xs", healthStyles[p.health])}>{p.health}</Badge>
+                    </td>
+                    <td className="py-2 px-3 text-xs text-muted-foreground truncate max-w-[120px]">{p.stage}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {loading && Array.from({ length: 3 }).map((_, i) => (
-                    <tr key={i} className="border-b"><td colSpan={4} className="py-2 px-3"><Skeleton className="h-4 w-full" /></td></tr>
-                  ))}
-                  {!loading && (data?.project_health.at_risk_projects ?? []).length === 0 && (
-                    <tr><td colSpan={4} className="py-6 text-center text-sm text-muted-foreground">No at-risk projects</td></tr>
-                  )}
-                  {!loading && (data?.project_health.at_risk_projects ?? []).map(p => (
-                    <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
-                      <td className="py-2 px-3">
-                        <Link to={`/projects/${p.id}`} className="font-medium text-primary hover:underline">{p.name}</Link>
-                      </td>
-                      <td className="py-2 px-3 text-card-foreground">{p.client_name}</td>
-                      <td className="py-2 px-3">
-                        <Badge className={cn("border capitalize text-xs", healthStyles[p.health])}>{p.health}</Badge>
-                      </td>
-                      <td className="py-2 px-3 text-xs text-muted-foreground truncate max-w-[120px]">{p.stage}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </Panel>
 
-        {/* Overdue Collections */}
-        <div className="bg-card rounded-xl border shadow-sm">
-          <div className="p-4 border-b flex items-center gap-2">
-            <RefreshCcw className="h-4 w-4 text-primary" />
-            <h2 className="text-base font-semibold text-card-foreground">Overdue Collections</h2>
-          </div>
-          <div className="p-4">
-            <div className="overflow-x-auto eco-float-scroll">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    {["Client","Balance","Target Date"].map(h => (
-                      <th key={h} className="text-left py-2 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
-                    ))}
+        <Panel title="Overdue Collections" flush>
+          <div className="overflow-x-auto eco-float-scroll">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  {["Client","Balance","Target Date"].map(h => (
+                    <th key={h} className="text-left py-2 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading && Array.from({ length: 3 }).map((_, i) => (
+                  <tr key={i} className="border-b"><td colSpan={3} className="py-2 px-3"><Skeleton className="h-4 w-full" /></td></tr>
+                ))}
+                {!loading && (data?.money.overdue_collections ?? []).length === 0 && (
+                  <tr><td colSpan={3} className="py-6 text-center text-sm text-muted-foreground">No overdue collections</td></tr>
+                )}
+                {!loading && (data?.money.overdue_collections ?? []).map(p => (
+                  <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
+                    <td className="py-2 px-3 font-medium text-card-foreground truncate max-w-[120px]">{p.client_name}</td>
+                    <td className="py-2 px-3 text-red-600 font-medium">₹{Number(p.balance).toLocaleString("en-IN")}</td>
+                    <td className="py-2 px-3 text-xs text-muted-foreground">{p.collection_target_date ?? "—"}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {loading && Array.from({ length: 3 }).map((_, i) => (
-                    <tr key={i} className="border-b"><td colSpan={3} className="py-2 px-3"><Skeleton className="h-4 w-full" /></td></tr>
-                  ))}
-                  {!loading && (data?.money.overdue_collections ?? []).length === 0 && (
-                    <tr><td colSpan={3} className="py-6 text-center text-sm text-muted-foreground">No overdue collections</td></tr>
-                  )}
-                  {!loading && (data?.money.overdue_collections ?? []).map(p => (
-                    <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
-                      <td className="py-2 px-3 font-medium text-card-foreground truncate max-w-[120px]">{p.client_name}</td>
-                      <td className="py-2 px-3 text-red-600 font-medium">₹{Number(p.balance).toLocaleString("en-IN")}</td>
-                      <td className="py-2 px-3 text-xs text-muted-foreground">{p.collection_target_date ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </Panel>
       </div>
 
-      {/* Lead Pipeline + AI Recommendations */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Pipeline Summary */}
-        <div className="bg-card rounded-xl border shadow-sm">
-          <div className="p-4 border-b flex items-center gap-2">
-            <Users className="h-4 w-4 text-primary" />
-            <h2 className="text-base font-semibold text-card-foreground">Lead Pipeline</h2>
-          </div>
-          <div className="p-4 space-y-2">
+        <Panel title="Lead Pipeline">
+          <div className="space-y-2">
             {loading ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-6 w-full" />) : (
               <>
                 <div className="flex gap-4 text-sm mb-3">
@@ -207,15 +184,10 @@ export default function Dashboard() {
               </>
             )}
           </div>
-        </div>
+        </Panel>
 
-        {/* AI Recommendations */}
-        <div className="bg-card rounded-xl border shadow-sm">
-          <div className="p-4 border-b flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            <h2 className="text-base font-semibold text-card-foreground">AI Recommendations</h2>
-          </div>
-          <div className="p-4 space-y-2">
+        <Panel title="AI Recommendations">
+          <div className="space-y-2">
             {loading ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-5 w-full" />) : (
               (data?.ai_recommendations ?? []).length > 0
                 ? (data!.ai_recommendations.map((rec, i) => (
@@ -227,8 +199,8 @@ export default function Dashboard() {
                 : <p className="text-sm text-muted-foreground py-4 text-center">No recommendations available</p>
             )}
           </div>
-        </div>
+        </Panel>
       </div>
-    </div>
+    </RecordListPage>
   );
 }

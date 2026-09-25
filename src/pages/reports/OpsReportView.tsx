@@ -8,8 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { opsReportsApi, type ReportColumn, type ReportResult } from "@/lib/api/opsReports";
 import { ReportExportDialog } from "@/components/reports/ReportExportDialog";
+import { RecordDetailPage } from "@/components/RecordDetailPage";
+import { SectionCard } from "@/components/SectionCard";
 
-/** Formats one cell according to the type the report declared for its column. */
 function cell(value: unknown, type: ReportColumn["type"]) {
   if (value === null || value === undefined || value === "") {
     return <span className="text-muted-foreground">—</span>;
@@ -37,8 +38,7 @@ function cell(value: unknown, type: ReportColumn["type"]) {
           {d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
           {type === "datetime" && (
             <span className="ml-1.5 text-muted-foreground">
-              {" "}
-              {d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+              {" "}{d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
             </span>
           )}
         </span>
@@ -55,12 +55,6 @@ function cell(value: unknown, type: ReportColumn["type"]) {
   }
 }
 
-/**
- * One report: its rows, the range they cover, and the way out to a file.
- *
- * The table is driven entirely by the columns the server sent with the report,
- * so this screen never needs to know which report it is showing.
- */
 export default function OpsReportView() {
   const { id = "" } = useParams();
   const [result, setResult] = useState<ReportResult | null>(null);
@@ -83,15 +77,12 @@ export default function OpsReportView() {
   useEffect(() => { load(range); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [id]);
 
   const report = result?.report;
-  const rows = result?.rows ?? [];
+  const rows   = result?.rows ?? [];
 
   return (
-    <div className="space-y-5 p-4 sm:p-6">
+    <RecordDetailPage>
       <div>
-        <Link
-          to="/reports"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
+        <Link to="/reports" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> All reports
         </Link>
       </div>
@@ -99,33 +90,20 @@ export default function OpsReportView() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight">{report?.title ?? "Report"}</h1>
-          {report && (
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{report.description}</p>
-          )}
+          {report && <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{report.description}</p>}
         </div>
-
         <div className="flex flex-wrap items-end gap-3">
           {report?.has_dates && (
             <>
               <div className="space-y-1.5">
                 <Label htmlFor="rv-from" className="text-xs">From</Label>
-                <Input
-                  id="rv-from"
-                  type="date"
-                  className="h-10 w-[9.5rem]"
-                  value={range.from}
-                  onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
-                />
+                <Input id="rv-from" type="date" className="h-10 w-[9.5rem]" value={range.from}
+                  onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="rv-to" className="text-xs">To</Label>
-                <Input
-                  id="rv-to"
-                  type="date"
-                  className="h-10 w-[9.5rem]"
-                  value={range.to}
-                  onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
-                />
+                <Input id="rv-to" type="date" className="h-10 w-[9.5rem]" value={range.to}
+                  onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} />
               </div>
               <Button variant="outline" className="h-10" onClick={() => load(range)} disabled={loading}>
                 <RefreshCcw className="mr-1.5 h-4 w-4" /> Apply
@@ -139,9 +117,7 @@ export default function OpsReportView() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-        <span>
-          {loading ? "Running…" : `${rows.length.toLocaleString()} row${rows.length === 1 ? "" : "s"}`}
-        </span>
+        <span>{loading ? "Running…" : `${rows.length.toLocaleString()} row${rows.length === 1 ? "" : "s"}`}</span>
         {result?.truncated && (
           <Badge variant="outline" className="font-normal">
             Cut off at the row limit — narrow the dates to see the rest
@@ -149,44 +125,46 @@ export default function OpsReportView() {
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border bg-card">
-        <table className="w-full min-w-[42rem] text-sm">
-          <thead className="border-b bg-muted/50">
-            <tr>
-              {report?.columns.map((c) => (
-                <th key={c.key} className="whitespace-nowrap px-4 py-3 text-left font-semibold">
-                  {c.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
+      <SectionCard bodyPadding="">
+        <div className="overflow-x-auto eco-float-scroll">
+          <table className="w-full min-w-[42rem] text-sm">
+            <thead className="border-b bg-muted/50">
               <tr>
-                <td colSpan={report?.columns.length || 1} className="px-4 py-14 text-center text-muted-foreground">
-                  Running the report…
-                </td>
+                {report?.columns.map((c) => (
+                  <th key={c.key} className="whitespace-nowrap px-4 py-3 text-left font-semibold">
+                    {c.label}
+                  </th>
+                ))}
               </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={report?.columns.length || 1} className="px-4 py-14 text-center text-muted-foreground">
-                  Nothing to show for this range.
-                </td>
-              </tr>
-            ) : (
-              rows.map((row, i) => (
-                <tr key={i} className="border-b last:border-0 hover:bg-muted/40">
-                  {report?.columns.map((c) => (
-                    <td key={c.key} className="max-w-[22rem] truncate px-4 py-3 align-top">
-                      {cell(row[c.key], c.type)}
-                    </td>
-                  ))}
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={report?.columns.length || 1} className="px-4 py-14 text-center text-muted-foreground">
+                    Running the report…
+                  </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={report?.columns.length || 1} className="px-4 py-14 text-center text-muted-foreground">
+                    Nothing to show for this range.
+                  </td>
+                </tr>
+              ) : (
+                rows.map((row, i) => (
+                  <tr key={i} className="border-b last:border-0 hover:bg-muted/40">
+                    {report?.columns.map((c) => (
+                      <td key={c.key} className="max-w-[22rem] truncate px-4 py-3 align-top">
+                        {cell(row[c.key], c.type)}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
 
       {report && (
         <ReportExportDialog
@@ -201,6 +179,6 @@ export default function OpsReportView() {
           onRangeChange={(next) => { setRange(next); load(next); }}
         />
       )}
-    </div>
+    </RecordDetailPage>
   );
 }

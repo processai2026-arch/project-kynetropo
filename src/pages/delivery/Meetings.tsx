@@ -7,10 +7,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
+import { Panel } from "@/components/Panel";
 import { opsMeetingsApi, opsClientsApi, opsProjectsApi } from "@/lib/api/ops";
 import type { OpsMeeting, OpsClient, OpsProject } from "@/types/ops";
-import { CalendarDays, Plus, Pencil } from "lucide-react";
+import { Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 const typeLabels: Record<string, string> = {
@@ -83,11 +85,11 @@ export default function Meetings() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Meetings</h1>
-        <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Schedule Meeting</Button>
-      </div>
+    <RecordListPage>
+      <PageHeader
+        title="Meetings"
+        action={<Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Schedule Meeting</Button>}
+      />
 
       <div className="flex flex-wrap gap-3">
         <Select value={clientFilter} onValueChange={setClientFilter}>
@@ -101,53 +103,47 @@ export default function Meetings() {
         <Input type="date" value={dateTo}   onChange={e => setDateTo(e.target.value)}   className="w-[160px]" />
       </div>
 
-      <div className="bg-card rounded-xl border shadow-sm">
-        <div className="p-4 border-b flex items-center gap-2">
-          <CalendarDays className="h-4 w-4 text-primary" />
-          <h2 className="text-base font-semibold text-card-foreground">All Meetings ({items.length})</h2>
-        </div>
-        <div className="p-4">
-          <div className="overflow-x-auto eco-float-scroll">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  {["Date","Client","Project","Type","Outcome","Next Follow-up","Booked By",""].map(h => (
-                    <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
-                  ))}
+      <Panel title={`All Meetings (${items.length})`} flush>
+        <div className="overflow-x-auto eco-float-scroll">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                {["Date","Client","Project","Type","Outcome","Next Follow-up","Booked By",""].map(h => (
+                  <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading && Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} className="border-b">
+                  {Array.from({ length: 8 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-20" /></td>)}
                 </tr>
-              </thead>
-              <tbody>
-                {loading && Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="border-b">
-                    {Array.from({ length: 8 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-20" /></td>)}
-                  </tr>
-                ))}
-                {!loading && items.length === 0 && (
-                  <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground text-sm">No meetings found</td></tr>
-                )}
-                {!loading && items.map(m => (
-                  <tr key={m.id} className="border-b hover:bg-muted/30 transition-colors">
-                    <td className="py-3 px-4 text-card-foreground">
-                      {new Date(m.date).toLocaleDateString("en-IN", { day:"2-digit", month:"short", year:"numeric" })}
-                    </td>
-                    <td className="py-3 px-4 text-card-foreground">{m.client_name ?? "—"}</td>
-                    <td className="py-3 px-4 text-card-foreground">{m.project_name ?? "—"}</td>
-                    <td className="py-3 px-4">
-                      <Badge variant="outline" className="text-xs">{typeLabels[m.type] ?? m.type}</Badge>
-                    </td>
-                    <td className="py-3 px-4 text-card-foreground max-w-[180px] truncate">{m.outcome || "—"}</td>
-                    <td className="py-3 px-4 text-card-foreground">{m.next_followup ?? "—"}</td>
-                    <td className="py-3 px-4 text-card-foreground">{m.booked_by || "—"}</td>
-                    <td className="py-3 px-4">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(m)}><Pencil className="h-4 w-4" /></Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+              {!loading && items.length === 0 && (
+                <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground text-sm">No meetings found</td></tr>
+              )}
+              {!loading && items.map(m => (
+                <tr key={m.id} className="border-b hover:bg-muted/30 transition-colors">
+                  <td className="py-3 px-4 text-card-foreground">
+                    {new Date(m.date).toLocaleDateString("en-IN", { day:"2-digit", month:"short", year:"numeric" })}
+                  </td>
+                  <td className="py-3 px-4 text-card-foreground">{m.client_name ?? "—"}</td>
+                  <td className="py-3 px-4 text-card-foreground">{m.project_name ?? "—"}</td>
+                  <td className="py-3 px-4">
+                    <Badge variant="outline" className="text-xs">{typeLabels[m.type] ?? m.type}</Badge>
+                  </td>
+                  <td className="py-3 px-4 text-card-foreground max-w-[180px] truncate">{m.outcome || "—"}</td>
+                  <td className="py-3 px-4 text-card-foreground">{m.next_followup ?? "—"}</td>
+                  <td className="py-3 px-4 text-card-foreground">{m.booked_by || "—"}</td>
+                  <td className="py-3 px-4">
+                    <Button variant="ghost" size="icon" onClick={() => openEdit(m)}><Pencil className="h-4 w-4" /></Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
+      </Panel>
 
       <Dialog open={formOpen} onOpenChange={v => { if (!saving) setFormOpen(v); }}>
         <DialogContent className="max-w-2xl" onInteractOutside={e => e.preventDefault()}>
@@ -175,7 +171,7 @@ export default function Meetings() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Date & Time *</Label>
+                <Label>Date &amp; Time *</Label>
                 <Input type="datetime-local" value={form.date ?? ""} onChange={e => set("date", e.target.value)} />
               </div>
               <div className="space-y-1.5">
@@ -219,6 +215,6 @@ export default function Meetings() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </RecordListPage>
   );
 }

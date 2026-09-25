@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { salesCallsApi, salesFollowupsApi, salesLeadsApi, salesMeetingsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { RecordDetailPage } from "@/components/RecordDetailPage";
 import { LogCallDialog } from "@/components/sales/LogCallDialog";
 import { MeetingFormDialog, MeetingOutcomeDialog } from "@/components/sales/MeetingDialogs";
 import { useConfirm } from "@/components/ConfirmDialog";
@@ -271,9 +272,11 @@ export default function SalesLeadDetail() {
   if (loading) {
     return (
       <SalesLayout>
+        <RecordDetailPage>
         <Skeleton className="h-8 w-40" />
         <Skeleton className="h-40 w-full rounded-2xl" />
         <Skeleton className="h-32 w-full rounded-2xl" />
+        </RecordDetailPage>
       </SalesLayout>
     );
   }
@@ -281,6 +284,7 @@ export default function SalesLeadDetail() {
   if (error || !lead) {
     return (
       <SalesLayout>
+        <RecordDetailPage>
         <Button variant="ghost" size="sm" onClick={() => navigate("/sales/leads")}>
           <ArrowLeft className="mr-1.5 h-4 w-4" />
           Back to leads
@@ -288,6 +292,7 @@ export default function SalesLeadDetail() {
         <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center text-sm text-destructive">
           {error ?? "Lead not found"}
         </div>
+        </RecordDetailPage>
       </SalesLayout>
     );
   }
@@ -297,6 +302,7 @@ export default function SalesLeadDetail() {
 
   return (
     <SalesLayout>
+      <RecordDetailPage>
       <Button variant="ghost" size="sm" className="-ml-2 w-fit" onClick={() => navigate("/sales/leads")}>
         <ArrowLeft className="mr-1.5 h-4 w-4" />
         Leads
@@ -805,6 +811,7 @@ export default function SalesLeadDetail() {
         entityType={thread?.type ?? "lead"}
         entityId={thread?.id ?? 0}
       />
+      </RecordDetailPage>
     </SalesLayout>
   );
 }

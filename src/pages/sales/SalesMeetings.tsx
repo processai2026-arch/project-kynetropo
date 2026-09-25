@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import { salesMeetingsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
 import { MeetingFormDialog, MeetingOutcomeDialog } from "@/components/sales/MeetingDialogs";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { CommentButton, CommentThreadDialog } from "@/components/sales/CommentThread";
@@ -76,7 +78,8 @@ export default function SalesMeetings() {
 
   return (
     <SalesLayout>
-      <h1 className="text-2xl font-bold text-foreground">Meetings</h1>
+      <RecordListPage>
+      <PageHeader title="Meetings" />
 
       <div className="grid grid-cols-2 gap-3">
         <Select value={status} onValueChange={setStatus}>
@@ -242,6 +245,7 @@ export default function SalesMeetings() {
         entityType="meeting"
         entityId={thread?.id ?? 0}
       />
+      </RecordListPage>
     </SalesLayout>
   );
 }

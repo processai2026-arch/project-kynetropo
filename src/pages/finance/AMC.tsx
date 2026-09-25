@@ -8,9 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
+import { Panel } from "@/components/Panel";
 import { opsAmcApi, opsClientsApi, opsProjectsApi } from "@/lib/api/ops";
 import type { OpsAmcRecord, OpsClient, OpsProject } from "@/types/ops";
-import { RefreshCcw, Plus, Pencil, CheckCircle } from "lucide-react";
+import { Plus, Pencil, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 
 const statusStyles: Record<string, string> = {
@@ -69,7 +72,6 @@ export default function AMC() {
     if (form.amount <= 0) { toast.error("Amount required"); return; }
     setSaving(true);
     try {
-      // Auto-calculate renewal date if only start_date given
       const startDate   = form.start_date || new Date().toISOString().split("T")[0];
       const renewalDate = form.renewal_date || new Date(new Date(startDate).setFullYear(new Date(startDate).getFullYear() + 1)).toISOString().split("T")[0];
       if (editing) {
@@ -100,11 +102,11 @@ export default function AMC() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">AMC</h1>
-        <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Add AMC</Button>
-      </div>
+    <RecordListPage>
+      <PageHeader
+        title="AMC"
+        action={<Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Add AMC</Button>}
+      />
 
       {(counts.overdue > 0 || counts.due > 0) && (
         <div className="flex gap-2">
@@ -126,64 +128,58 @@ export default function AMC() {
         </Select>
       </div>
 
-      <div className="bg-card rounded-xl border shadow-sm">
-        <div className="p-4 border-b flex items-center gap-2">
-          <RefreshCcw className="h-4 w-4 text-primary" />
-          <h2 className="text-base font-semibold text-card-foreground">AMC Records ({items.length})</h2>
-        </div>
-        <div className="p-4">
-          <div className="overflow-x-auto eco-float-scroll">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  {["Client","Project","Amount","Start Date","Renewal Date","Days Until","Status",""].map(h => (
-                    <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {loading && Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="border-b">{Array.from({ length: 8 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>)}</tr>
+      <Panel title={`AMC Records (${items.length})`} flush>
+        <div className="overflow-x-auto eco-float-scroll">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                {["Client","Project","Amount","Start Date","Renewal Date","Days Until","Status",""].map(h => (
+                  <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
-                {!loading && items.length === 0 && (
-                  <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground text-sm">No AMC records found</td></tr>
-                )}
-                {!loading && items.map(a => {
-                  const daysLeft = a.days_until_renewal;
-                  const rowColor = a.status === "overdue" ? "bg-red-50/40" : a.status === "due" ? "bg-amber-50/40" : "";
-                  return (
-                    <tr key={a.id} className={cn("border-b hover:bg-muted/30 transition-colors", rowColor)}>
-                      <td className="py-3 px-4 font-medium text-card-foreground">{a.client_name}</td>
-                      <td className="py-3 px-4 text-card-foreground">{a.project_name}</td>
-                      <td className="py-3 px-4 font-medium text-card-foreground">₹{Number(a.amount).toLocaleString("en-IN")}</td>
-                      <td className="py-3 px-4 text-card-foreground">{a.start_date}</td>
-                      <td className="py-3 px-4 text-card-foreground">{a.renewal_date}</td>
-                      <td className="py-3 px-4 text-card-foreground">
-                        {daysLeft != null
-                          ? daysLeft < 0 ? <span className="text-red-600 font-medium">{Math.abs(daysLeft)}d overdue</span>
-                          : daysLeft === 0 ? <span className="text-amber-600 font-medium">Today</span>
-                          : <span className={daysLeft <= 30 ? "text-amber-600" : ""}>{daysLeft}d</span>
-                          : "—"}
-                      </td>
-                      <td className="py-3 px-4">
-                        <Badge className={cn("border capitalize", statusStyles[a.status] ?? "bg-muted text-muted-foreground")}>{a.status}</Badge>
-                      </td>
-                      <td className="py-3 px-4 flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(a)}><Pencil className="h-4 w-4" /></Button>
-                        {a.status !== "paid" && (
-                          <Button variant="ghost" size="icon" onClick={() => handleMarkPaid(a.id)} disabled={markingId === a.id} title="Mark Collected">
-                            <CheckCircle className="h-4 w-4 text-emerald-600" />
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} className="border-b">{Array.from({ length: 8 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>)}</tr>
+              ))}
+              {!loading && items.length === 0 && (
+                <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground text-sm">No AMC records found</td></tr>
+              )}
+              {!loading && items.map(a => {
+                const daysLeft = a.days_until_renewal;
+                const rowColor = a.status === "overdue" ? "bg-red-50/40" : a.status === "due" ? "bg-amber-50/40" : "";
+                return (
+                  <tr key={a.id} className={cn("border-b hover:bg-muted/30 transition-colors", rowColor)}>
+                    <td className="py-3 px-4 font-medium text-card-foreground">{a.client_name}</td>
+                    <td className="py-3 px-4 text-card-foreground">{a.project_name}</td>
+                    <td className="py-3 px-4 font-medium text-card-foreground">₹{Number(a.amount).toLocaleString("en-IN")}</td>
+                    <td className="py-3 px-4 text-card-foreground">{a.start_date}</td>
+                    <td className="py-3 px-4 text-card-foreground">{a.renewal_date}</td>
+                    <td className="py-3 px-4 text-card-foreground">
+                      {daysLeft != null
+                        ? daysLeft < 0 ? <span className="text-red-600 font-medium">{Math.abs(daysLeft)}d overdue</span>
+                        : daysLeft === 0 ? <span className="text-amber-600 font-medium">Today</span>
+                        : <span className={daysLeft <= 30 ? "text-amber-600" : ""}>{daysLeft}d</span>
+                        : "—"}
+                    </td>
+                    <td className="py-3 px-4">
+                      <Badge className={cn("border capitalize", statusStyles[a.status] ?? "bg-muted text-muted-foreground")}>{a.status}</Badge>
+                    </td>
+                    <td className="py-3 px-4 flex gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(a)}><Pencil className="h-4 w-4" /></Button>
+                      {a.status !== "paid" && (
+                        <Button variant="ghost" size="icon" onClick={() => handleMarkPaid(a.id)} disabled={markingId === a.id} title="Mark Collected">
+                          <CheckCircle className="h-4 w-4 text-emerald-600" />
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-      </div>
+      </Panel>
 
       <Dialog open={formOpen} onOpenChange={v => { if (!saving) setFormOpen(v); }}>
         <DialogContent className="max-w-lg" onInteractOutside={e => e.preventDefault()}>
@@ -235,6 +231,6 @@ export default function AMC() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </RecordListPage>
   );
 }

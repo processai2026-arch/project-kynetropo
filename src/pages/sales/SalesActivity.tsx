@@ -9,6 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { salesDashboardApi } from "@/lib/api/sales";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
 import { formatDateTime } from "@/components/sales/SalesBits";
 import type { SalesFeedEvent } from "@/types/sales";
 import { cn } from "@/lib/utils";
@@ -102,38 +104,37 @@ export default function SalesActivity() {
 
   return (
     <SalesLayout>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Team Activity</h1>
-          <p className="text-sm text-muted-foreground">
-            Everything happening across leads, meetings and challenges.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs",
-              live ? "border-emerald-500/40 text-emerald-700" : "text-muted-foreground",
-            )}
-          >
+      <RecordListPage>
+      <PageHeader
+        title="Team Activity"
+        subtitle="Everything happening across leads, meetings and challenges."
+        action={
+          <div className="flex items-center gap-2">
             <span
               className={cn(
-                "h-1.5 w-1.5 rounded-full",
-                live ? "animate-pulse bg-emerald-500" : "bg-muted-foreground/50",
+                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs",
+                live ? "border-emerald-500/40 text-emerald-700" : "text-muted-foreground",
               )}
-            />
-            {live ? "Live" : "Paused"}
-          </span>
-          <Button variant="outline" size="sm" onClick={() => setLive((v) => !v)}>
-            {live ? <Pause className="mr-1.5 h-3.5 w-3.5" /> : <Play className="mr-1.5 h-3.5 w-3.5" />}
-            {live ? "Pause" : "Resume"}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => void load(true)}>
-            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-            Refresh
-          </Button>
-        </div>
-      </div>
+            >
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full",
+                  live ? "animate-pulse bg-emerald-500" : "bg-muted-foreground/50",
+                )}
+              />
+              {live ? "Live" : "Paused"}
+            </span>
+            <Button variant="outline" size="sm" onClick={() => setLive((v) => !v)}>
+              {live ? <Pause className="mr-1.5 h-3.5 w-3.5" /> : <Play className="mr-1.5 h-3.5 w-3.5" />}
+              {live ? "Pause" : "Resume"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => void load(true)}>
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              Refresh
+            </Button>
+          </div>
+        }
+      />
 
       {loading ? (
         <div className="space-y-3">
@@ -196,6 +197,7 @@ export default function SalesActivity() {
           })}
         </ol>
       )}
+      </RecordListPage>
     </SalesLayout>
   );
 }

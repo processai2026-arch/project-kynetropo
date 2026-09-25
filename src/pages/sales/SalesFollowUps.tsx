@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { salesFollowupsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
 import { LogCallDialog } from "@/components/sales/LogCallDialog";
 import {
   FollowupEditDialog,
@@ -107,7 +109,8 @@ export default function SalesFollowUps() {
 
   return (
     <SalesLayout>
-      <h1 className="text-2xl font-bold text-foreground">Follow-Ups</h1>
+      <RecordListPage>
+      <PageHeader title="Follow-Ups" />
 
       {/* Bucket tabs — horizontally scrollable on narrow screens. */}
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
@@ -345,6 +348,7 @@ export default function SalesFollowUps() {
         onClose={() => setCompleting(null)}
         onCompleted={() => void load()}
       />
+      </RecordListPage>
     </SalesLayout>
   );
 }

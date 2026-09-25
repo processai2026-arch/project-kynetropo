@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AtSign, Bell, CalendarDays, ChevronRight, ClipboardList, History, Phone, Settings, ShieldCheck, Sparkles, Trophy, User } from "lucide-react";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -64,7 +66,8 @@ export default function SalesMore() {
 
   return (
     <SalesLayout>
-      <h1 className="text-2xl font-bold text-foreground">More</h1>
+      <RecordListPage>
+      <PageHeader title="More" />
 
       {loading ? (
         <Skeleton className="h-20 w-full rounded-2xl" />
@@ -177,6 +180,7 @@ export default function SalesMore() {
           </Link>
         ))}
       </div>
+      </RecordListPage>
     </SalesLayout>
   );
 }

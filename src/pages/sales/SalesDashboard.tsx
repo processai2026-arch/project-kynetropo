@@ -14,6 +14,7 @@ import { StatsRow } from "@/components/StatsRow";
 import { SectionCard } from "@/components/SectionCard";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { RecordListPage } from "@/components/RecordListPage";
 import { ViewAsSwitcher } from "@/components/sales/ViewAsSwitcher";
 import { TemperatureBadge, formatDate, formatTime, humanise } from "@/components/sales/SalesBits";
 import type { SalesDashboard as Dashboard, SalesFollowup, SalesMeeting } from "@/types/sales";
@@ -183,12 +184,14 @@ export default function SalesDashboard() {
   if (hasNoAccess) {
     return (
       <SalesLayout>
+        <RecordListPage>
         <div className="rounded-2xl border bg-card p-8 text-center shadow-sm">
           <h1 className="text-lg font-semibold">Sales module</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             You do not have access to the sales module. Ask an administrator to grant your sales permissions.
           </p>
         </div>
+        </RecordListPage>
       </SalesLayout>
     );
   }
@@ -196,10 +199,12 @@ export default function SalesDashboard() {
   if (loading || accessLoading) {
     return (
       <SalesLayout>
+        <RecordListPage>
         <Skeleton className="h-9 w-56" />
         <Skeleton className="h-36 w-full rounded-2xl" />
         <Skeleton className="h-28 w-full rounded-2xl" />
         <Skeleton className="h-28 w-full rounded-2xl" />
+        </RecordListPage>
       </SalesLayout>
     );
   }
@@ -207,6 +212,7 @@ export default function SalesDashboard() {
   if (error || !data) {
     return (
       <SalesLayout>
+        <RecordListPage>
         <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center">
           <AlertTriangle className="mx-auto h-6 w-6 text-destructive" />
           <p className="mt-2 text-sm text-destructive">{error ?? "Could not load the sales dashboard"}</p>
@@ -214,6 +220,7 @@ export default function SalesDashboard() {
             Try again
           </Button>
         </div>
+        </RecordListPage>
       </SalesLayout>
     );
   }
@@ -223,6 +230,7 @@ export default function SalesDashboard() {
 
   return (
     <SalesLayout>
+      <RecordListPage>
       {isMobile ? (
         <>
           {/* Phone: greeting, one compact metrics block, then the work itself. */}
@@ -496,6 +504,7 @@ export default function SalesDashboard() {
           Server time {new Date(data.server_time.replace(" ", "T")).toLocaleString("en-IN")}
         </div>
       )}
+      </RecordListPage>
     </SalesLayout>
   );
 }

@@ -8,9 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
+import { Panel } from "@/components/Panel";
 import { opsHiringApi } from "@/lib/api/ops";
 import type { OpsHiringCandidate } from "@/types/ops";
-import { UserCog, Plus, Pencil } from "lucide-react";
+import { Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 const decisionStyles: Record<string, string> = {
@@ -48,7 +51,6 @@ export default function Hiring() {
   useEffect(() => { load(); }, [decisionFilter]);
 
   const set = (k: keyof OpsHiringCandidate, v: unknown) => setForm(f => ({ ...f, [k]: v }));
-
   const openCreate = () => { setEditing(null); setForm(EMPTY); setFormOpen(true); };
   const openEdit   = (c: OpsHiringCandidate) => { setEditing(c); setForm({ ...c }); setFormOpen(true); };
 
@@ -80,11 +82,11 @@ export default function Hiring() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Hiring</h1>
-        <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Add Candidate</Button>
-      </div>
+    <RecordListPage>
+      <PageHeader
+        title="Hiring"
+        action={<Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Add Candidate</Button>}
+      />
 
       <div className="flex gap-3 flex-wrap">
         <Badge className="bg-amber-50 text-amber-600 border border-amber-200">{counts.pending} pending</Badge>
@@ -104,54 +106,48 @@ export default function Hiring() {
         </Select>
       </div>
 
-      <div className="bg-card rounded-xl border shadow-sm">
-        <div className="p-4 border-b flex items-center gap-2">
-          <UserCog className="h-4 w-4 text-primary" />
-          <h2 className="text-base font-semibold text-card-foreground">Candidates ({items.length})</h2>
-        </div>
-        <div className="p-4">
-          <div className="overflow-x-auto eco-float-scroll">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  {["Name","Assignment Sent","Due","Submitted","WF Bugs","Critical","Reporting (1-5)","Score/10","Decision","Start Date",""].map(h => (
-                    <th key={h} className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
-                  ))}
+      <Panel title={`Candidates (${items.length})`} flush>
+        <div className="overflow-x-auto eco-float-scroll">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                {["Name","Assignment Sent","Due","Submitted","WF Bugs","Critical","Reporting (1-5)","Score/10","Decision","Start Date",""].map(h => (
+                  <th key={h} className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading && Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} className="border-b">{Array.from({ length: 11 }).map((_, j) => <td key={j} className="py-3 px-3"><Skeleton className="h-4 w-14" /></td>)}</tr>
+              ))}
+              {!loading && items.length === 0 && (
+                <tr><td colSpan={11} className="px-6 py-8 text-center text-muted-foreground text-sm">No candidates</td></tr>
+              )}
+              {!loading && items.map(c => (
+                <tr key={c.id} className="border-b hover:bg-muted/30 transition-colors">
+                  <td className="py-3 px-3 font-medium text-card-foreground">{c.name}</td>
+                  <td className="py-3 px-3 text-card-foreground">{c.assignment_sent ?? "—"}</td>
+                  <td className="py-3 px-3 text-card-foreground">{c.assignment_due ?? "—"}</td>
+                  <td className="py-3 px-3 text-center">
+                    <span className={cn("text-xs font-medium", c.submitted ? "text-emerald-700" : "text-muted-foreground")}>{c.submitted ? "Yes" : "No"}</span>
+                  </td>
+                  <td className="py-3 px-3 text-center text-card-foreground">{c.workflow_bugs}</td>
+                  <td className="py-3 px-3 text-center font-medium text-red-600">{c.critical_bugs}</td>
+                  <td className="py-3 px-3 text-center text-card-foreground">{c.reporting_quality}/5</td>
+                  <td className="py-3 px-3 text-center font-medium text-card-foreground">{c.score}</td>
+                  <td className="py-3 px-3">
+                    <Badge className={cn("border capitalize", decisionStyles[c.decision])}>{c.decision}</Badge>
+                  </td>
+                  <td className="py-3 px-3 text-card-foreground">{c.start_date ?? "—"}</td>
+                  <td className="py-3 px-3">
+                    <Button variant="ghost" size="icon" onClick={() => openEdit(c)}><Pencil className="h-4 w-4" /></Button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {loading && Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="border-b">{Array.from({ length: 11 }).map((_, j) => <td key={j} className="py-3 px-3"><Skeleton className="h-4 w-14" /></td>)}</tr>
-                ))}
-                {!loading && items.length === 0 && (
-                  <tr><td colSpan={11} className="px-6 py-8 text-center text-muted-foreground text-sm">No candidates</td></tr>
-                )}
-                {!loading && items.map(c => (
-                  <tr key={c.id} className="border-b hover:bg-muted/30 transition-colors">
-                    <td className="py-3 px-3 font-medium text-card-foreground">{c.name}</td>
-                    <td className="py-3 px-3 text-card-foreground">{c.assignment_sent ?? "—"}</td>
-                    <td className="py-3 px-3 text-card-foreground">{c.assignment_due ?? "—"}</td>
-                    <td className="py-3 px-3 text-center">
-                      <span className={cn("text-xs font-medium", c.submitted ? "text-emerald-700" : "text-muted-foreground")}>{c.submitted ? "Yes" : "No"}</span>
-                    </td>
-                    <td className="py-3 px-3 text-center text-card-foreground">{c.workflow_bugs}</td>
-                    <td className="py-3 px-3 text-center font-medium text-red-600">{c.critical_bugs}</td>
-                    <td className="py-3 px-3 text-center text-card-foreground">{c.reporting_quality}/5</td>
-                    <td className="py-3 px-3 text-center font-medium text-card-foreground">{c.score}</td>
-                    <td className="py-3 px-3">
-                      <Badge className={cn("border capitalize", decisionStyles[c.decision])}>{c.decision}</Badge>
-                    </td>
-                    <td className="py-3 px-3 text-card-foreground">{c.start_date ?? "—"}</td>
-                    <td className="py-3 px-3">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(c)}><Pencil className="h-4 w-4" /></Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
+      </Panel>
 
       <Dialog open={formOpen} onOpenChange={v => { if (!saving) setFormOpen(v); }}>
         <DialogContent className="max-w-2xl" onInteractOutside={e => e.preventDefault()}>
@@ -241,6 +237,6 @@ export default function Hiring() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </RecordListPage>
   );
 }

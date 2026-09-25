@@ -8,9 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
+import { Panel } from "@/components/Panel";
 import { opsEmployeesApi } from "@/lib/api/ops";
 import type { OpsEmployee } from "@/types/ops";
-import { Users, Plus, Pencil } from "lucide-react";
+import { Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 const roleLabels: Record<string, string> = {
@@ -54,7 +57,6 @@ export default function Employees() {
   useEffect(() => { load(); }, [statusFilter]);
 
   const set = (k: keyof OpsEmployee, v: unknown) => setForm(f => ({ ...f, [k]: v }));
-
   const openCreate = () => { setEditing(null); setForm(EMPTY); setFormOpen(true); };
   const openEdit   = (e: OpsEmployee) => { setEditing(e); setForm({ ...e }); setFormOpen(true); };
 
@@ -70,18 +72,12 @@ export default function Employees() {
     finally       { setSaving(false); }
   };
 
-  const handleDeactivate = async (id: number) => {
-    if (!confirm("Deactivate this employee?")) return;
-    try { await opsEmployeesApi.remove(id); toast.success("Employee deactivated"); load(); }
-    catch { toast.error("Failed"); }
-  };
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Employees</h1>
-        <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Add Employee</Button>
-      </div>
+    <RecordListPage>
+      <PageHeader
+        title="Employees"
+        action={<Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Add Employee</Button>}
+      />
 
       <div className="flex gap-3">
         <Select value={statusFilter} onValueChange={setStatus}>
@@ -94,54 +90,48 @@ export default function Employees() {
         </Select>
       </div>
 
-      <div className="bg-card rounded-xl border shadow-sm">
-        <div className="p-4 border-b flex items-center gap-2">
-          <Users className="h-4 w-4 text-primary" />
-          <h2 className="text-base font-semibold text-card-foreground">Team ({items.length})</h2>
-        </div>
-        <div className="p-4">
-          <div className="overflow-x-auto eco-float-scroll">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  {["Name","Phone","Email","Role","Access Level","Monthly Pay","Start Date","Status",""].map(h => (
-                    <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
-                  ))}
+      <Panel title={`Team (${items.length})`} flush>
+        <div className="overflow-x-auto eco-float-scroll">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                {["Name","Phone","Email","Role","Access Level","Monthly Pay","Start Date","Status",""].map(h => (
+                  <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading && Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} className="border-b">{Array.from({ length: 9 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-20" /></td>)}</tr>
+              ))}
+              {!loading && items.length === 0 && (
+                <tr><td colSpan={9} className="px-6 py-8 text-center text-muted-foreground text-sm">No employees found</td></tr>
+              )}
+              {!loading && items.map(emp => (
+                <tr key={emp.id} className="border-b hover:bg-muted/30 transition-colors">
+                  <td className="py-3 px-4 font-medium text-card-foreground">{emp.name}</td>
+                  <td className="py-3 px-4 text-card-foreground">{emp.phone || "—"}</td>
+                  <td className="py-3 px-4 text-card-foreground">{emp.email || "—"}</td>
+                  <td className="py-3 px-4">
+                    <Badge variant="outline" className="text-xs capitalize">{roleLabels[emp.role] ?? emp.role}</Badge>
+                  </td>
+                  <td className="py-3 px-4 text-xs text-card-foreground">{accessLabels[emp.access_level] ?? emp.access_level}</td>
+                  <td className="py-3 px-4 text-card-foreground">
+                    {emp.monthly_pay > 0 ? "₹" + Number(emp.monthly_pay).toLocaleString("en-IN") : "—"}
+                  </td>
+                  <td className="py-3 px-4 text-card-foreground">{emp.start_date ?? "—"}</td>
+                  <td className="py-3 px-4">
+                    <Badge className={cn("border capitalize", statusStyles[emp.status] ?? "bg-muted text-muted-foreground")}>{emp.status}</Badge>
+                  </td>
+                  <td className="py-3 px-4 flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => openEdit(emp)}><Pencil className="h-4 w-4" /></Button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {loading && Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="border-b">{Array.from({ length: 9 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-20" /></td>)}</tr>
-                ))}
-                {!loading && items.length === 0 && (
-                  <tr><td colSpan={9} className="px-6 py-8 text-center text-muted-foreground text-sm">No employees found</td></tr>
-                )}
-                {!loading && items.map(emp => (
-                  <tr key={emp.id} className="border-b hover:bg-muted/30 transition-colors">
-                    <td className="py-3 px-4 font-medium text-card-foreground">{emp.name}</td>
-                    <td className="py-3 px-4 text-card-foreground">{emp.phone || "—"}</td>
-                    <td className="py-3 px-4 text-card-foreground">{emp.email || "—"}</td>
-                    <td className="py-3 px-4">
-                      <Badge variant="outline" className="text-xs capitalize">{roleLabels[emp.role] ?? emp.role}</Badge>
-                    </td>
-                    <td className="py-3 px-4 text-xs text-card-foreground">{accessLabels[emp.access_level] ?? emp.access_level}</td>
-                    <td className="py-3 px-4 text-card-foreground">
-                      {emp.monthly_pay > 0 ? "₹" + Number(emp.monthly_pay).toLocaleString("en-IN") : "—"}
-                    </td>
-                    <td className="py-3 px-4 text-card-foreground">{emp.start_date ?? "—"}</td>
-                    <td className="py-3 px-4">
-                      <Badge className={cn("border capitalize", statusStyles[emp.status] ?? "bg-muted text-muted-foreground")}>{emp.status}</Badge>
-                    </td>
-                    <td className="py-3 px-4 flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(emp)}><Pencil className="h-4 w-4" /></Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
+      </Panel>
 
       <Dialog open={formOpen} onOpenChange={v => { if (!saving) setFormOpen(v); }}>
         <DialogContent className="max-w-lg" onInteractOutside={e => e.preventDefault()}>
@@ -210,6 +200,6 @@ export default function Employees() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </RecordListPage>
   );
 }

@@ -9,6 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { RecordListPage } from "@/components/RecordListPage";
+import { PageHeader } from "@/components/PageHeader";
+import { Panel } from "@/components/Panel";
 import { opsFinanceApi, opsClientsApi, opsProjectsApi } from "@/lib/api/ops";
 import type { OpsPayment, OpsExpense, OpsFinanceSummary, OpsClient, OpsProject } from "@/types/ops";
 import { IndianRupee, Plus, Trash2, TrendingUp, TrendingDown, Wallet, Clock } from "lucide-react";
@@ -101,17 +104,18 @@ export default function Finance() {
   const fmt = (n: number) => "₹" + n.toLocaleString("en-IN");
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Finance</h1>
-        <div className="flex gap-2 items-center">
-          <Input type="month" value={month} onChange={e => setMonth(e.target.value)} className="w-[160px]" />
-          <Button onClick={() => setPayOpen(true)}><Plus className="h-4 w-4 mr-2" />Add Payment</Button>
-          <Button variant="outline" onClick={() => setExpOpen(true)}><Plus className="h-4 w-4 mr-2" />Add Expense</Button>
-        </div>
-      </div>
+    <RecordListPage>
+      <PageHeader
+        title="Finance"
+        action={
+          <div className="flex gap-2 items-center">
+            <Input type="month" value={month} onChange={e => setMonth(e.target.value)} className="w-[160px]" />
+            <Button onClick={() => setPayOpen(true)}><Plus className="h-4 w-4 mr-2" />Add Payment</Button>
+            <Button variant="outline" onClick={() => setExpOpen(true)}><Plus className="h-4 w-4 mr-2" />Add Expense</Button>
+          </div>
+        }
+      />
 
-      {/* Summary stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         {loading ? Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="bg-card rounded-xl border shadow-sm p-5"><Skeleton className="h-4 w-20 mb-2" /><Skeleton className="h-8 w-16" /></div>
@@ -126,7 +130,6 @@ export default function Finance() {
         </>}
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 bg-muted/40 rounded-lg p-1 w-fit">
         {(["summary","payments","expenses","pl"] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
@@ -137,144 +140,132 @@ export default function Finance() {
         ))}
       </div>
 
-      {/* Revenue by project summary */}
       {activeTab === "summary" && (
-        <div className="bg-card rounded-xl border shadow-sm">
-          <div className="p-4 border-b"><h2 className="text-base font-semibold text-card-foreground">Revenue by Project</h2></div>
-          <div className="p-4">
-            <div className="overflow-x-auto eco-float-scroll">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    {["Project","Client","Quoted","Received","Balance","Status","% Collected"].map(h => (
-                      <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
-                    ))}
+        <Panel title="Revenue by Project" flush>
+          <div className="overflow-x-auto eco-float-scroll">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  {["Project","Client","Quoted","Received","Balance","Status","% Collected"].map(h => (
+                    <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading && Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b">{Array.from({ length: 7 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>)}</tr>
+                ))}
+                {!loading && (summary?.by_project ?? []).length === 0 && (
+                  <tr><td colSpan={7} className="py-8 text-center text-muted-foreground text-sm">No projects</td></tr>
+                )}
+                {!loading && (summary?.by_project ?? []).map(p => (
+                  <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
+                    <td className="py-3 px-4 font-medium text-card-foreground">{p.name}</td>
+                    <td className="py-3 px-4 text-card-foreground">{p.client_name}</td>
+                    <td className="py-3 px-4 text-card-foreground">{fmt(p.quoted)}</td>
+                    <td className="py-3 px-4 text-emerald-700 font-medium">{fmt(p.received)}</td>
+                    <td className="py-3 px-4 text-red-600 font-medium">{fmt(p.balance)}</td>
+                    <td className="py-3 px-4">
+                      <Badge className={cn("border capitalize text-xs", payStatusStyles[p.payment_status] ?? "bg-muted text-muted-foreground")}>
+                        {p.payment_status}
+                      </Badge>
+                    </td>
+                    <td className="py-3 px-4 text-card-foreground">{p.pct_collected}%</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {loading && Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={i} className="border-b">{Array.from({ length: 7 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>)}</tr>
-                  ))}
-                  {!loading && (summary?.by_project ?? []).length === 0 && (
-                    <tr><td colSpan={7} className="py-8 text-center text-muted-foreground text-sm">No projects</td></tr>
-                  )}
-                  {!loading && (summary?.by_project ?? []).map(p => (
-                    <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
-                      <td className="py-3 px-4 font-medium text-card-foreground">{p.name}</td>
-                      <td className="py-3 px-4 text-card-foreground">{p.client_name}</td>
-                      <td className="py-3 px-4 text-card-foreground">{fmt(p.quoted)}</td>
-                      <td className="py-3 px-4 text-emerald-700 font-medium">{fmt(p.received)}</td>
-                      <td className="py-3 px-4 text-red-600 font-medium">{fmt(p.balance)}</td>
-                      <td className="py-3 px-4">
-                        <Badge className={cn("border capitalize text-xs", payStatusStyles[p.payment_status] ?? "bg-muted text-muted-foreground")}>
-                          {p.payment_status}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4 text-card-foreground">{p.pct_collected}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </Panel>
       )}
 
-      {/* Payments tab */}
       {activeTab === "payments" && (
-        <div className="bg-card rounded-xl border shadow-sm">
-          <div className="p-4 border-b"><h2 className="text-base font-semibold text-card-foreground">Payment Log — {month}</h2></div>
-          <div className="p-4">
-            <div className="overflow-x-auto eco-float-scroll">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    {["Date","Client","Project","Amount","Type","Mode","Reference","Recorded By",""].map(h => (
-                      <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
-                    ))}
+        <Panel title={`Payment Log — ${month}`} flush>
+          <div className="overflow-x-auto eco-float-scroll">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  {["Date","Client","Project","Amount","Type","Mode","Reference","Recorded By",""].map(h => (
+                    <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading && Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b">{Array.from({ length: 9 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>)}</tr>
+                ))}
+                {!loading && payments.length === 0 && (
+                  <tr><td colSpan={9} className="py-8 text-center text-muted-foreground text-sm">No payments this month</td></tr>
+                )}
+                {!loading && payments.map(p => (
+                  <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
+                    <td className="py-3 px-4 text-card-foreground">{p.payment_date}</td>
+                    <td className="py-3 px-4 text-card-foreground">
+                      {p.client_code && <span className="mr-1 font-mono text-xs text-muted-foreground">{p.client_code}</span>}{p.client_name ?? "—"}
+                    </td>
+                    <td className="py-3 px-4 text-card-foreground">
+                      {p.project_code && <span className="mr-1 font-mono text-xs text-muted-foreground">{p.project_code}</span>}{p.project_name ?? "—"}
+                    </td>
+                    <td className="py-3 px-4 font-medium text-emerald-700">{fmt(p.amount)}</td>
+                    <td className="py-3 px-4 capitalize text-card-foreground">{p.type}</td>
+                    <td className="py-3 px-4 capitalize text-card-foreground">{p.mode.replace("_"," ")}</td>
+                    <td className="py-3 px-4 text-card-foreground">{p.reference ?? "—"}</td>
+                    <td className="py-3 px-4 text-card-foreground">{p.recorded_by || "—"}</td>
+                    <td className="py-3 px-4">
+                      <Button variant="ghost" size="icon" onClick={() => handleDeletePayment(p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {loading && Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={i} className="border-b">{Array.from({ length: 9 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>)}</tr>
-                  ))}
-                  {!loading && payments.length === 0 && (
-                    <tr><td colSpan={9} className="py-8 text-center text-muted-foreground text-sm">No payments this month</td></tr>
-                  )}
-                  {!loading && payments.map(p => (
-                    <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
-                      <td className="py-3 px-4 text-card-foreground">{p.payment_date}</td>
-                      <td className="py-3 px-4 text-card-foreground">
-                        {p.client_code && <span className="mr-1 font-mono text-xs text-muted-foreground">{p.client_code}</span>}{p.client_name ?? "—"}
-                      </td>
-                      <td className="py-3 px-4 text-card-foreground">
-                        {p.project_code && <span className="mr-1 font-mono text-xs text-muted-foreground">{p.project_code}</span>}{p.project_name ?? "—"}
-                      </td>
-                      <td className="py-3 px-4 font-medium text-emerald-700">{fmt(p.amount)}</td>
-                      <td className="py-3 px-4 capitalize text-card-foreground">{p.type}</td>
-                      <td className="py-3 px-4 capitalize text-card-foreground">{p.mode.replace("_"," ")}</td>
-                      <td className="py-3 px-4 text-card-foreground">{p.reference ?? "—"}</td>
-                      <td className="py-3 px-4 text-card-foreground">{p.recorded_by || "—"}</td>
-                      <td className="py-3 px-4">
-                        <Button variant="ghost" size="icon" onClick={() => handleDeletePayment(p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </Panel>
       )}
 
-      {/* Expenses tab */}
       {activeTab === "expenses" && (
-        <div className="bg-card rounded-xl border shadow-sm">
-          <div className="p-4 border-b"><h2 className="text-base font-semibold text-card-foreground">Expense Log — {month}</h2></div>
-          <div className="p-4">
-            <div className="overflow-x-auto eco-float-scroll">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    {["Date","Category","Description","Amount","Project","Added By",""].map(h => (
-                      <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
-                    ))}
+        <Panel title={`Expense Log — ${month}`} flush>
+          <div className="overflow-x-auto eco-float-scroll">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  {["Date","Category","Description","Amount","Project","Added By",""].map(h => (
+                    <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading && Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b">{Array.from({ length: 7 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>)}</tr>
+                ))}
+                {!loading && expenses.length === 0 && (
+                  <tr><td colSpan={7} className="py-8 text-center text-muted-foreground text-sm">No expenses this month</td></tr>
+                )}
+                {!loading && expenses.map(e => (
+                  <tr key={e.id} className="border-b hover:bg-muted/30 transition-colors">
+                    <td className="py-3 px-4 text-card-foreground">{e.date}</td>
+                    <td className="py-3 px-4 capitalize text-card-foreground">{e.category}</td>
+                    <td className="py-3 px-4 text-card-foreground">{e.description || "—"}</td>
+                    <td className="py-3 px-4 font-medium text-red-600">{fmt(e.amount)}</td>
+                    <td className="py-3 px-4 text-card-foreground">{(e as any).project_name ?? "—"}</td>
+                    <td className="py-3 px-4 text-card-foreground">{e.added_by || "—"}</td>
+                    <td className="py-3 px-4">
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteExpense(e.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {loading && Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={i} className="border-b">{Array.from({ length: 7 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>)}</tr>
-                  ))}
-                  {!loading && expenses.length === 0 && (
-                    <tr><td colSpan={7} className="py-8 text-center text-muted-foreground text-sm">No expenses this month</td></tr>
-                  )}
-                  {!loading && expenses.map(e => (
-                    <tr key={e.id} className="border-b hover:bg-muted/30 transition-colors">
-                      <td className="py-3 px-4 text-card-foreground">{e.date}</td>
-                      <td className="py-3 px-4 capitalize text-card-foreground">{e.category}</td>
-                      <td className="py-3 px-4 text-card-foreground">{e.description || "—"}</td>
-                      <td className="py-3 px-4 font-medium text-red-600">{fmt(e.amount)}</td>
-                      <td className="py-3 px-4 text-card-foreground">{(e as any).project_name ?? "—"}</td>
-                      <td className="py-3 px-4 text-card-foreground">{e.added_by || "—"}</td>
-                      <td className="py-3 px-4">
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteExpense(e.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </Panel>
       )}
 
-      {/* P&L tab */}
       {activeTab === "pl" && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
-            { label: "Total Revenue", value: summary?.total_revenue_month ?? 0, color: "text-emerald-700" },
+            { label: "Total Revenue",  value: summary?.total_revenue_month ?? 0,  color: "text-emerald-700" },
             { label: "Total Expenses", value: summary?.total_expenses_month ?? 0, color: "text-red-600" },
-            { label: "Net Profit", value: summary?.net_profit_month ?? 0, color: (summary?.net_profit_month ?? 0) >= 0 ? "text-emerald-700" : "text-red-600" },
+            { label: "Net Profit",     value: summary?.net_profit_month ?? 0,
+              color: (summary?.net_profit_month ?? 0) >= 0 ? "text-emerald-700" : "text-red-600" },
           ].map(item => (
             <div key={item.label} className="bg-card rounded-xl border shadow-sm p-6 text-center">
               <p className="text-sm text-muted-foreground mb-2">{item.label}</p>
@@ -284,7 +275,6 @@ export default function Finance() {
         </div>
       )}
 
-      {/* Add Payment Dialog */}
       <Dialog open={payOpen} onOpenChange={v => { if (!payingSaving) setPayOpen(v); }}>
         <DialogContent className="max-w-lg" onInteractOutside={e => e.preventDefault()}>
           <DialogHeader><DialogTitle>Record Payment</DialogTitle></DialogHeader>
@@ -349,7 +339,6 @@ export default function Finance() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Expense Dialog */}
       <Dialog open={expOpen} onOpenChange={v => { if (!expSaving) setExpOpen(v); }}>
         <DialogContent className="max-w-lg" onInteractOutside={e => e.preventDefault()}>
           <DialogHeader><DialogTitle>Add Expense</DialogTitle></DialogHeader>
@@ -398,6 +387,6 @@ export default function Finance() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </RecordListPage>
   );
 }
