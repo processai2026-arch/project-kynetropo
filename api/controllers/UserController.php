@@ -10,8 +10,10 @@ class UserController
     {
         AuthMiddleware::handle($request);
 
-        $targetId  = (int) $request->param('id');
         $actorId   = (int) ($request->user['user_id'] ?? 0);
+        $rawId     = (string) $request->param('id');
+        // The Settings page sends /users/me/password.
+        $targetId  = $rawId === 'me' ? $actorId : (int) $rawId;
         $actorType = $request->user['user_type'] ?? '';
 
         // Only the account owner or an admin may change a password.

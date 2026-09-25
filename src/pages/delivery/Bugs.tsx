@@ -39,7 +39,7 @@ const statusStyles: Record<string, string> = {
 const EMPTY: Partial<OpsBug> = {
   description: "", project_id: undefined, module: "", type: "bug",
   priority: "p2_medium", status: "open", reported_by: "", steps_to_repro: "",
-  target_date: "", developer_id: undefined,
+  target_date: "", developer_id: undefined, qa_id: undefined,
 };
 
 export default function Bugs() {
@@ -243,6 +243,16 @@ export default function Bugs() {
               <div className="space-y-1.5">
                 <Label>Assign to Developer</Label>
                 <Select value={String(form.developer_id ?? "")} onValueChange={v => set("developer_id", v ? Number(v) : undefined)}>
+                  <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Unassigned</SelectItem>
+                    {employees.map(e => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Assign to QA</Label>
+                <Select value={String(form.qa_id ?? "")} onValueChange={v => set("qa_id", v ? Number(v) : undefined)}>
                   <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">Unassigned</SelectItem>
