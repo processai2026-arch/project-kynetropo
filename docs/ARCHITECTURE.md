@@ -22,7 +22,7 @@
 | `72_search.php` | Global search |
 | `73_sales_ai_actions.php` | CRM and invoice routes that only the Sales AI assistant calls (see `api/ai/sales-endpoint-catalog.json`) |
 
-Only the routes the web app calls are registered. The other modules (products, procurement, inventory, invoicing, GST, accounting, HR, invoice processing and the Krish Agencies CRM) were removed from the routes along with their pages.
+Only the routes the web app calls are registered. Dead code was removed in one pass: 78 controllers, 42 models, 8 services, and 2 helpers that were not referenced by any route were deleted. What remains: 38 controllers, 21 models, 5 services, 9 helpers.
 
 - **Runtime folders.** `api/uploads/`, `api/storage/` and `api/backups/` are written by the API. Stored file paths in the database are relative to `api/` (for example `uploads/meetings/2026/09/x.pdf`), so these folders must stay where they are.
 - **Configuration.** `api/config/*.php` read `.env` from the project root, which is the folder that contains `api/`.

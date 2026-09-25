@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,7 +37,7 @@ export default function Hiring() {
   const [form, setForm]         = useState<Partial<OpsHiringCandidate>>(EMPTY);
   const [saving, setSaving]     = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const params: Record<string, string> = {};
@@ -46,9 +46,9 @@ export default function Hiring() {
       setItems(res.data ?? []);
     } catch { toast.error("Failed to load candidates"); }
     finally  { setLoading(false); }
-  };
+  }, [decisionFilter]);
 
-  useEffect(() => { load(); }, [decisionFilter]);
+  useEffect(() => { load(); }, [load]);
 
   const set = (k: keyof OpsHiringCandidate, v: unknown) => setForm(f => ({ ...f, [k]: v }));
   const openCreate = () => { setEditing(null); setForm(EMPTY); setFormOpen(true); };

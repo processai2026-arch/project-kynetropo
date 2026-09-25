@@ -19,10 +19,44 @@ The script refuses to leave a release that contains `.env`, logs, `src/`, `tests
 
 ## Upgrade
 
-1. Back up: export the database from phpMyAdmin, and download `.env`, `api/uploads/`, `api/storage/` and `api/backups/`.
-2. Upload the contents of `release/` over `public_html/`, uploading `index.html` last. Never delete `public_html/`, `.env` or the three runtime folders.
-3. Over SSH: `cd public_html && php database/migrate.php`. Read any `WARN` lines.
-4. Sign in and open a page from each module.
+1. **Back up first.** On the server over SSH:
+   ```
+   cd public_html
+   mysqldump -u DB_USER -p'DB_PASS' DB_NAME > ~/backup_$(date +%Y%m%d_%H%M).sql
+   tar -czf ~/backup_api_uploads_$(date +%Y%m%d).tar.gz api/uploads/ api/storage/ api/backups/
+   ```
+   Also download `.env` locally.
+
+2. **Upload the release.** Use cPanel File Manager or `scp`/`rsync`.
+   - Upload everything **except** `index.html` first.
+   - Upload `index.html` **last** so the app is never half-deployed.
+   - Never delete `public_html/`, `.env`, or the three runtime folders (`api/uploads/`, `api/storage/`, `api/backups/`).
+
+3. **Fix permissions after upload.** On the server:
+   ```
+   umask 022
+   find public_html -type d -exec chmod 755 {} +
+   find public_html -type f -name "*.php" -exec chmod 644 {} +
+   find public_html -type f -name "*.html" -exec chmod 644 {} +
+   chmod -R 775 public_html/api/uploads public_html/api/storage public_html/api/backups
+   ```
+   If uploading via `tar`: `tar -xzf release.tar.gz --no-same-permissions --no-same-owner -C /path/to/public_html/`
+
+4. **Run migrations.** Over SSH:
+   ```
+   cd public_html && php database/migrate.php
+   ```
+   Re-applying every `NNN_*.sql` is safe (all statements are guarded). Read any `WARN` lines.
+
+5. **Smoke test.** Over SSH, from the deployment root:
+   ```
+   php scripts/smoke.php https://project.kynetropo.com/api
+   ```
+   The script mints a 2-minute admin JWT, GETs every list endpoint, checks auth rejection, and exits non-zero on failure. Run it before considering the deploy live.
+
+6. **Verify manually.** Sign in and open a page from each module. Check the browser console and `api/error_log` for new errors.
+
+7. **Cloudflare cache.** If any page returns 404 after a correct deploy, purge the Cloudflare cache for that URL (Dashboard → Caching → Purge Cache → Custom Purge).
 
 ## Rollback
 

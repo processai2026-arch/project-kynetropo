@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Flag, Trophy } from "lucide-react";
+import { Flag, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +16,9 @@ import { CommentThread } from "@/components/sales/CommentThread";
 import { ChallengeTimer } from "@/components/sales/ChallengeTimer";
 import { ChallengeExpiredAnimation } from "@/components/sales/challenge/ChallengeExpiredAnimation";
 import type { SalesChallengeDetail as ChallengeDetail } from "@/types/sales";
+import { RecordProfileHeader } from "@/components/RecordProfileHeader";
+import { DetailTimeline } from "@/components/DetailTimeline";
+import type { TimelineItem } from "@/components/DetailTimeline";
 
 /**
  * Challenge detail — accept, start, complete, and the expiry experience.
@@ -121,8 +124,8 @@ export default function SalesChallengeDetail() {
     return (
       <SalesLayout>
         <RecordDetailPage>
-        <Skeleton className="h-8 w-40" />
-        <Skeleton className="h-48 w-full rounded-2xl" />
+          <RecordProfileHeader backTo="/sales/challenges" backLabel="Challenges" crumb="Challenge" icon={Trophy} title="Challenge" loading />
+          <Skeleton className="h-48 w-full rounded-2xl" />
         </RecordDetailPage>
       </SalesLayout>
     );
@@ -132,13 +135,10 @@ export default function SalesChallengeDetail() {
     return (
       <SalesLayout>
         <RecordDetailPage>
-        <Button variant="ghost" size="sm" onClick={() => navigate("/sales/challenges")}>
-          <ArrowLeft className="mr-1.5 h-4 w-4" />
-          Challenges
-        </Button>
-        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center text-sm text-destructive">
-          {error ?? "Challenge not found"}
-        </div>
+          <RecordProfileHeader backTo="/sales/challenges" backLabel="Challenges" crumb="Challenge" icon={Trophy} title="Challenge" />
+          <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center text-sm text-destructive">
+            {error ?? "Challenge not found"}
+          </div>
         </RecordDetailPage>
       </SalesLayout>
     );
@@ -303,29 +303,31 @@ export default function SalesChallengeDetail() {
   return (
     <SalesLayout>
       <RecordDetailPage>
-      <Button variant="ghost" size="sm" className="-ml-2 w-fit" onClick={() => navigate("/sales/challenges")}>
-        <ArrowLeft className="mr-1.5 h-4 w-4" />
-        Challenges
-      </Button>
+      <RecordProfileHeader
+        backTo="/sales/challenges"
+        backLabel="Challenges"
+        crumb={challenge.title}
+        icon={Trophy}
+        mark={challenge.title.slice(0, 2).toUpperCase()}
+        eyebrow={[challenge.challenge_code, challenge.priority !== "normal" ? `${humanise(challenge.priority)} priority` : null].filter(Boolean).join(" · ")}
+        status={<ChallengeStatusBadge value={challenge.status} />}
+        title={challenge.title}
+      />
 
       {shell}
 
       {challenge.activity.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-base font-semibold">History</h2>
-          <ol className="relative space-y-3 border-l pl-5">
-            {challenge.activity.map((a) => (
-              <li key={a.id} className="relative">
-                <span className="absolute -left-[26px] top-1.5 h-2.5 w-2.5 rounded-full bg-muted-foreground/50 ring-4 ring-background" />
-                <p className="text-sm font-medium capitalize text-card-foreground">{humanise(a.action)}</p>
-                {a.notes && <p className="text-sm text-muted-foreground">{a.notes}</p>}
-                <p className="text-[11px] text-muted-foreground">
-                  {formatDateTime(a.created_at)}
-                  {a.actor_name ? ` · ${a.actor_name}` : ""}
-                </p>
-              </li>
-            ))}
-          </ol>
+          <DetailTimeline
+            items={challenge.activity.map((a): TimelineItem => ({
+              label: humanise(a.action),
+              at: a.created_at,
+              by: a.actor_name || undefined,
+              description: a.notes || undefined,
+              tone: "done",
+            }))}
+          />
         </section>
       )}
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,7 +56,7 @@ export default function Bugs() {
   const [form, setForm]         = useState<Partial<OpsBug>>(EMPTY);
   const [saving, setSaving]     = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const params: Record<string, string> = {};
@@ -67,9 +67,9 @@ export default function Bugs() {
       setItems(res.data ?? []);
     } catch { toast.error("Failed to load bugs"); }
     finally  { setLoading(false); }
-  };
+  }, [projectFilter, statusFilter, priorityFilter]);
 
-  useEffect(() => { load(); }, [projectFilter, statusFilter, priorityFilter]);
+  useEffect(() => { load(); }, [load]);
   useEffect(() => {
     opsProjectsApi.list().then(r => setProjects(r.data ?? [])).catch(() => {});
     opsEmployeesApi.list().then(r => setEmployees(r.data ?? [])).catch(() => {});

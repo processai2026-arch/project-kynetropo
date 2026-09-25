@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,7 +43,7 @@ export default function Finance() {
   const [expForm, setExpForm]   = useState(EMPTY_EXP);
   const [expSaving, setExpSaving] = useState(false);
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true);
     try {
       const [sumRes, payRes, expRes] = await Promise.all([
@@ -56,9 +56,9 @@ export default function Finance() {
       setExpenses(expRes.data ?? []);
     } catch { toast.error("Failed to load finance data"); }
     finally  { setLoading(false); }
-  };
+  }, [month]);
 
-  useEffect(() => { loadAll(); }, [month]);
+  useEffect(() => { loadAll(); }, [loadAll]);
   useEffect(() => {
     opsClientsApi.list().then(r => setClients(r.data ?? [])).catch(() => {});
     opsProjectsApi.list().then(r => setProjects(r.data ?? [])).catch(() => {});

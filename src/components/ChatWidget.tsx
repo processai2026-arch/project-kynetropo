@@ -108,7 +108,7 @@ export function ChatWidget() {
     chatApi.history(sid).then((history) => {
       if (history.length > 0) setMessages([GREETING, ...history]);
     }).catch(() => {});
-  }, [open]);
+  }, [open, messages.length]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });

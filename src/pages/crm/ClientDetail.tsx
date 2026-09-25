@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Bug, CalendarClock, CalendarDays, CheckSquare, CircleDollarSign, FolderKanban, Hash, History, IndianRupee,
@@ -60,8 +60,11 @@ export default function ClientDetail() {
   const [followupOpen, setFollowupOpen] = useState(false);
 
   // Every project of this client — the detail endpoint only carries the newest.
-  const loadProjects = () => opsProjectsApi.list().then((r) => setProjects((r.data ?? []).filter((p) => p.client_id === id))).catch(() => undefined);
-  useEffect(() => { void loadProjects(); }, [id]);
+  const loadProjects = useCallback(
+    () => opsProjectsApi.list().then((r) => setProjects((r.data ?? []).filter((p) => p.client_id === id))).catch(() => undefined),
+    [id],
+  );
+  useEffect(() => { void loadProjects(); }, [loadProjects]);
   const refresh = async () => { await reload(); await loadProjects(); };
 
   const payments = (c?.payments ?? []) as OpsPayment[];

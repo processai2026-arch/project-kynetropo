@@ -279,14 +279,27 @@ SERVER LAYOUT  (deployment root = web root: Hostinger public_html/)
   database/    migrations, run from SSH only (migrate.php refuses web requests)
 
 UPGRADE (the usual case)
-  1. Back up first: export the database (hPanel -> phpMyAdmin), and download
-     .env and api/uploads/, api/storage/, api/backups/.
-  2. Upload this folder's contents over public_html/. Never delete
-     public_html/, .env or the three runtime folders above. Upload index.html last.
-  3. From SSH:  cd public_html && php database/migrate.php
+  1. Back up first (over SSH):
+       mysqldump -u DB_USER -p'DB_PASS' DB_NAME > ~/backup_$(date +%Y%m%d_%H%M).sql
+       tar -czf ~/api_uploads_$(date +%Y%m%d).tar.gz api/uploads/ api/storage/ api/backups/
+     Also download .env locally.
+  2. Upload this folder's contents over public_html/, EXCEPT index.html.
+     Upload index.html LAST. Never delete public_html/, .env, or the three
+     runtime folders. If using tar: add --no-same-permissions --no-same-owner.
+  3. Fix permissions (SSH):
+       umask 022
+       find public_html -type d -exec chmod 755 {} +
+       find public_html -type f \\( -name "*.php" -o -name "*.html" \\) -exec chmod 644 {} +
+       chmod -R 775 public_html/api/uploads public_html/api/storage public_html/api/backups
+  4. From SSH:  cd public_html && php database/migrate.php
      It re-applies every NNN_*.sql; each is guarded, so re-running is safe.
      Lines marked WARN name a statement the database refused - read them.
-  4. Open the site, sign in, and check a page from each module.
+  5. Smoke test (SSH, from deployment root):
+       php scripts/smoke.php https://project.kynetropo.com/api
+     Exits non-zero on any failure. Fix before going live.
+  6. Open the site, sign in, and check a page from each module.
+  7. Cloudflare: if a page 404s after correct deploy, purge the cache for
+     that URL (Dashboard → Caching → Purge Cache → Custom Purge).
 
 FIRST DEPLOY
   1. PHP 8.1+ with pdo_mysql, mbstring, openssl, json; MySQL 8 or MariaDB; HTTPS.
