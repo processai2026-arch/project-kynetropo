@@ -105,15 +105,22 @@ class AdminUserController
         $total = Database::count("SELECT COUNT(*) AS cnt FROM users u WHERE $whereClause", $params);
         $offset = ($page - 1) * $limit;
         $staffRoleSelect = User::hasStaffRoleColumn() ? 'u.staff_role,' : 'NULL AS staff_role,';
+        $hasHealth = Database::tableExists('customer_health_scores');
+        $healthSelect = $hasHealth
+            ? 'chs.health_score, chs.segment, chs.is_at_risk, chs.is_high_value'
+            : 'NULL AS health_score, NULL AS segment, NULL AS is_at_risk, NULL AS is_high_value';
+        $healthJoin = $hasHealth
+            ? 'LEFT JOIN customer_health_scores chs ON chs.customer_id = u.user_id AND chs.tenant_id = u.tenant_id'
+            : '';
 
         $rows = Database::fetchAll(
             "SELECT u.user_id, u.name, u.email, u.phone, u.user_type,
                     $staffRoleSelect
                     u.company_name, u.address, u.city, u.state, u.pincode,
                     u.udyam_number, u.gst_number, u.is_active, u.created_at,
-                    chs.health_score, chs.segment, chs.is_at_risk, chs.is_high_value
+                    $healthSelect
              FROM users u
-             LEFT JOIN customer_health_scores chs ON chs.customer_id = u.user_id AND chs.tenant_id = u.tenant_id
+             $healthJoin
              WHERE $whereClause
              ORDER BY $sortField $sortDir
              LIMIT ? OFFSET ?",

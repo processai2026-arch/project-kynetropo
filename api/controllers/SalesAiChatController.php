@@ -1117,7 +1117,7 @@ SYSPROMPT;
         $apiKey = $this->env('GROQ_API_KEY') ?: $this->env('groq_api_key');
         if (!$apiKey) return ['ok' => false, 'error' => 'Groq not configured.'];
         $response = $this->httpPostJson('https://api.groq.com/openai/v1/chat/completions',
-            ['model' => $this->env('GROQ_MODEL') ?: 'llama-3.1-70b-versatile', 'messages' => $messages, 'temperature' => 0.1, 'max_tokens' => 1400, 'response_format' => ['type' => 'json_object']],
+            ['model' => $this->env('GROQ_MODEL') ?: 'openai/gpt-oss-120b', 'messages' => $messages, 'temperature' => 0.1, 'max_tokens' => 1400, 'response_format' => ['type' => 'json_object']],
             ['Authorization: Bearer ' . $apiKey], min(self::MODEL_TIMEOUT_S, $this->remaining($deadline)));
         if ($response === null) return ['ok' => false, 'error' => 'Groq unreachable.'];
         $json = json_decode($response, true);

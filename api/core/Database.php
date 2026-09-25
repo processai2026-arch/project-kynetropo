@@ -141,6 +141,16 @@ class Database
         return self::query($sql, $params)->rowCount();
     }
 
+    /** Whether a table exists in the current database. Cached per request. */
+    public static function tableExists(string $table): bool
+    {
+        static $seen = [];
+        return $seen[$table] ??= (bool) self::fetch(
+            'SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1',
+            [$table]
+        );
+    }
+
     public static function count(string $sql, array $params = []): int
     {
         $row = self::fetch($sql, $params);

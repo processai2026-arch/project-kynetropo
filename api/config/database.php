@@ -42,5 +42,7 @@ define('DB_CHARSET', $_env['DB_CHARSET'] ?? 'utf8mb4');
 define('GEMINI_API_KEY',     $_env['gemini_api_key']     ?? '');
 define('GROQ_API_KEY',       $_env['groq_api_key']       ?? '');
 define('GROQ_API_KEY_NEW',   $_env['groq_api_key_new']   ?? '');
+// Groq retires models; set GROQ_MODEL in .env to one your account lists.
+define('GROQ_MODEL',         $_env['groq_model']         ?? '');
 
 unset($_envPath, $_env, $_line, $_k, $_v, $_required);

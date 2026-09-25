@@ -330,7 +330,7 @@ SYSPROMPT;
             }
         }
         if (!$model) $model = getenv('GROQ_MODEL') ?: '';
-        if (!$model) $model = 'llama-3.1-70b-versatile';
+        if (!$model) $model = 'openai/gpt-oss-120b';
 
         $payload = json_encode([
             'model'           => $model,

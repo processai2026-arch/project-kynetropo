@@ -13,6 +13,10 @@ class AdminCustomerController
 {
     public function index(Request $request): void
     {
+        if (!Database::tableExists('customers')) {
+            Response::success([]);
+            return;
+        }
         $tenantId = Database::tenantId();
         $status   = $request->query('status');
         $search   = $request->query('search');

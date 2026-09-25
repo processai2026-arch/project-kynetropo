@@ -453,7 +453,7 @@ SYSPROMPT;
         if (!$apiKey) return ['ok' => false, 'error' => 'GROQ API key not configured in .env'];
 
         $payload = json_encode([
-            'model'           => 'llama-3.3-70b-versatile',
+            'model'           => (defined('GROQ_MODEL') && GROQ_MODEL) ? GROQ_MODEL : 'openai/gpt-oss-120b',
             'messages'        => [
                 ['role' => 'system', 'content' => $systemPrompt],
                 ['role' => 'user',   'content' => $userPrompt],

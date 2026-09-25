@@ -18,6 +18,10 @@ class AdminKrishEmployeeController
 {
     public function index(Request $request): void
     {
+        if (!Database::tableExists('employees')) {
+            Response::success([]);
+            return;
+        }
         $tenantId = Database::tenantId();
         $sql    = 'SELECT * FROM employees WHERE tenant_id = ?';
         $params = [$tenantId];

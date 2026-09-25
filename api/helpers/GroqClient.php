@@ -4,7 +4,7 @@ declare(strict_types=1);
 class GroqClient
 {
     private const API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-    private const MODEL   = 'llama-3.3-70b-versatile';
+    private const MODEL   = 'openai/gpt-oss-120b';
     private const TIMEOUT = 30;
 
     /**
@@ -23,7 +23,7 @@ class GroqClient
         }
 
         $payload = json_encode([
-            'model'       => self::MODEL,
+            'model'       => GROQ_MODEL ?: self::MODEL,
             'messages'    => $messages,
             'max_tokens'  => $maxTokens,
             'temperature' => 0.3,
