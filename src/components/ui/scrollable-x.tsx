@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+import { createWheelAxisLock, touchAxis as decideTouchAxis, type Axis } from "@/lib/gestureAxis";
 
 interface ScrollableXProps {
   children: React.ReactNode;
@@ -12,11 +13,15 @@ interface ScrollableXProps {
  * the bottom of the viewport, shown only while the table is wider than its
  * container and on screen.
  *
- * The floating bar is the ONLY way to move the table sideways. The wrapper
- * clips its own horizontal overflow (overflow-x: hidden still allows setting
- * scrollLeft from code), so it draws no second scrollbar, and a mouse wheel,
- * touchpad or swipe over the table only ever scrolls the page up and down.
+ * The wrapper clips its own horizontal overflow (overflow-x: hidden still
+ * allows setting scrollLeft from code), so it draws no second scrollbar and
+ * the browser never slides it sideways by itself. Sideways movement comes
+ * from the floating bar, or from a gesture over the table that is locked to
+ * one direction when it starts: a mostly-vertical touchpad/wheel/finger swipe
+ * only scrolls the page, a mostly-horizontal one only moves the table. A
+ * slightly diagonal swipe down therefore no longer drifts the table sideways.
  */
+
 export function ScrollableX({ children, className }: ScrollableXProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const mirrorRef  = useRef<HTMLDivElement>(null);
@@ -74,9 +79,51 @@ export function ScrollableX({ children, className }: ScrollableXProps) {
     const ro = new ResizeObserver(refresh);
     ro.observe(el);
 
+    const canScrollX = () => el.scrollWidth > el.clientWidth + 2;
+
+    // Touchpad / mouse wheel: lock each gesture to the axis it starts on.
+    const wheelAxis = createWheelAxisLock();
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) return; // pinch-zoom
+      if (wheelAxis(e.deltaX, e.deltaY, e.timeStamp) !== "x" || !canScrollX()) return; // the page scrolls; the table cannot drift
+      e.preventDefault(); // keep a sideways swipe from also scrolling the page or going Back
+      el.scrollLeft += e.deltaX;
+    };
+
+    // Touch screens: the same rule for a finger swipe.
+    let touchAxis: Axis | null = null;
+    let startX = 0, startY = 0, startLeft = 0;
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) { touchAxis = "y"; return; }
+      touchAxis = null;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      startLeft = el.scrollLeft;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (touchAxis === "y" || e.touches.length !== 1) return;
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (touchAxis === null) {
+        const decided = decideTouchAxis(dx, dy);
+        if (decided === null) return;
+        touchAxis = decided === "x" && canScrollX() ? "x" : "y";
+        if (touchAxis === "y") return;
+      }
+      e.preventDefault();
+      el.scrollLeft = startLeft - dx;
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: false });
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+
     refresh();
 
     return () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
       el.removeEventListener("scroll", onContentScroll);
       main?.removeEventListener("scroll", refresh);
       window.removeEventListener("resize", refresh);
