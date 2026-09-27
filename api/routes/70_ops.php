@@ -50,6 +50,7 @@ $router->delete('/admin/ops/finance/expenses/{id}',          [AdminOpsFinanceCon
 $router->get('/admin/ops/amc',                               [AdminOpsAmcController::class, 'index'],                'admin');
 $router->post('/admin/ops/amc',                              [AdminOpsAmcController::class, 'store'],                'admin');
 $router->put('/admin/ops/amc/{id}',                          [AdminOpsAmcController::class, 'update'],               'admin');
+$router->post('/admin/ops/amc/{id}/collect',                 [AdminOpsAmcController::class, 'collect'],              'admin');
 $router->delete('/admin/ops/amc/{id}',                       [AdminOpsAmcController::class, 'destroy'],              'admin');
 
 // ─── Kynetropo Ops — Pitches ─────────────────────────────────────────────────

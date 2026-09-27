@@ -17,13 +17,17 @@ class AdminOpsDashboardController
         // Today's actions
         $followupsToday = $this->followupsToday($tenantId, $today);
 
+        // AMC money due by the end of this month, overdue included: the renewal
+        // of a paid (or free) year, or a charged year not paid yet.
         $amcDueThisMonth = Database::fetchAll(
-            "SELECT a.*, c.name AS client_name, p.name AS project_name
+            "SELECT a.*, c.name AS client_name, p.name AS project_name,
+                    IF(a.term_paid, a.renewal_date, a.start_date) AS due_date
              FROM ops_amc_records a
              JOIN ops_clients c ON c.id = a.client_id
              JOIN ops_projects p ON p.id = a.project_id
-             WHERE a.tenant_id = ? AND DATE_FORMAT(a.renewal_date,'%Y-%m') = ? AND a.status != 'paid'",
-            [$tenantId, $month]
+             WHERE a.tenant_id = ? AND IF(a.term_paid, a.renewal_date, a.start_date) <= LAST_DAY(CURDATE())
+             ORDER BY due_date",
+            [$tenantId]
         );
 
         $meetingsToday = Database::fetchAll(

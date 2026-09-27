@@ -1,7 +1,7 @@
 import { apiFetch } from "@/lib/api/client";
 import type {
   OpsClient, OpsClientDetail, OpsProject, OpsMeeting, OpsBug,
-  OpsPayment, OpsExpense, OpsAmcRecord, OpsPitch, OpsEmployee,
+  OpsPayment, OpsExpense, OpsAmcRecord, OpsAmcCreateBody, OpsAmcCollectBody, OpsPitch, OpsEmployee,
   OpsHiringCandidate, OpsDashboardStats, OpsFinanceSummary, OpsProjectDetail,
 } from "@/types/ops";
 
@@ -76,8 +76,12 @@ export const opsFinanceApi = {
 // ─── AMC ──────────────────────────────────────────────────────────────────────
 export const opsAmcApi = {
   list:   (p?: Record<string, string>) => apiFetch<{ data: OpsAmcRecord[] }>(`/admin/ops/amc${qs(p)}`),
-  create: (body: Partial<OpsAmcRecord>) => apiFetch<{ data: OpsAmcRecord }>("/admin/ops/amc", { method: "POST", body: JSON.stringify(body) }),
-  update: (id: number, body: Partial<OpsAmcRecord>) => apiFetch<{ data: OpsAmcRecord }>(`/admin/ops/amc/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  create: (body: OpsAmcCreateBody) => apiFetch<{ data: OpsAmcRecord }>("/admin/ops/amc", { method: "POST", body: JSON.stringify(body) }),
+  update: (id: number, body: Partial<Pick<OpsAmcRecord, "amount" | "start_date" | "renewal_date" | "notes">>) =>
+    apiFetch<{ data: OpsAmcRecord }>(`/admin/ops/amc/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  /** Records this year's AMC payment in Finance; a paid year rolls on to the next. */
+  collect: (id: number, body: OpsAmcCollectBody) =>
+    apiFetch<{ data: OpsAmcRecord }>(`/admin/ops/amc/${id}/collect`, { method: "POST", body: JSON.stringify(body) }),
   remove: (id: number) => apiFetch<void>(`/admin/ops/amc/${id}`, { method: "DELETE" }),
 };
 

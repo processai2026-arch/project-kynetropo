@@ -221,16 +221,8 @@ class AdminOpsFinanceController
         $project = Database::fetch('SELECT * FROM ops_projects WHERE id = ? AND tenant_id = ? LIMIT 1', [(int)$pay['project_id'], $tenantId]);
         if ($project) self::adjustProject($project, $tenantId, -self::projectShare((string)$pay['type'], (float)$pay['amount']));
 
-        // Check if this payment was an AMC payment — revert AMC record to due
-        if ((string)($pay['type'] ?? '') === 'amc') {
-            $amc = Database::fetch(
-                "SELECT * FROM ops_amc_records WHERE client_id = ? AND project_id = ? AND tenant_id = ? AND status = 'paid' LIMIT 1",
-                [(int)$pay['client_id'], (int)$pay['project_id'], $tenantId]
-            );
-            if ($amc) {
-                Database::update('ops_amc_records', ['status' => 'due'], ['id' => $amc['id'], 'tenant_id' => $tenantId]);
-            }
-        }
+        // If it paid an AMC's current year, that year is unpaid again
+        if ((string)($pay['type'] ?? '') === 'amc') AdminOpsAmcController::paymentRemoved($tenantId, $id);
 
         Database::query('DELETE FROM ops_payments WHERE id = ? AND tenant_id = ?', [$id, $tenantId]);
 

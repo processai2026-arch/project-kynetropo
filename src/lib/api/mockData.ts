@@ -46,8 +46,8 @@ const EXPENSES = [
 ];
 
 const AMC = [
-  { id: 1, client_id: 3, client_name: "VTT Gold", project_id: 3, project_name: "VTT Gold Portal", amount: 18000, start_date: "2025-04-01", renewal_date: "2026-04-01", status: "overdue", payment_mode: "bank_transfer", notes: "Annual maintenance contract", days_until_renewal: -126 },
-  { id: 2, client_id: 1, client_name: "Cable TV CRM", project_id: 1, project_name: "Cable TV CRM Phase 2", amount: 24000, start_date: "2026-05-01", renewal_date: "2027-05-01", status: "active", payment_mode: null, notes: null, days_until_renewal: 269 },
+  { id: 1, client_id: 3, client_name: "VTT Gold", client_company: "", project_id: 3, project_name: "VTT Gold Portal", project_code: null, amount: 18000, first_year_free: false, term_paid: true, in_free_year: false, start_date: "2025-04-01", renewal_date: "2026-04-01", due_date: "2026-04-01", status: "overdue", payment_mode: "bank_transfer", notes: "Annual maintenance contract", days_until_due: -126 },
+  { id: 2, client_id: 1, client_name: "Cable TV CRM", client_company: "", project_id: 1, project_name: "Cable TV CRM Phase 2", project_code: null, amount: 24000, first_year_free: true, term_paid: true, in_free_year: true, start_date: "2026-05-01", renewal_date: "2027-05-01", due_date: "2027-05-01", status: "active", payment_mode: null, notes: null, days_until_due: 269 },
 ];
 
 const PITCHES = [
@@ -234,7 +234,7 @@ export function getMockResponse(path: string, method: string, body?: unknown): u
 
   // AMC
   if (url === "/admin/ops/amc" && method === "GET") return ok([...AMC]);
-  if (url === "/admin/ops/amc" && method === "POST") return ok({ ...(body as object), id: 99, status: "active", days_until_renewal: 365 });
+  if (url === "/admin/ops/amc" && method === "POST") return ok({ ...(body as object), id: 99, status: "active", days_until_due: 365 });
   if (url.match(/^\/admin\/ops\/amc\/\d+$/) && method === "PUT") return ok({ ...(body as object) });
 
   // Pitches

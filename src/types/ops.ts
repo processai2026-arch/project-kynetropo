@@ -243,19 +243,59 @@ export interface OpsExpense {
   created_at: string;
 }
 
+/**
+ * One AMC contract, tracked a year at a time: start_date to renewal_date is
+ * the current year. AMC is separate from the project price.
+ */
 export interface OpsAmcRecord {
   id: number;
   client_id: number;
   client_name: string | null;
+  client_company: string;
   project_id: number;
   project_name: string | null;
+  project_code: string | null;
+  /** The yearly AMC amount. */
   amount: number;
+  /** Nothing was charged for the first year; the amount is first due at renewal. */
+  first_year_free: boolean;
+  /** The current year is paid for (or is the free first year). */
+  term_paid: boolean;
+  /** Still in the free first year (no AMC payment made yet). */
+  in_free_year: boolean;
   start_date: string;
   renewal_date: string;
-  status: "active" | "due" | "overdue" | "paid";
+  /** When the next AMC payment is due: renewal_date, or start_date while the year is unpaid. */
+  due_date: string;
+  days_until_due: number | null;
+  status: "active" | "due" | "overdue";
   payment_mode: string | null;
   notes: string | null;
-  days_until_renewal: number | null;
+}
+
+/** POST /admin/ops/amc */
+export interface OpsAmcCreateBody {
+  client_id: number;
+  project_id: number;
+  amount: number;
+  first_year_free: boolean;
+  /** Charged first year only: already paid, so it is recorded in Finance. */
+  first_year_paid?: boolean;
+  start_date: string;
+  renewal_date: string;
+  payment_mode?: string;
+  payment_date?: string;
+  notes?: string;
+  recorded_by?: string;
+}
+
+/** POST /admin/ops/amc/{id}/collect */
+export interface OpsAmcCollectBody {
+  amount?: number;
+  payment_mode: string;
+  payment_date: string;
+  reference?: string;
+  recorded_by?: string;
 }
 
 export interface OpsPitch {

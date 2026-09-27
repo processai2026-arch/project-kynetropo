@@ -1,30 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { RecordListPage } from "@/components/RecordListPage";
 import { PageHeader } from "@/components/PageHeader";
 import { Panel } from "@/components/Panel";
 import { opsAmcApi, opsClientsApi, opsProjectsApi } from "@/lib/api/ops";
+import { formatDate } from "@/lib/format";
 import type { OpsAmcRecord, OpsClient, OpsProject } from "@/types/ops";
 import { Plus, Pencil, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollableX } from "@/components/ui/scrollable-x";
+import { AmcCollectDialog, AmcFormDialog, AmcStatusBadge, AmcYearBadge, dueText } from "./components/AmcDialogs";
 
-const statusStyles: Record<string, string> = {
-  active:  "bg-emerald-50 text-emerald-700 border-emerald-200",
-  due:     "bg-amber-50 text-amber-600 border-amber-200",
-  overdue: "bg-red-50 text-red-600 border-red-200",
-  paid:    "bg-gray-100 text-gray-500 border-gray-200",
-};
-
-const EMPTY = { client_id: 0, project_id: 0, amount: 0, start_date: "", renewal_date: "", payment_mode: "", notes: "" };
+const COLUMNS = ["Client", "Project", "Per year", "This year", "Renewal", "Next due", "Status", ""];
 
 export default function AMC() {
   const [items, setItems]       = useState<OpsAmcRecord[]>([]);
@@ -34,9 +26,7 @@ export default function AMC() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing]   = useState<OpsAmcRecord | null>(null);
-  const [form, setForm]         = useState(EMPTY);
-  const [saving, setSaving]     = useState(false);
-  const [markingId, setMarkingId] = useState<number | null>(null);
+  const [collecting, setCollecting] = useState<OpsAmcRecord | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,47 +45,8 @@ export default function AMC() {
     opsProjectsApi.list().then(r => setProjects(r.data ?? [])).catch(() => {});
   }, []);
 
-  const clientProjects = form.client_id ? projects.filter(p => p.client_id === form.client_id) : projects;
-  const set = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }));
-
-  const openCreate = () => { setEditing(null); setForm(EMPTY); setFormOpen(true); };
-  const openEdit   = (a: OpsAmcRecord) => {
-    setEditing(a);
-    setForm({ client_id: a.client_id, project_id: a.project_id, amount: a.amount,
-              start_date: a.start_date, renewal_date: a.renewal_date,
-              payment_mode: a.payment_mode ?? "", notes: a.notes ?? "" });
-    setFormOpen(true);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.client_id || !form.project_id) { toast.error("Client and project required"); return; }
-    if (form.amount <= 0) { toast.error("Amount required"); return; }
-    setSaving(true);
-    try {
-      const startDate   = form.start_date || new Date().toISOString().split("T")[0];
-      const renewalDate = form.renewal_date || new Date(new Date(startDate).setFullYear(new Date(startDate).getFullYear() + 1)).toISOString().split("T")[0];
-      if (editing) {
-        await opsAmcApi.update(editing.id, { ...form, start_date: startDate, renewal_date: renewalDate });
-        toast.success("AMC updated");
-      } else {
-        await opsAmcApi.create({ ...form, start_date: startDate, renewal_date: renewalDate });
-        toast.success("AMC record created");
-      }
-      setFormOpen(false); load();
-    } catch (err) { toast.error(err instanceof Error ? err.message : "Save failed"); }
-    finally       { setSaving(false); }
-  };
-
-  const handleMarkPaid = async (id: number) => {
-    setMarkingId(id);
-    try {
-      await opsAmcApi.update(id, { status: "paid" });
-      toast.success("AMC marked as paid — payment logged automatically");
-      load();
-    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); }
-    finally       { setMarkingId(null); }
-  };
+  const openCreate = () => { setEditing(null); setFormOpen(true); };
+  const openEdit   = (a: OpsAmcRecord) => { setEditing(a); setFormOpen(true); };
 
   const counts = {
     due:     items.filter(a => a.status === "due").length,
@@ -106,6 +57,7 @@ export default function AMC() {
     <RecordListPage>
       <PageHeader
         title="AMC"
+        subtitle="Yearly maintenance, kept separate from project amounts"
         action={<Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Add AMC</Button>}
       />
 
@@ -124,7 +76,6 @@ export default function AMC() {
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="due">Due Soon</SelectItem>
             <SelectItem value="overdue">Overdue</SelectItem>
-            <SelectItem value="paid">Paid</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -134,45 +85,48 @@ export default function AMC() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
-                {["Client","Project","Amount","Start Date","Renewal Date","Days Until","Status",""].map(h => (
+                {COLUMNS.map(h => (
                   <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading && Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i} className="border-b">{Array.from({ length: 8 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>)}</tr>
+                <tr key={i} className="border-b">{COLUMNS.map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>)}</tr>
               ))}
               {!loading && items.length === 0 && (
-                <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground text-sm">No AMC records found</td></tr>
+                <tr><td colSpan={COLUMNS.length} className="px-6 py-8 text-center text-muted-foreground text-sm">No AMC records found</td></tr>
               )}
               {!loading && items.map(a => {
-                const daysLeft = a.days_until_renewal;
                 const rowColor = a.status === "overdue" ? "bg-red-50/40" : a.status === "due" ? "bg-amber-50/40" : "";
                 return (
                   <tr key={a.id} className={cn("border-b hover:bg-muted/30 transition-colors", rowColor)}>
-                    <td className="py-3 px-4 font-medium text-card-foreground">{a.client_name}</td>
-                    <td className="py-3 px-4 text-card-foreground">{a.project_name}</td>
-                    <td className="py-3 px-4 font-medium text-card-foreground">₹{Number(a.amount).toLocaleString("en-IN")}</td>
-                    <td className="py-3 px-4 text-card-foreground">{a.start_date}</td>
-                    <td className="py-3 px-4 text-card-foreground">{a.renewal_date}</td>
-                    <td className="py-3 px-4 text-card-foreground">
-                      {daysLeft != null
-                        ? daysLeft < 0 ? <span className="text-red-600 font-medium">{Math.abs(daysLeft)}d overdue</span>
-                        : daysLeft === 0 ? <span className="text-amber-600 font-medium">Today</span>
-                        : <span className={daysLeft <= 30 ? "text-amber-600" : ""}>{daysLeft}d</span>
-                        : "—"}
+                    <td className="py-3 px-4">
+                      <Link to={`/clients/${a.client_id}`} className="font-medium text-card-foreground hover:text-primary">{a.client_name}</Link>
+                      {a.client_company && <div className="text-xs text-muted-foreground">{a.client_company}</div>}
                     </td>
                     <td className="py-3 px-4">
-                      <Badge className={cn("border capitalize", statusStyles[a.status] ?? "bg-muted text-muted-foreground")}>{a.status}</Badge>
+                      <Link to={`/projects/${a.project_id}`} className="text-card-foreground hover:text-primary">{a.project_name}</Link>
                     </td>
-                    <td className="py-3 px-4 flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(a)}><Pencil className="h-4 w-4" /></Button>
-                      {a.status !== "paid" && (
-                        <Button variant="ghost" size="icon" onClick={() => handleMarkPaid(a.id)} disabled={markingId === a.id} title="Mark Collected">
+                    <td className="py-3 px-4 font-medium text-card-foreground whitespace-nowrap">₹{Number(a.amount).toLocaleString("en-IN")}</td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <AmcYearBadge amc={a} />
+                      <div className="text-xs text-muted-foreground mt-0.5">from {formatDate(a.start_date)}</div>
+                    </td>
+                    <td className="py-3 px-4 text-card-foreground whitespace-nowrap">{formatDate(a.renewal_date)}</td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <div className="text-card-foreground">{formatDate(a.due_date)}</div>
+                      <div className="text-xs">{dueText(a.days_until_due)}</div>
+                    </td>
+                    <td className="py-3 px-4"><AmcStatusBadge status={a.status} /></td>
+                    <td className="py-3 px-4">
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(a)} title="Edit" aria-label={`Edit AMC for ${a.project_name}`}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => setCollecting(a)}
+                          title={a.term_paid ? "Collect renewal" : "Collect this year's AMC"} aria-label={`Collect AMC for ${a.project_name}`}>
                           <CheckCircle className="h-4 w-4 text-emerald-600" />
                         </Button>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -182,56 +136,20 @@ export default function AMC() {
         </ScrollableX>
       </Panel>
 
-      <Dialog open={formOpen} onOpenChange={v => { if (!saving) setFormOpen(v); }}>
-        <DialogContent className="max-w-lg" onInteractOutside={e => e.preventDefault()}>
-          <DialogHeader><DialogTitle>{editing ? "Edit AMC" : "Add AMC Record"}</DialogTitle></DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5 col-span-2">
-                <Label>Client *</Label>
-                <Select value={String(form.client_id || "")} onValueChange={v => set("client_id", Number(v))}>
-                  <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
-                  <SelectContent>{clients.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5 col-span-2">
-                <Label>Project *</Label>
-                <Select value={String(form.project_id || "")} onValueChange={v => set("project_id", Number(v))}>
-                  <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Select project</SelectItem>
-                    {clientProjects.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>AMC Amount (₹) *</Label>
-                <Input type="number" value={form.amount || ""} onChange={e => set("amount", Number(e.target.value))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Payment Mode</Label>
-                <Input value={form.payment_mode} onChange={e => set("payment_mode", e.target.value)} placeholder="UPI / Bank transfer" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Contract Start Date</Label>
-                <Input type="date" value={form.start_date} onChange={e => set("start_date", e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Renewal Date (auto = start + 1yr)</Label>
-                <Input type="date" value={form.renewal_date} onChange={e => set("renewal_date", e.target.value)} />
-              </div>
-              <div className="space-y-1.5 col-span-2">
-                <Label>Notes</Label>
-                <Textarea value={form.notes} onChange={e => set("notes", e.target.value)} rows={2} />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setFormOpen(false)} disabled={saving}>Cancel</Button>
-              <Button type="submit" disabled={saving}>{saving ? "Saving…" : editing ? "Update" : "Create"}</Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <AmcFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        amc={editing}
+        clients={clients}
+        projects={projects}
+        onSaved={load}
+      />
+      <AmcCollectDialog
+        open={collecting !== null}
+        onOpenChange={(v) => { if (!v) setCollecting(null); }}
+        amc={collecting}
+        onSaved={load}
+      />
     </RecordListPage>
   );
 }

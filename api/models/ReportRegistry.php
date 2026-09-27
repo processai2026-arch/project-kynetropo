@@ -299,24 +299,29 @@ final class ReportRegistry
             'amc-renewals' => [
                 'title'       => 'AMC renewals',
                 'category'    => 'Finance',
-                'description' => 'Maintenance contracts by renewal date, so none of them lapse unnoticed.',
-                'date_column' => 'a.renewal_date',
+                'description' => 'Maintenance contracts by when the next AMC payment is due, so none of them lapse unnoticed.',
+                'date_column' => 'IF(a.term_paid, a.renewal_date, a.start_date)',
                 'columns'     => [
-                    self::col('renewal_date', 'Renews', 'date'),
+                    self::col('due_date', 'Next due', 'date'),
                     self::col('client', 'Client'),
                     self::col('project', 'Project'),
-                    self::col('amount', 'Amount', 'money'),
+                    self::col('amount', 'Amount / year', 'money'),
+                    self::col('first_year', 'First year'),
                     self::col('status', 'Status', 'badge'),
-                    self::col('start_date', 'Started', 'date'),
-                    self::col('payment_mode', 'Mode'),
+                    self::col('start_date', 'This year from', 'date'),
+                    self::col('renewal_date', 'Renews', 'date'),
                 ],
-                'sql' => "SELECT a.renewal_date, c.name AS client, p.name AS project,
-                                 a.amount, a.status, a.start_date, a.payment_mode
+                'sql' => "SELECT IF(a.term_paid, a.renewal_date, a.start_date) AS due_date, c.name AS client, p.name AS project,
+                                 a.amount, IF(a.first_year_free, 'Free', 'Charged') AS first_year,
+                                 CASE WHEN IF(a.term_paid, a.renewal_date, a.start_date) < CURDATE() THEN 'overdue'
+                                      WHEN IF(a.term_paid, a.renewal_date, a.start_date) <= CURDATE() + INTERVAL 30 DAY THEN 'due'
+                                      ELSE 'active' END AS status,
+                                 a.start_date, a.renewal_date
                             FROM ops_amc_records a
                             LEFT JOIN ops_clients c  ON c.id = a.client_id  AND c.tenant_id = a.tenant_id
                             LEFT JOIN ops_projects p ON p.id = a.project_id AND p.tenant_id = a.tenant_id
                            WHERE a.tenant_id = ?",
-                'order' => 'a.renewal_date IS NULL, a.renewal_date ASC',
+                'order' => 'due_date ASC',
             ],
 
             // ── Delivery ────────────────────────────────────────────────────

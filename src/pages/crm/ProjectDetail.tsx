@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Activity, Bug, CalendarDays, CircleDollarSign, ClipboardList, FolderKanban, Hash, History, IndianRupee,
-  Pencil, Plus, Trash2, UserRound, Users, Wallet,
+  Pencil, Plus, ShieldCheck, Trash2, UserRound, Users, Wallet,
 } from "lucide-react";
 import { RecordDetailPage } from "@/components/RecordDetailPage";
 import { RecordProfileHeader, ProfileLinkCard } from "@/components/RecordProfileHeader";
@@ -24,12 +24,13 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ScrollableX } from "@/components/ui/scrollable-x";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLoad } from "@/hooks/useLoad";
-import { opsFinanceApi, opsProjectsApi } from "@/lib/api/ops";
+import { opsAmcApi, opsFinanceApi, opsProjectsApi } from "@/lib/api/ops";
 import { formatDate, humanise } from "@/lib/format";
 import { initialsOf } from "@/lib/initials";
-import type { OpsPayment } from "@/types/ops";
+import type { OpsAmcRecord, OpsPayment } from "@/types/ops";
 import { HealthBadge, PROJECT_STAGES, PriorityBadge, rupees } from "./components/crm";
 import { PAYMENT_MODES, PAYMENT_TYPES, PaymentDialog } from "./components/PaymentDialog";
+import { AmcCollectDialog, AmcFormDialog, AmcStatusBadge, AmcYearBadge, dueText } from "@/pages/finance/components/AmcDialogs";
 
 const label = (options: { value: string; label: string }[], v: string) => options.find((o) => o.value === v)?.label ?? humanise(v);
 
@@ -44,6 +45,11 @@ export default function ProjectDetail() {
   const [removingPayment, setRemovingPayment] = useState<OpsPayment | null>(null);
   const [removing, setRemoving] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  // AMC is separate from the project price, so it is loaded on its own.
+  const { data: amcs, reload: reloadAmc } = useLoad(() => opsAmcApi.list({ project_id: String(id) }), [id]);
+  const [amcFormOpen, setAmcFormOpen] = useState(false);
+  const [editingAmc, setEditingAmc] = useState<OpsAmcRecord | null>(null);
+  const [collectingAmc, setCollectingAmc] = useState<OpsAmcRecord | null>(null);
 
   if (error) return <p className="text-destructive">{error}</p>;
 
@@ -52,7 +58,12 @@ export default function ProjectDetail() {
   const meetings = p?.meetings ?? [];
   const activity = p?.activity_log ?? [];
   const stages = p?.stage_history ?? [];
+  const amcList = amcs ?? [];
+  // AMC payments are listed with the rest but are not part of what was received.
+  const projectPayments = payments.filter((pay) => pay.type !== "amc").length;
   const openPayment = (payment: OpsPayment | null) => { setEditingPayment(payment); setPayOpen(true); };
+  const openAmc = (amc: OpsAmcRecord | null) => { setEditingAmc(amc); setAmcFormOpen(true); };
+  const amcSaved = () => { void reloadAmc(); void reload(); setTab("amc"); };
 
   return (
     <RecordDetailPage>
@@ -83,7 +94,7 @@ export default function ProjectDetail() {
 
       <DetailStats>
         <StatCard title="Quoted" value={p ? rupees(p.quoted) : "—"} subtitle="Agreed amount" icon={IndianRupee} accent="sky" subtitleColor="muted" />
-        <StatCard title="Received" value={p ? rupees(p.received) : "—"} subtitle={`${payments.length} payment${payments.length === 1 ? "" : "s"}`} icon={Wallet} accent="violet" subtitleColor="muted" />
+        <StatCard title="Received" value={p ? rupees(p.received) : "—"} subtitle={`${projectPayments} payment${projectPayments === 1 ? "" : "s"}, AMC not included`} icon={Wallet} accent="violet" subtitleColor="muted" />
         <StatCard title="Balance" value={p ? rupees(p.balance) : "—"} subtitle={p && Number(p.balance) > 0 ? "Still to collect" : "Nothing owed"} icon={CircleDollarSign} accent="teal" subtitleColor="muted" />
         <StatCard title="Payment status" value={p ? humanise(p.payment_status) : "—"} subtitle={p?.collection_target_date ? `Target ${formatDate(p.collection_target_date)}` : "No target date"} icon={ClipboardList} accent="amber" subtitleColor="muted" />
       </DetailStats>
@@ -105,6 +116,7 @@ export default function ProjectDetail() {
           <DetailTabs value={tab} onValueChange={setTab} ariaLabel="Project details" tabs={[
             { value: "status", label: "Status", icon: ClipboardList },
             { value: "payments", label: "Payments", icon: Wallet, count: payments.length },
+            { value: "amc", label: "AMC", icon: ShieldCheck, count: amcList.length },
             { value: "bugs", label: "Bugs", icon: Bug, count: bugs.length },
             { value: "meetings", label: "Meetings", icon: CalendarDays, count: meetings.length },
             { value: "activity", label: "Activity", icon: History, count: activity.length },
@@ -145,6 +157,38 @@ export default function ProjectDetail() {
                           <RowActionsMenu ariaLabel={`Actions for payment of ${rupees(pay.amount)}`}>
                             <DropdownMenuItem onSelect={() => openPayment(pay)}><Pencil className="h-4 w-4" /> Edit payment</DropdownMenuItem>
                             <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setRemovingPayment(pay)}><Trash2 className="h-4 w-4" /> Delete payment</DropdownMenuItem>
+                          </RowActionsMenu>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </ScrollableX>
+            </SectionCard>
+          )}
+
+          {tab === "amc" && p && (
+            <SectionCard icon={ShieldCheck} title="AMC" subtitle="Yearly maintenance — separate from the quoted amount and balance" bodyPadding=""
+              headerAction={<Button size="sm" onClick={() => openAmc(null)}><Plus className="h-4 w-4" /> Add AMC</Button>}>
+              <ScrollableX>
+                <table className="w-full text-sm">
+                  <thead><tr>
+                    <th className="text-right">Per year</th><th className="text-left">This year</th><th className="text-left">Renewal</th>
+                    <th className="text-left">Next due</th><th className="text-left">Status</th><th />
+                  </tr></thead>
+                  <tbody>
+                    {amcList.length === 0 && <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No AMC for this project</td></tr>}
+                    {amcList.map((a) => (
+                      <tr key={a.id}>
+                        <td className="text-right font-medium tabular-nums">{rupees(a.amount)}</td>
+                        <td className="whitespace-nowrap"><AmcYearBadge amc={a} /> <span className="text-xs text-muted-foreground">from {formatDate(a.start_date)}</span></td>
+                        <td className="whitespace-nowrap">{formatDate(a.renewal_date)}</td>
+                        <td className="whitespace-nowrap">{formatDate(a.due_date)} <span className="text-xs">{dueText(a.days_until_due)}</span></td>
+                        <td><AmcStatusBadge status={a.status} /></td>
+                        <td className="w-10">
+                          <RowActionsMenu ariaLabel={`Actions for AMC of ${rupees(a.amount)}`}>
+                            <DropdownMenuItem onSelect={() => setCollectingAmc(a)}><Wallet className="h-4 w-4" /> {a.term_paid ? "Collect renewal" : "Collect this year's AMC"}</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => openAmc(a)}><Pencil className="h-4 w-4" /> Edit AMC</DropdownMenuItem>
                           </RowActionsMenu>
                         </td>
                       </tr>
@@ -234,6 +278,8 @@ export default function ProjectDetail() {
           onConfirm={async () => { if (removingPayment) { await opsFinanceApi.deletePayment(removingPayment.id); await reload(); } }}
           successMessage="Payment deleted"
         />
+        <AmcFormDialog open={amcFormOpen} onOpenChange={setAmcFormOpen} amc={editingAmc} project={p} onSaved={amcSaved} />
+        <AmcCollectDialog open={collectingAmc !== null} onOpenChange={(v) => { if (!v) setCollectingAmc(null); }} amc={collectingAmc} onSaved={amcSaved} />
         <StatusDialog open={statusOpen} onOpenChange={setStatusOpen} project={p} userName={userName ?? ""} onSaved={reload} />
         <ActionDialog
           open={removing}
