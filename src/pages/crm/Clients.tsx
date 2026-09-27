@@ -19,7 +19,7 @@ export default function Clients() {
   const [projects, setProjects] = useState<OpsProject[]>([]);
   const [removing, setRemoving] = useState<OpsClient | null>(null);
 
-  // Oldest first, as the API returns them — the order the Client IDs were given out in.
+  // In Client ID order, as the API returns them.
   const list = useClientList<OpsClient>(async () => (await opsClientsApi.list()).data ?? [], {
     searchText: (c) => [c.client_code, c.name, c.phone, c.email, c.owner],
     sorts: {

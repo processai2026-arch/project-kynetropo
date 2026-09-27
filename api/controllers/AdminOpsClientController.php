@@ -58,8 +58,11 @@ class AdminOpsClientController
             $params[] = $like; $params[] = $like; $params[] = $like;
         }
 
-        // Oldest first: the order the Client IDs were handed out in.
-        $sql .= ' ORDER BY c.created_at ASC, c.id ASC';
+        // By Client ID number (CL-0001, CL-0002, ...): new clients get the next
+        // number, and the IDs can be renumbered to set the order. An ID edited
+        // into another format sorts after the numbered ones.
+        $sql .= " ORDER BY (c.client_code REGEXP '^CL-[0-9]+$') DESC, CAST(SUBSTRING(c.client_code, 4) AS UNSIGNED) ASC,
+                  c.client_code ASC, c.created_at ASC, c.id ASC";
         $rows = Database::fetchAll($sql, $params);
 
         // Which of these clients came from a sales lead, in one query rather

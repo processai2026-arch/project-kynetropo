@@ -36,8 +36,9 @@ class AdminOpsProjectController
             array_push($params, $like, $like, $like, $like);
         }
 
-        // Oldest first: the order the Project IDs were handed out in.
-        $sql .= ' ORDER BY p.created_at ASC, p.id ASC';
+        // By Project ID number (PRJ-0001, ...), as clients are ordered by Client ID.
+        $sql .= " ORDER BY (p.project_code REGEXP '^PRJ-[0-9]+$') DESC, CAST(SUBSTRING(p.project_code, 5) AS UNSIGNED) ASC,
+                  p.project_code ASC, p.created_at ASC, p.id ASC";
         $rows = Database::fetchAll($sql, $params);
         Response::success(array_map([$this, 'format'], $rows));
     }

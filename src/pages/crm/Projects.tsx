@@ -19,7 +19,7 @@ export default function Projects() {
   const navigate = useNavigate();
   const [removing, setRemoving] = useState<OpsProject | null>(null);
 
-  // Oldest first, as the API returns them — the order the Project IDs were given out in.
+  // In Project ID order, as the API returns them.
   const list = useClientList<OpsProject>(async () => (await opsProjectsApi.list()).data ?? [], {
     searchText: (p) => [p.project_code, p.name, p.client_code, p.client_name, p.owner],
     sorts: {
