@@ -150,6 +150,7 @@ $f = false;
 $listEndpoints = [
     // Ops
     'GET /admin/ops/dashboard-stats'    => '/admin/ops/dashboard-stats',
+    'GET /admin/ops/dashboard-ai'       => '/admin/ops/dashboard-ai',
     'GET /admin/ops/clients'            => '/admin/ops/clients',
     'GET /admin/ops/projects'           => '/admin/ops/projects',
     'GET /admin/ops/bugs'               => '/admin/ops/bugs',
