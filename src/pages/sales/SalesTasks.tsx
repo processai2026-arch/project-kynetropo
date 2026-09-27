@@ -20,6 +20,8 @@ import { CommentButton, CommentThread } from "@/components/sales/CommentThread";
 import { formatDate, formatDateTime, formatTime, humanise } from "@/components/sales/SalesBits";
 import type { SalesTask, SalesTaskDetail, TaskBucket, TaskCounts } from "@/types/sales";
 import { cn } from "@/lib/utils";
+import { usePaged } from "@/hooks/usePaged";
+import { PaginationBar } from "@/components/PaginationBar";
 
 /**
  * Tasks — work one person handed another.
@@ -99,6 +101,7 @@ export default function SalesTasks() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<SalesTask | null>(null);
   const [open, setOpen] = useState<SalesTaskDetail | null>(null);
+  const openHistory = usePaged(open?.activity ?? [], undefined, { resetKey: open?.id });
   const [completing, setCompleting] = useState<SalesTask | null>(null);
   const [completionNotes, setCompletionNotes] = useState("");
 
@@ -461,7 +464,7 @@ export default function SalesTasks() {
                   <div>
                     <h3 className="text-sm font-semibold">History</h3>
                     <ul className="mt-2 space-y-2">
-                      {open.activity.map((a) => (
+                      {openHistory.pageItems.map((a) => (
                         <li key={a.id} className="flex gap-2 text-xs text-muted-foreground">
                           <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/50" />
                           <span className="min-w-0">
@@ -472,6 +475,10 @@ export default function SalesTasks() {
                         </li>
                       ))}
                     </ul>
+                    {openHistory.totalPages > 1 && (
+                      <PaginationBar page={openHistory.page} totalPages={openHistory.totalPages} total={openHistory.total}
+                        onPage={openHistory.setPage} itemLabel="entries" />
+                    )}
                   </div>
                 )}
 

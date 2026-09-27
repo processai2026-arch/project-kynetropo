@@ -17,6 +17,8 @@ import {
 import { toast } from "sonner";
 import { RecordDetailPage } from "@/components/RecordDetailPage";
 import { SectionCard } from "@/components/SectionCard";
+import { PaginationBar } from "@/components/PaginationBar";
+import { usePaged } from "@/hooks/usePaged";
 
 const priorityStyles: Record<string, string> = {
   p0_critical: "bg-red-50 text-red-600 border-red-200",
@@ -156,6 +158,8 @@ export default function BugDetail() {
       at: c.created_at,
     })),
   ].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()) : [];
+  // Oldest first like a conversation, with the comment box below: open on the newest page.
+  const pagedTimeline = usePaged(timeline, undefined, { resetKey: bug?.id, fromEnd: true });
 
   if (loading) return (
     <RecordDetailPage>
@@ -338,7 +342,7 @@ export default function BugDetail() {
               {timeline.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4">No activity yet</p>
               )}
-              {timeline.map(entry => (
+              {pagedTimeline.pageItems.map(entry => (
                 <div key={entry.id} className="flex gap-3">
                   <div className={cn(
                     "flex h-7 w-7 shrink-0 items-center justify-center rounded-full mt-0.5",
@@ -371,6 +375,10 @@ export default function BugDetail() {
                   </div>
                 </div>
               ))}
+              {pagedTimeline.totalPages > 1 && (
+                <PaginationBar page={pagedTimeline.page} totalPages={pagedTimeline.totalPages} total={pagedTimeline.total}
+                  onPage={pagedTimeline.setPage} itemLabel="entries" />
+              )}
 
               <div className="border-t pt-4 space-y-3">
                 <div className="space-y-1.5">

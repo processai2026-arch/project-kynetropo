@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/format';
+import { PaginationBar } from '@/components/PaginationBar';
+import { usePaged, TIMELINE_PAGE_SIZE } from '@/hooks/usePaged';
 
 /**
  * A vertical event list for a detail page.
@@ -38,45 +40,55 @@ const dotTone: Record<string, string> = {
 export function DetailTimeline({
   items,
   empty = 'Nothing recorded yet',
+  pageSize = TIMELINE_PAGE_SIZE,
 }: {
   items: TimelineItem[];
   empty?: string;
+  /** Entries per page; the page bar appears only when there is more than one page. */
+  pageSize?: number;
 }) {
+  const { page, setPage, pageItems, total, totalPages } = usePaged(items, pageSize);
+
   if (items.length === 0) {
     return <p className="text-sm text-muted-foreground py-4 text-center">{empty}</p>;
   }
 
   return (
-    <ol className="relative space-y-5">
-      {items.map((item, i) => {
-        const tone = item.tone ?? (item.at ? 'done' : 'pending');
-        return (
-          <li key={`${item.label}-${i}`} className="relative flex gap-3">
-            {/* The rail, drawn per row so it stops at the last dot rather than
-                running past it into empty space. */}
-            <div className="flex flex-col items-center">
-              <span className={cn('mt-1 h-2.5 w-2.5 shrink-0 rounded-full', dotTone[tone])} />
-              {i < items.length - 1 && <span className="mt-1 w-px flex-1 bg-border" />}
-            </div>
-
-            <div className={cn('min-w-0 flex-1 pb-1', tone === 'pending' && 'opacity-60')}>
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                <p className="text-sm font-medium text-card-foreground">{item.label}</p>
-                <p className="text-xs text-muted-foreground">
-                  {item.at ? formatDateTime(item.at) : 'Pending'}
-                </p>
+    <div className="space-y-4">
+      <ol className="relative space-y-5">
+        {pageItems.map((item, i) => {
+          const tone = item.tone ?? (item.at ? 'done' : 'pending');
+          return (
+            <li key={`${page}-${item.label}-${i}`} className="relative flex gap-3">
+              {/* The rail, drawn per row so it stops at the last dot rather than
+                  running past it into empty space. */}
+              <div className="flex flex-col items-center">
+                <span className={cn('mt-1 h-2.5 w-2.5 shrink-0 rounded-full', dotTone[tone])} />
+                {i < pageItems.length - 1 && <span className="mt-1 w-px flex-1 bg-border" />}
               </div>
-              {item.by && <p className="text-xs text-muted-foreground mt-0.5">{item.by}</p>}
-              {item.description != null && item.description !== '' && (
-                <div className="text-sm text-card-foreground mt-1 whitespace-pre-line break-words">
-                  {item.description}
+
+              <div className={cn('min-w-0 flex-1 pb-1', tone === 'pending' && 'opacity-60')}>
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                  <p className="text-sm font-medium text-card-foreground">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {item.at ? formatDateTime(item.at) : 'Pending'}
+                  </p>
                 </div>
-              )}
-            </div>
-          </li>
-        );
-      })}
-    </ol>
+                {item.by && <p className="text-xs text-muted-foreground mt-0.5">{item.by}</p>}
+                {item.description != null && item.description !== '' && (
+                  <div className="text-sm text-card-foreground mt-1 whitespace-pre-line break-words">
+                    {item.description}
+                  </div>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      {totalPages > 1 && (
+        <PaginationBar page={page} totalPages={totalPages} total={total} onPage={setPage} itemLabel="entries" />
+      )}
+    </div>
   );
 }
 
