@@ -24,12 +24,17 @@ const healthStyles: Record<string, string> = {
 export default function Dashboard() {
   const [data, setData]       = useState<OpsDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  // Loaded on its own so the numbers above never wait for the AI.
+  const [aiRecs, setAiRecs]   = useState<string[] | null>(null);
 
   useEffect(() => {
     opsDashboardApi.stats()
       .then(res => setData(res.data))
       .catch(() => toast.error("Failed to load dashboard"))
       .finally(() => setLoading(false));
+    opsDashboardApi.ai()
+      .then(res => setAiRecs(res.data.recommendations ?? []))
+      .catch(() => setAiRecs([]));
   }, []);
 
   const fmt = (n: number) => "₹" + n.toLocaleString("en-IN");
@@ -188,9 +193,9 @@ export default function Dashboard() {
 
         <Panel title="AI Recommendations">
           <div className="space-y-2">
-            {loading ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-5 w-full" />) : (
-              (data?.ai_recommendations ?? []).length > 0
-                ? (data!.ai_recommendations.map((rec, i) => (
+            {aiRecs === null ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-5 w-full" />) : (
+              aiRecs.length > 0
+                ? (aiRecs.map((rec, i) => (
                     <div key={i} className="flex gap-2 text-sm text-card-foreground leading-snug py-1">
                       <span className="text-primary mt-0.5 shrink-0">•</span>
                       <span>{rec.replace(/^[•\-–]\s*/, "")}</span>

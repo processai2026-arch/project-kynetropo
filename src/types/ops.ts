@@ -358,7 +358,6 @@ export interface OpsDashboardStats {
     }[];
     window_end: string;
   };
-  ai_recommendations: string[];
 }
 
 // ─── SOP Module ───────────────────────────────────────────────────────────────

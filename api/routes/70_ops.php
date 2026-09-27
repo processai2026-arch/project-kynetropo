@@ -3,6 +3,7 @@
 
 // ─── Kynetropo Ops — Dashboard ────────────────────────────────────────────────
 $router->get('/admin/ops/dashboard-stats',                   [AdminOpsDashboardController::class, 'stats'],          'admin');
+$router->get('/admin/ops/dashboard-ai',                      [AdminOpsDashboardController::class, 'ai'],             'admin');
 
 // ─── Kynetropo Ops — Clients ──────────────────────────────────────────────────
 $router->get('/admin/ops/clients',                           [AdminOpsClientController::class, 'index'],             'admin');

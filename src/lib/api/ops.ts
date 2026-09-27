@@ -13,6 +13,8 @@ function qs(p?: Record<string, string>) {
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export const opsDashboardApi = {
   stats: () => apiFetch<{ data: OpsDashboardStats }>("/admin/ops/dashboard-stats"),
+  /** Separate from stats so the numbers never wait on the AI. */
+  ai: () => apiFetch<{ data: { recommendations: string[]; cached: boolean } }>("/admin/ops/dashboard-ai"),
 };
 
 // ─── Clients ─────────────────────────────────────────────────────────────────

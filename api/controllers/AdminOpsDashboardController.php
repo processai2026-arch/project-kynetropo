@@ -3,7 +3,8 @@ declare(strict_types=1);
 
 /**
  * Ops Dashboard Controller
- * GET /admin/ops/dashboard-stats
+ * GET /admin/ops/dashboard-stats  the numbers; answers straight away
+ * GET /admin/ops/dashboard-ai     AI recommendations, loaded by the page separately
  */
 class AdminOpsDashboardController
 {
@@ -14,14 +15,7 @@ class AdminOpsDashboardController
         $month    = date('Y-m');
 
         // Today's actions
-        $followupsToday = Database::fetchAll(
-            "SELECT m.next_followup, c.name AS client_name, c.id AS client_id
-             FROM ops_meetings m
-             JOIN ops_clients c ON c.id = m.client_id AND c.tenant_id = m.tenant_id
-             WHERE m.tenant_id = ? AND m.next_followup = ?
-             GROUP BY c.id",
-            [$tenantId, $today]
-        );
+        $followupsToday = $this->followupsToday($tenantId, $today);
 
         $amcDueThisMonth = Database::fetchAll(
             "SELECT a.*, c.name AS client_name, p.name AS project_name
@@ -65,13 +59,7 @@ class AdminOpsDashboardController
             [$tenantId, $month]
         );
 
-        $overdueCollections = Database::fetchAll(
-            "SELECT p.*, c.name AS client_name
-             FROM ops_projects p
-             JOIN ops_clients c ON c.id = p.client_id
-             WHERE p.tenant_id = ? AND p.collection_target_date < ? AND p.payment_status NOT IN ('paid') AND p.balance > 0",
-            [$tenantId, $today]
-        );
+        $overdueCollections = $this->overdueCollections($tenantId, $today);
 
         // Project health
         $healthCounts = Database::fetchAll(
@@ -81,14 +69,7 @@ class AdminOpsDashboardController
         $health = ['red' => 0, 'yellow' => 0, 'green' => 0];
         foreach ($healthCounts as $h) $health[$h['health']] = (int)$h['cnt'];
 
-        $redYellowProjects = Database::fetchAll(
-            "SELECT p.*, c.name AS client_name
-             FROM ops_projects p
-             JOIN ops_clients c ON c.id = p.client_id
-             WHERE p.tenant_id = ? AND p.health IN ('red','yellow') AND p.stage NOT IN ('Closed','Delivered')
-             ORDER BY FIELD(p.health,'red','yellow'), p.updated_at ASC LIMIT 10",
-            [$tenantId]
-        );
+        $redYellowProjects = $this->atRiskProjects($tenantId);
 
         // Lead pipeline summary
         $pipelineByStage = Database::fetchAll(
@@ -108,16 +89,6 @@ class AdminOpsDashboardController
              WHERE tenant_id = ? AND stage IN ('Scope Freeze','Requirements')",
             [$tenantId]
         );
-
-        // AI recommendations via Groq
-        $aiRecommendations = [];
-        try {
-            $context = $this->buildAiContext($tenantId, $today, $overdueCollections, $redYellowProjects, $followupsToday);
-            $aiRecommendations = $this->getAiRecommendations($context);
-        } catch (\Throwable $e) {
-            error_log('[OpsDashboard] AI error: ' . $e->getMessage());
-            $aiRecommendations = ['AI insights temporarily unavailable.'];
-        }
 
         // Due comments today (bug comments with due_date = today)
         $dueCommentsToday = Database::fetchAll(
@@ -222,8 +193,96 @@ class AdminOpsDashboardController
                 'overdue_followups' => (int)($overdueFollowups['cnt'] ?? 0),
                 'proposals_sent'    => (int)($proposalsSent['cnt'] ?? 0),
             ],
-            'ai_recommendations' => $aiRecommendations,
         ]);
+    }
+
+    /**
+     * GET /admin/ops/dashboard-ai
+     *
+     * The recommendations used to be part of dashboard-stats, which made every
+     * dashboard load wait about a second for Groq. They come separately now,
+     * and a reply is reused for an hour while the snapshot it was based on is
+     * unchanged, so most loads do not call Groq at all.
+     */
+    public function ai(Request $request): void
+    {
+        $tenantId = Database::tenantId();
+        $today    = date('Y-m-d');
+        $context  = $this->buildAiContext(
+            $tenantId, $today,
+            $this->overdueCollections($tenantId, $today),
+            $this->atRiskProjects($tenantId),
+            $this->followupsToday($tenantId, $today)
+        );
+
+        $cacheFile = self::cacheDir() . '/ops-ai-' . $tenantId . '-' . md5($context) . '.json';
+        if (is_file($cacheFile) && filemtime($cacheFile) > time() - self::AI_CACHE_TTL) {
+            $cached = json_decode((string)file_get_contents($cacheFile), true);
+            if (is_array($cached)) {
+                Response::success(['recommendations' => $cached, 'cached' => true]);
+                return;
+            }
+        }
+
+        try {
+            $recommendations = $this->getAiRecommendations($context);
+        } catch (\Throwable $e) {
+            error_log('[OpsDashboard] AI error: ' . $e->getMessage());
+            Response::success(['recommendations' => ['AI insights temporarily unavailable.'], 'cached' => false]);
+            return;
+        }
+
+        if ($recommendations) {
+            foreach (glob(self::cacheDir() . '/ops-ai-' . $tenantId . '-*.json') ?: [] as $old) @unlink($old);
+            @file_put_contents($cacheFile, json_encode($recommendations), LOCK_EX);
+        }
+        Response::success(['recommendations' => $recommendations, 'cached' => false]);
+    }
+
+    /** How long an AI reply is reused while the snapshot behind it is unchanged. */
+    private const AI_CACHE_TTL = 3600;
+
+    /** api/storage/cache: not shipped by releases, created on first use, denied to the web. */
+    private static function cacheDir(): string
+    {
+        $dir = ROOT_PATH . '/storage/cache';
+        if (!is_dir($dir)) @mkdir($dir, 0755, true);
+        return $dir;
+    }
+
+    private function followupsToday(int $tenantId, string $today): array
+    {
+        return Database::fetchAll(
+            "SELECT m.next_followup, c.name AS client_name, c.id AS client_id
+             FROM ops_meetings m
+             JOIN ops_clients c ON c.id = m.client_id AND c.tenant_id = m.tenant_id
+             WHERE m.tenant_id = ? AND m.next_followup = ?
+             GROUP BY c.id",
+            [$tenantId, $today]
+        );
+    }
+
+    private function overdueCollections(int $tenantId, string $today): array
+    {
+        return Database::fetchAll(
+            "SELECT p.*, c.name AS client_name
+             FROM ops_projects p
+             JOIN ops_clients c ON c.id = p.client_id
+             WHERE p.tenant_id = ? AND p.collection_target_date < ? AND p.payment_status NOT IN ('paid') AND p.balance > 0",
+            [$tenantId, $today]
+        );
+    }
+
+    private function atRiskProjects(int $tenantId): array
+    {
+        return Database::fetchAll(
+            "SELECT p.*, c.name AS client_name
+             FROM ops_projects p
+             JOIN ops_clients c ON c.id = p.client_id
+             WHERE p.tenant_id = ? AND p.health IN ('red','yellow') AND p.stage NOT IN ('Closed','Delivered')
+             ORDER BY FIELD(p.health,'red','yellow'), p.updated_at ASC LIMIT 10",
+            [$tenantId]
+        );
     }
 
     private function buildAiContext(int $tenantId, string $today, array $overdue, array $atRisk, array $followups): string
