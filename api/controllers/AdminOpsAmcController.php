@@ -104,7 +104,8 @@ class AdminOpsAmcController
         if (isset($body['status']) && in_array($body['status'], ['active','due','overdue','paid'])) {
             $updates['status'] = $body['status'];
 
-            // If marking paid → create a payment record and log expense
+            // Marking paid records the payment in Finance. AMC is separate from
+            // the project price, so the project's received/balance stay as they are.
             if ($body['status'] === 'paid' && $amc['status'] !== 'paid') {
                 $payId = Database::insert('ops_payments', [
                     'tenant_id'    => $tenantId,
@@ -119,15 +120,6 @@ class AdminOpsAmcController
                     'notes'        => 'AMC payment',
                 ]);
                 $updates['payment_id'] = $payId;
-
-                // Update project balance
-                $proj = Database::fetch('SELECT * FROM ops_projects WHERE id = ? AND tenant_id = ? LIMIT 1', [(int)$amc['project_id'], $tenantId]);
-                if ($proj) {
-                    $nr = (float)$proj['received'] + (float)$amc['amount'];
-                    $nb = max(0, (float)$proj['quoted'] - $nr);
-                    $ns = $nb <= 0 ? 'paid' : 'partial';
-                    Database::update('ops_projects', ['received' => $nr, 'balance' => $nb, 'payment_status' => $ns], ['id' => $proj['id']]);
-                }
 
                 Database::insert('ops_activity_log', [
                     'tenant_id'   => $tenantId,

@@ -112,16 +112,9 @@ class AdminOpsFinanceController
             'notes'        => trim((string)($body['notes'] ?? '')),
         ]);
 
-        // Update project: received + balance + payment_status
-        $newReceived = (float)$project['received'] + $amount;
-        $newBalance  = (float)$project['quoted'] - $newReceived;
-        $newStatus   = $newBalance <= 0 ? 'paid' : ($newReceived > 0 ? 'partial' : 'pending');
-
-        Database::update('ops_projects', [
-            'received'       => $newReceived,
-            'balance'        => max(0, $newBalance),
-            'payment_status' => $newStatus,
-        ], ['id' => $projectId, 'tenant_id' => $tenantId]);
+        // Update project: received + balance + payment_status (AMC money stays out of it)
+        $type = in_array($body['type'] ?? '', ['advance','mid','final','amc','other']) ? $body['type'] : 'advance';
+        self::adjustProject($project, $tenantId, self::projectShare($type, $amount));
 
         // Log to activity (client timeline)
         Database::insert('ops_activity_log', [
@@ -202,19 +195,14 @@ class AdminOpsFinanceController
             Database::update('ops_payments', $updates, ['id' => $id, 'tenant_id' => $tenantId]);
         }
 
-        // If amount changed — adjust project received/balance
-        if (isset($body['amount']) && $newAmount !== $oldAmount) {
+        // Adjust the project by what this payment now counts toward it: a changed
+        // amount, or a type changed to or from AMC (which never counts).
+        $oldType = (string)$pay['type'];
+        $newType = (string)($updates['type'] ?? $oldType);
+        $delta   = self::projectShare($newType, $newAmount) - self::projectShare($oldType, $oldAmount);
+        if ($delta != 0.0) {
             $project = Database::fetch('SELECT * FROM ops_projects WHERE id = ? AND tenant_id = ? LIMIT 1', [(int)$pay['project_id'], $tenantId]);
-            if ($project) {
-                $newReceived = max(0, (float)$project['received'] - $oldAmount + $newAmount);
-                $newBalance  = (float)$project['quoted'] - $newReceived;
-                $newStatus   = $newBalance <= 0 ? 'paid' : ($newReceived > 0 ? 'partial' : 'pending');
-                Database::update('ops_projects', [
-                    'received'       => $newReceived,
-                    'balance'        => max(0, $newBalance),
-                    'payment_status' => $newStatus,
-                ], ['id' => $project['id'], 'tenant_id' => $tenantId]);
-            }
+            if ($project) self::adjustProject($project, $tenantId, $delta);
         }
 
         $row = Database::fetch('SELECT * FROM ops_payments WHERE id = ? LIMIT 1', [$id]);
@@ -229,18 +217,9 @@ class AdminOpsFinanceController
         $pay = Database::fetch('SELECT * FROM ops_payments WHERE id = ? AND tenant_id = ? LIMIT 1', [$id, $tenantId]);
         if (!$pay) Response::error('Payment not found', 404);
 
-        // Reverse project balance
+        // Reverse what this payment counted toward the project (nothing for AMC)
         $project = Database::fetch('SELECT * FROM ops_projects WHERE id = ? AND tenant_id = ? LIMIT 1', [(int)$pay['project_id'], $tenantId]);
-        if ($project) {
-            $newReceived = max(0, (float)$project['received'] - (float)$pay['amount']);
-            $newBalance  = (float)$project['quoted'] - $newReceived;
-            $newStatus   = $newBalance <= 0 ? 'paid' : ($newReceived > 0 ? 'partial' : 'pending');
-            Database::update('ops_projects', [
-                'received'       => $newReceived,
-                'balance'        => max(0, $newBalance),
-                'payment_status' => $newStatus,
-            ], ['id' => $project['id'], 'tenant_id' => $tenantId]);
-        }
+        if ($project) self::adjustProject($project, $tenantId, -self::projectShare((string)$pay['type'], (float)$pay['amount']));
 
         // Check if this payment was an AMC payment — revert AMC record to due
         if ((string)($pay['type'] ?? '') === 'amc') {
@@ -276,5 +255,29 @@ class AdminOpsFinanceController
             ?: Response::error('Expense not found', 404);
         Database::query('DELETE FROM ops_expenses WHERE id = ? AND tenant_id = ?', [$id, $tenantId]);
         Response::success(['message' => 'Expense deleted']);
+    }
+
+    /**
+     * How much of a payment counts toward its project's received amount. AMC
+     * is a separate yearly charge, not part of the project price, so an AMC
+     * payment counts for nothing there; it is still a payment in Finance.
+     */
+    public static function projectShare(string $type, float $amount): float
+    {
+        return $type === 'amc' ? 0.0 : $amount;
+    }
+
+    /** Add $delta to a project's received amount and recompute its balance and payment status. */
+    private static function adjustProject(array $project, int $tenantId, float $delta): void
+    {
+        if ($delta == 0.0) return;
+        $newReceived = max(0, (float)$project['received'] + $delta);
+        $newBalance  = (float)$project['quoted'] - $newReceived;
+        $newStatus   = $newBalance <= 0 ? 'paid' : ($newReceived > 0 ? 'partial' : 'pending');
+        Database::update('ops_projects', [
+            'received'       => $newReceived,
+            'balance'        => max(0, $newBalance),
+            'payment_status' => $newStatus,
+        ], ['id' => $project['id'], 'tenant_id' => $tenantId]);
     }
 }
