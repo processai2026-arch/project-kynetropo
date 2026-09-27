@@ -10,6 +10,7 @@ import { ArrowLeft, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { RecordDetailPage } from "@/components/RecordDetailPage";
 import { SectionCard } from "@/components/SectionCard";
+import { ScrollableX } from "@/components/ui/scrollable-x";
 
 const stageStyles: Record<string, string> = {
   "Advance Paid": "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -96,7 +97,7 @@ export default function PitchDetail() {
             subtitle="All clients who listed this event as their source"
             bodyPadding=""
           >
-            <div className="overflow-x-auto eco-float-scroll">
+            <ScrollableX>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/50">
@@ -135,7 +136,7 @@ export default function PitchDetail() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ScrollableX>
           </SectionCard>
         </div>
       </div>

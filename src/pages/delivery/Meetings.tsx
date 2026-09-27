@@ -14,6 +14,7 @@ import { opsMeetingsApi, opsClientsApi, opsProjectsApi } from "@/lib/api/ops";
 import type { OpsMeeting, OpsClient, OpsProject } from "@/types/ops";
 import { Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { ScrollableX } from "@/components/ui/scrollable-x";
 
 const typeLabels: Record<string, string> = {
   google_meet: "Google Meet", in_person: "In-Person",
@@ -104,7 +105,7 @@ export default function Meetings() {
       </div>
 
       <Panel title={`All Meetings (${items.length})`} flush>
-        <div className="overflow-x-auto eco-float-scroll">
+        <ScrollableX>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
@@ -142,7 +143,7 @@ export default function Meetings() {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollableX>
       </Panel>
 
       <Dialog open={formOpen} onOpenChange={v => { if (!saving) setFormOpen(v); }}>

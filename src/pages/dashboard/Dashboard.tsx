@@ -13,6 +13,7 @@ import {
   IndianRupee, AlertCircle, TrendingUp, Clock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ScrollableX } from "@/components/ui/scrollable-x";
 
 const healthStyles: Record<string, string> = {
   green:  "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -96,7 +97,7 @@ export default function Dashboard() {
         </Panel>
 
         <Panel title="At-Risk Projects" flush>
-          <div className="overflow-x-auto eco-float-scroll">
+          <ScrollableX>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
@@ -126,11 +127,11 @@ export default function Dashboard() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollableX>
         </Panel>
 
         <Panel title="Overdue Collections" flush>
-          <div className="overflow-x-auto eco-float-scroll">
+          <ScrollableX>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
@@ -155,7 +156,7 @@ export default function Dashboard() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollableX>
         </Panel>
       </div>
 

@@ -16,6 +16,7 @@ import { opsFinanceApi, opsClientsApi, opsProjectsApi } from "@/lib/api/ops";
 import type { OpsPayment, OpsExpense, OpsFinanceSummary, OpsClient, OpsProject } from "@/types/ops";
 import { IndianRupee, Plus, Trash2, TrendingUp, TrendingDown, Wallet, Clock } from "lucide-react";
 import { toast } from "sonner";
+import { ScrollableX } from "@/components/ui/scrollable-x";
 
 const EMPTY_PAY = { client_id: 0, project_id: 0, amount: 0, type: "advance", mode: "bank_transfer", reference: "", payment_date: "", notes: "" };
 const EMPTY_EXP = { category: "other", amount: 0, description: "", project_id: undefined as number | undefined, date: "", added_by: "" };
@@ -142,7 +143,7 @@ export default function Finance() {
 
       {activeTab === "summary" && (
         <Panel title="Revenue by Project" flush>
-          <div className="overflow-x-auto eco-float-scroll">
+          <ScrollableX>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
@@ -175,13 +176,13 @@ export default function Finance() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollableX>
         </Panel>
       )}
 
       {activeTab === "payments" && (
         <Panel title={`Payment Log — ${month}`} flush>
-          <div className="overflow-x-auto eco-float-scroll">
+          <ScrollableX>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
@@ -218,13 +219,13 @@ export default function Finance() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollableX>
         </Panel>
       )}
 
       {activeTab === "expenses" && (
         <Panel title={`Expense Log — ${month}`} flush>
-          <div className="overflow-x-auto eco-float-scroll">
+          <ScrollableX>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
@@ -257,7 +258,7 @@ export default function Finance() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollableX>
         </Panel>
       )}
 

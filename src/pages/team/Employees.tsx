@@ -15,6 +15,7 @@ import { opsEmployeesApi } from "@/lib/api/ops";
 import type { OpsEmployee } from "@/types/ops";
 import { Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { ScrollableX } from "@/components/ui/scrollable-x";
 
 const roleLabels: Record<string, string> = {
   founder: "Founder", qa_tester: "QA Tester", sales_caller: "Sales Caller",
@@ -91,7 +92,7 @@ export default function Employees() {
       </div>
 
       <Panel title={`Team (${items.length})`} flush>
-        <div className="overflow-x-auto eco-float-scroll">
+        <ScrollableX>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
@@ -130,7 +131,7 @@ export default function Employees() {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollableX>
       </Panel>
 
       <Dialog open={formOpen} onOpenChange={v => { if (!saving) setFormOpen(v); }}>

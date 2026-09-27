@@ -16,6 +16,7 @@ import { opsBugsApi, opsProjectsApi, opsEmployeesApi } from "@/lib/api/ops";
 import type { OpsBug, OpsProject, OpsEmployee } from "@/types/ops";
 import { Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { ScrollableX } from "@/components/ui/scrollable-x";
 
 const priorityStyles: Record<string, string> = {
   p0_critical: "bg-red-50 text-red-600 border-red-200",
@@ -140,7 +141,7 @@ export default function Bugs() {
       </div>
 
       <Panel title={`Bugs (${items.length})`} flush>
-        <div className="overflow-x-auto eco-float-scroll">
+        <ScrollableX>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
@@ -182,7 +183,7 @@ export default function Bugs() {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollableX>
       </Panel>
 
       <Dialog open={formOpen} onOpenChange={v => { if (!saving) setFormOpen(v); }}>

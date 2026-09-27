@@ -15,6 +15,7 @@ import { opsAmcApi, opsClientsApi, opsProjectsApi } from "@/lib/api/ops";
 import type { OpsAmcRecord, OpsClient, OpsProject } from "@/types/ops";
 import { Plus, Pencil, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
+import { ScrollableX } from "@/components/ui/scrollable-x";
 
 const statusStyles: Record<string, string> = {
   active:  "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -129,7 +130,7 @@ export default function AMC() {
       </div>
 
       <Panel title={`AMC Records (${items.length})`} flush>
-        <div className="overflow-x-auto eco-float-scroll">
+        <ScrollableX>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
@@ -178,7 +179,7 @@ export default function AMC() {
               })}
             </tbody>
           </table>
-        </div>
+        </ScrollableX>
       </Panel>
 
       <Dialog open={formOpen} onOpenChange={v => { if (!saving) setFormOpen(v); }}>

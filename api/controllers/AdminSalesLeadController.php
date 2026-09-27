@@ -346,7 +346,8 @@ class AdminSalesLeadController
         if ($existing) {
             $clientId = (int)$existing['id'];
         } else {
-            $clientId = Database::insert('ops_clients', ['tenant_id' => $tenantId] + $details);
+            // Same numbering as a client added from the Clients page (CL-0001, ...).
+            $clientId = Database::insert('ops_clients', ['tenant_id' => $tenantId, 'client_code' => OpsCodes::next($tenantId, OpsCodes::CLIENT)] + $details);
         }
 
         // Optionally open the first project for this customer in the same step.
@@ -360,7 +361,8 @@ class AdminSalesLeadController
             }
             $deadline  = (string)$request->input('project_deadline', '');
             $projectId = Database::insert('ops_projects', [
-                'tenant_id' => $tenantId,
+                'tenant_id'    => $tenantId,
+                'project_code' => OpsCodes::next($tenantId, OpsCodes::PROJECT),
                 'client_id' => $clientId,
                 'name'      => mb_substr($projectName, 0, 200),
                 'stage'     => 'Onboarding',

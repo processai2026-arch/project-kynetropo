@@ -8,10 +8,14 @@ interface ScrollableXProps {
 }
 
 /**
- * Wraps any horizontally-scrollable container and renders a floating mirror
- * scrollbar via a portal, fixed at the bottom of the viewport. The bar is
- * only shown when the element is actually wider than its container and is
- * currently visible on screen.
+ * Wraps a wide table and renders a floating scrollbar via a portal, fixed at
+ * the bottom of the viewport, shown only while the table is wider than its
+ * container and on screen.
+ *
+ * The floating bar is the ONLY way to move the table sideways. The wrapper
+ * clips its own horizontal overflow (overflow-x: hidden still allows setting
+ * scrollLeft from code), so it draws no second scrollbar, and a mouse wheel,
+ * touchpad or swipe over the table only ever scrolls the page up and down.
  */
 export function ScrollableX({ children, className }: ScrollableXProps) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -82,7 +86,7 @@ export function ScrollableX({ children, className }: ScrollableXProps) {
 
   return (
     <>
-      <div ref={contentRef} className={cn("overflow-x-auto", className)}>
+      <div ref={contentRef} className={cn("overflow-x-hidden", className)}>
         {children}
       </div>
 

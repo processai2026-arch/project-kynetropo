@@ -16,6 +16,7 @@ import { opsPitchesApi } from "@/lib/api/ops";
 import type { OpsPitch } from "@/types/ops";
 import { Plus, Pencil, Eye } from "lucide-react";
 import { toast } from "sonner";
+import { ScrollableX } from "@/components/ui/scrollable-x";
 
 const typeLabels: Record<string, string> = {
   yes_meeting: "YES Meeting", business_forum: "Business Forum",
@@ -94,7 +95,7 @@ export default function Pitches() {
       )}
 
       <Panel title={`All Pitch Events (${items.length})`} flush>
-        <div className="overflow-x-auto eco-float-scroll">
+        <ScrollableX>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
@@ -138,7 +139,7 @@ export default function Pitches() {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollableX>
       </Panel>
 
       <Dialog open={formOpen} onOpenChange={v => { if (!saving) setFormOpen(v); }}>

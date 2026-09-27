@@ -15,6 +15,7 @@ import { opsHiringApi } from "@/lib/api/ops";
 import type { OpsHiringCandidate } from "@/types/ops";
 import { Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { ScrollableX } from "@/components/ui/scrollable-x";
 
 const decisionStyles: Record<string, string> = {
   pending:  "bg-amber-50 text-amber-600 border-amber-200",
@@ -107,7 +108,7 @@ export default function Hiring() {
       </div>
 
       <Panel title={`Candidates (${items.length})`} flush>
-        <div className="overflow-x-auto eco-float-scroll">
+        <ScrollableX>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
@@ -146,7 +147,7 @@ export default function Hiring() {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollableX>
       </Panel>
 
       <Dialog open={formOpen} onOpenChange={v => { if (!saving) setFormOpen(v); }}>

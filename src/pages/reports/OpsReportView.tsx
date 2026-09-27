@@ -10,6 +10,7 @@ import { opsReportsApi, type ReportColumn, type ReportResult } from "@/lib/api/o
 import { ReportExportDialog } from "@/components/reports/ReportExportDialog";
 import { RecordDetailPage } from "@/components/RecordDetailPage";
 import { SectionCard } from "@/components/SectionCard";
+import { ScrollableX } from "@/components/ui/scrollable-x";
 
 function cell(value: unknown, type: ReportColumn["type"]) {
   if (value === null || value === undefined || value === "") {
@@ -127,7 +128,7 @@ export default function OpsReportView() {
       </div>
 
       <SectionCard bodyPadding="">
-        <div className="overflow-x-auto eco-float-scroll">
+        <ScrollableX>
           <table className="w-full min-w-[42rem] text-sm">
             <thead className="border-b bg-muted/50">
               <tr>
@@ -164,7 +165,7 @@ export default function OpsReportView() {
               )}
             </tbody>
           </table>
-        </div>
+        </ScrollableX>
       </SectionCard>
 
       {report && (

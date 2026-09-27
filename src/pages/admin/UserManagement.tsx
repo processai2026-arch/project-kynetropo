@@ -14,6 +14,7 @@ import { customersApi, employeesApi } from "@/lib/api/krish";
 import type { Customer, Employee } from "@/types/krish";
 import { UserPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { ScrollableX } from "@/components/ui/scrollable-x";
 
 const EMPTY_FORM = { name: "", email: "", phone: "", password: "" };
 
@@ -100,7 +101,7 @@ export default function UserManagement() {
 
       {activeTab === "customers" && (
         <Panel title={`Customer Accounts (${customers.length})`} flush>
-          <div className="overflow-x-auto eco-float-scroll">
+          <ScrollableX>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
@@ -142,13 +143,13 @@ export default function UserManagement() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollableX>
         </Panel>
       )}
 
       {activeTab === "employees" && (
         <Panel title={`Employee Accounts (${employees.length})`} flush>
-          <div className="overflow-x-auto eco-float-scroll">
+          <ScrollableX>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
@@ -191,7 +192,7 @@ export default function UserManagement() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollableX>
         </Panel>
       )}
 
