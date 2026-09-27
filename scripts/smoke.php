@@ -55,13 +55,15 @@ function b64url(string $data): string
     return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
 }
 
-function mintJwt(int $userId, string $secret, int $ttlSeconds = 120): string
+function mintJwt(int $userId, string $secret, int $ttlSeconds = 120, int $tenantId = 1): string
 {
     $now     = time();
     $header  = b64url((string)json_encode(['alg' => 'HS256', 'typ' => 'JWT']));
     $payload = b64url((string)json_encode([
-        'sub'  => $userId,
-        'type' => 'access',
+        'sub'    => $userId,
+        'type'   => 'access',
+        'client' => 'admin',
+        'tid'    => $tenantId,
         'iat'  => $now,
         'nbf'  => $now,
         'exp'  => $now + $ttlSeconds,
@@ -82,7 +84,7 @@ try {
 }
 
 $adminRow = $pdo->query(
-    "SELECT user_id FROM users WHERE user_type = 'admin' AND is_active = 1 ORDER BY user_id ASC LIMIT 1"
+    "SELECT user_id, tenant_id FROM users WHERE user_type = 'admin' AND is_active = 1 ORDER BY user_id ASC LIMIT 1"
 )->fetch(PDO::FETCH_ASSOC);
 
 if (!$adminRow) {
@@ -91,7 +93,7 @@ if (!$adminRow) {
 }
 
 $adminId = (int)$adminRow['user_id'];
-$token   = mintJwt($adminId, $jwtSecret, 120);
+$token   = mintJwt($adminId, $jwtSecret, 120, (int)($adminRow['tenant_id'] ?? 1));
 
 echo "Smoke test: $baseUrl\n";
 echo "Admin user: #$adminId  |  Token expires in 120 s\n";
@@ -102,8 +104,15 @@ echo str_repeat('-', 70) . "\n";
 $failures = 0;
 $runStart = microtime(true);
 
+/** Cloudflare caches 404s, so a fresh query string keeps a stale one from failing the run. */
+function cache_bust(string $url): string
+{
+    return $url . (str_contains($url, '?') ? '&' : '?') . '_smoke=' . bin2hex(random_bytes(4));
+}
+
 function smoke_get(string $url, string $token): array
 {
+    $url = cache_bust($url);
     $ctx = stream_context_create([
         'http' => [
             'method'          => 'GET',
@@ -197,7 +206,7 @@ $ctx = stream_context_create([
         'ignore_errors' => true,
     ],
 ]);
-$raw  = @file_get_contents($baseUrl . '/users/' . $adminId . '/password', false, $ctx);
+$raw  = @file_get_contents(cache_bust($baseUrl . '/users/me/password'), false, $ctx);
 $code = 0;
 if (!empty($http_response_header)) {
     preg_match('#HTTP/\S+\s+(\d+)#', $http_response_header[0], $m);
@@ -206,7 +215,7 @@ if (!empty($http_response_header)) {
 $ok   = ($code === 422 || $code === 400);
 $mark = $ok ? '  OK ' : ' FAIL';
 if (!$ok) { $failures++; }
-printf("%s  %3d  PUT /users/%d/password (wrong password → 400/422)\n", $mark, $code, $adminId);
+printf("%s  %3d  PUT /users/me/password (wrong password → 400/422)\n", $mark, $code);
 
 // ─── Print error_log lines produced during this run ──────────────────────────
 

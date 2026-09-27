@@ -43,7 +43,7 @@ npm run build
 
 ## Deploy
 
-`npm run release` builds the web app and packages `release/`, whose contents are uploaded into Hostinger's `public_html/`. Then run `php database/migrate.php` there. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+`npm run release` builds the web app and packages `release/`, whose contents are uploaded into Hostinger's `public_html/`. Then apply that release's new migrations and run `php scripts/smoke.php` there. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Documentation
 

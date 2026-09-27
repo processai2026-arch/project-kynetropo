@@ -213,6 +213,13 @@ for (const name of fs.readdirSync(DB).sort()) {
 }
 if (skippedDb.length) warn(`database/: not shipped (only NNN_*.sql and migrate.php are): ${skippedDb.join(', ')}`);
 
+// ── 4b. Server-side scripts ─────────────────────────────────────────────────
+// Run over SSH after a deploy. The web-root .htaccess denies scripts/ to browsers.
+for (const name of ['smoke.php', 'server-cleanup.sh']) {
+  fs.mkdirSync(path.join(OUT, 'scripts'), { recursive: true });
+  fs.copyFileSync(path.join(ROOT, 'scripts', name), path.join(OUT, 'scripts', name));
+}
+
 // ── 5. .env template ────────────────────────────────────────────────────────
 fs.copyFileSync(path.join(ROOT, '.env.example'), path.join(OUT, '.env.example'));
 
@@ -284,22 +291,26 @@ UPGRADE (the usual case)
        tar -czf ~/api_uploads_$(date +%Y%m%d).tar.gz api/uploads/ api/storage/ api/backups/
      Also download .env locally.
   2. Upload this folder's contents over public_html/, EXCEPT index.html.
-     Upload index.html LAST. Never delete public_html/, .env, or the three
-     runtime folders. If using tar: add --no-same-permissions --no-same-owner.
-  3. Fix permissions (SSH):
-       umask 022
-       find public_html -type d -exec chmod 755 {} +
-       find public_html -type f \\( -name "*.php" -o -name "*.html" \\) -exec chmod 644 {} +
-       chmod -R 775 public_html/api/uploads public_html/api/storage public_html/api/backups
-  4. From SSH:  cd public_html && php database/migrate.php
-     It re-applies every NNN_*.sql; each is guarded, so re-running is safe.
-     Lines marked WARN name a statement the database refused - read them.
-  5. Smoke test (SSH, from deployment root):
-       php scripts/smoke.php https://project.kynetropo.com/api
-     Exits non-zero on any failure. Fix before going live.
-  6. Open the site, sign in, and check a page from each module.
-  7. Cloudflare: if a page 404s after correct deploy, purge the cache for
-     that URL (Dashboard → Caching → Purge Cache → Custom Purge).
+     Upload index.html LAST. Never delete public_html/, .env, or api/uploads/.
+     If you extract a tarball on the server, run umask 022 first and use
+     tar --no-same-permissions --no-same-owner.
+  3. Check permissions (SSH). Both commands must print nothing; files the web
+     server could not read took the whole site down on 2026-09-25:
+       find public_html -type d -perm 0700
+       find public_html -type f -perm 0600 ! -name .env
+     Fix only what they list (chmod 755 for folders, 644 for files).
+  4. Apply ONLY this release's new migrations, one file at a time:
+       mysql DB_NAME < public_html/database/NNN_name.sql
+     Do not run database/migrate.php on production: it re-applies every
+     migration and has never been run there. Test it on a copy first.
+  5. Smoke test (SSH):
+       cd public_html && php scripts/smoke.php https://project.kynetropo.com/api
+     Exits non-zero on any failure. Fix or roll back before going live.
+  6. Remove files a newer release deleted (dry run first, then --delete):
+       cd public_html && bash scripts/server-cleanup.sh
+  7. Open the site, sign in, and check a page from each module.
+  8. Cloudflare: if a page 404s after a correct deploy, purge the cache for
+     that URL (Dashboard -> Caching -> Purge Cache -> Custom Purge).
 
 FIRST DEPLOY
   1. PHP 8.1+ with pdo_mysql, mbstring, openssl, json; MySQL 8 or MariaDB; HTTPS.

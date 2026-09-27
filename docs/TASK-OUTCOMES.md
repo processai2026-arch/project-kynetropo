@@ -97,7 +97,7 @@ Added `scripts/server-cleanup.sh`. The 130 files removed in Task A are still pre
 - Lists every stale file (dry-run by default)
 - Removes them when called with `--delete`
 
-Run from `public_html/` after the deploy: `bash api/scripts/server-cleanup.sh --delete`
+Run from `public_html/` after the deploy: `bash scripts/server-cleanup.sh --delete`
 
 ---
 
@@ -135,8 +135,8 @@ Merged `chore/dead-code-cleanup` → `main` with `--no-ff` (`faad0cf`). Branch d
 1. `npm run release` — builds and packages into `release/`
 2. Back up the server database and `.env`
 3. Upload `release/` contents to `public_html/` (index.html last)
-4. Fix permissions (see `docs/DEPLOYMENT.md`)
-5. `php database/migrate.php` — run migrations
+4. Check permissions (see `docs/DEPLOYMENT.md`)
+5. Apply only the release's new `NNN_*.sql` files with the mysql client (not `migrate.php`)
 6. `php scripts/smoke.php https://project.kynetropo.com/api` — smoke test
-7. `bash api/scripts/server-cleanup.sh --delete` — remove stale files from Task A
+7. `bash scripts/server-cleanup.sh --delete` — remove stale files from Task A
 8. Sign in and open a page from each module

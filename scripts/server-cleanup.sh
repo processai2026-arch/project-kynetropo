@@ -4,8 +4,8 @@
 # but will still exist on the server until deleted by hand.
 #
 # Usage (from public_html/):
-#   bash api/scripts/server-cleanup.sh          dry-run — lists files that exist
-#   bash api/scripts/server-cleanup.sh --delete  actually removes them
+#   bash scripts/server-cleanup.sh          dry-run — lists files that exist
+#   bash scripts/server-cleanup.sh --delete  actually removes them
 #
 # Always back up first:
 #   mysqldump -u DB_USER -p'DB_PASS' DB_NAME > ~/backup_$(date +%Y%m%d_%H%M).sql

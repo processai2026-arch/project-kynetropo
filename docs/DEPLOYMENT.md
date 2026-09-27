@@ -27,32 +27,34 @@ The script refuses to leave a release that contains `.env`, logs, `src/`, `tests
    ```
    Also download `.env` locally.
 
-2. **Upload the release.** Use cPanel File Manager or `scp`/`rsync`.
-   - Upload everything **except** `index.html` first.
-   - Upload `index.html` **last** so the app is never half-deployed.
-   - Never delete `public_html/`, `.env`, or the three runtime folders (`api/uploads/`, `api/storage/`, `api/backups/`).
+2. **Upload the release.** Use hPanel File Manager, `scp` or a tarball.
+   - Upload everything **except** `index.html` first, then `index.html` **last** so the app is never half-deployed.
+   - Never delete `public_html/`, `.env` or `api/uploads/`.
+   - Extracting a tarball on the server: run `umask 022` first and use `tar -xzf release.tgz --no-same-permissions --no-same-owner -C public_html`.
 
-3. **Fix permissions after upload.** On the server:
+3. **Check permissions.** Both commands must print nothing:
    ```
-   umask 022
-   find public_html -type d -exec chmod 755 {} +
-   find public_html -type f -name "*.php" -exec chmod 644 {} +
-   find public_html -type f -name "*.html" -exec chmod 644 {} +
-   chmod -R 775 public_html/api/uploads public_html/api/storage public_html/api/backups
+   find public_html -type d -perm 0700
+   find public_html -type f -perm 0600 ! -name .env
    ```
-   If uploading via `tar`: `tar -xzf release.tar.gz --no-same-permissions --no-same-owner -C /path/to/public_html/`
+   Fix only what they list (`chmod 755` folders, `chmod 644` files). On 2026-09-25 a deploy extracted under `umask 077` left files readable only by their owner, and every URL returned 403/404 until this was fixed.
 
-4. **Run migrations.** Over SSH:
+4. **Apply only the new migrations.** Over SSH, one file at a time, for each `NNN_*.sql` that is new in this release:
    ```
-   cd public_html && php database/migrate.php
+   mysql DB_NAME < public_html/database/NNN_name.sql
    ```
-   Re-applying every `NNN_*.sql` is safe (all statements are guarded). Read any `WARN` lines.
+   Do **not** run `php database/migrate.php` on production. It re-applies every migration and has never been run there; test it on a copy of the production database first if you ever need it.
 
-5. **Smoke test.** Over SSH, from the deployment root:
+5. **Smoke test.** Over SSH:
    ```
-   php scripts/smoke.php https://project.kynetropo.com/api
+   cd public_html && php scripts/smoke.php https://project.kynetropo.com/api
    ```
-   The script mints a 2-minute admin JWT, GETs every list endpoint, checks auth rejection, and exits non-zero on failure. Run it before considering the deploy live.
+   It mints a 2-minute admin token, GETs every list endpoint, checks that bad tokens and a wrong current password are refused, prints any `api/error_log` lines from the run, and exits non-zero on failure. Fix or roll back before calling the deploy done.
+
+   Then remove the files this release deleted from the repository (a dry run first, then with `--delete`):
+   ```
+   cd public_html && bash scripts/server-cleanup.sh
+   ```
 
 6. **Verify manually.** Sign in and open a page from each module. Check the browser console and `api/error_log` for new errors.
 
