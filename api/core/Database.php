@@ -72,9 +72,29 @@ class Database
         if (class_exists('TenantScope')) {
             TenantScope::audit($sql); // dev tripwire: flags unscoped tenant-table queries
         }
-        $stmt = self::getInstance()->prepare($sql);
-        $stmt->execute($params);
-        return $stmt;
+        try {
+            $stmt = self::getInstance()->prepare($sql);
+            $stmt->execute($params);
+            return $stmt;
+        } catch (PDOException $e) {
+            // The server closes connections idle for wait_timeout (20 s on
+            // Hostinger), e.g. while a request waits on an AI provider. Reconnect
+            // once and retry, unless a transaction was open: its work is lost.
+            if (!self::isGoneAway($e) || self::getInstance()->inTransaction()) throw $e;
+            self::$pool = [];
+            $stmt = self::getInstance()->prepare($sql);
+            $stmt->execute($params);
+            return $stmt;
+        }
+    }
+
+    /** MySQL 2006 "server has gone away" / 2013 "lost connection". */
+    private static function isGoneAway(PDOException $e): bool
+    {
+        $code = (int)($e->errorInfo[1] ?? 0);
+        return $code === 2006 || $code === 2013
+            || str_contains($e->getMessage(), 'server has gone away')
+            || str_contains($e->getMessage(), 'Lost connection');
     }
 
     /**
