@@ -284,7 +284,9 @@ class AdminSalesLeadController
         // Anything not supplied falls back to what the lead already knows.
         $name = trim((string)$request->input('name', ''));
         if ($name === '') {
-            $name = $raw['company'] !== '' ? (string)$raw['company'] : (string)$raw['name'];
+            // The client is the person the team deals with; their business goes in company.
+            $name = trim((string)($raw['contact_person'] ?? '')) !== '' ? (string)$raw['contact_person']
+                  : ((string)$raw['name'] !== '' ? (string)$raw['name'] : (string)$raw['company']);
         }
         if (mb_strlen($name) < 2) {
             Response::error('A customer name is required', 422);
@@ -297,6 +299,7 @@ class AdminSalesLeadController
 
         $details = [
             'name'   => mb_substr($name, 0, 200),
+            'company' => mb_substr(trim((string)$request->input('company', (string)($raw['company'] ?? ''))), 0, 200),
             'phone'  => mb_substr(trim((string)$request->input('phone',  $raw['phone']  ?? '')), 0, 30),
             'email'  => mb_substr(trim((string)$request->input('email',  $raw['email']  ?? '')), 0, 200),
             'source' => mb_substr(trim((string)$request->input('source', $raw['source'] ?: 'sales_lead')), 0, 200),

@@ -231,6 +231,7 @@ export type LeadFilters = {
  */
 export interface ConvertLeadBody {
   name?: string;
+  company?: string;
   phone?: string;
   email?: string;
   source?: string;

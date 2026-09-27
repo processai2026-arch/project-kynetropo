@@ -46,7 +46,8 @@ export function ConvertLeadDialog({
   useEffect(() => {
     if (!open || !lead) return;
     setForm({
-      name: lead.company || lead.name,
+      name: lead.contact_person || lead.name || lead.company,
+      company: lead.company ?? "",
       phone: lead.phone ?? "",
       email: lead.email ?? "",
       source: lead.source || "sales_lead",
@@ -117,12 +118,23 @@ export function ConvertLeadDialog({
           </p>
 
           <div className="space-y-1.5">
-            <Label htmlFor="cv-name">Customer / company name *</Label>
+            <Label htmlFor="cv-name">Client name *</Label>
             <Input
               id="cv-name"
               required
               value={form.name ?? ""}
               onChange={(e) => set("name", e.target.value)}
+              placeholder="The person you deal with"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="cv-company">Company</Label>
+            <Input
+              id="cv-company"
+              value={form.company ?? ""}
+              onChange={(e) => set("company", e.target.value)}
+              placeholder="Optional"
             />
           </div>
 
@@ -144,7 +156,7 @@ export function ConvertLeadDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="cv-owner">Account owner</Label>
+              <Label htmlFor="cv-owner">Handled by</Label>
               <Input
                 id="cv-owner"
                 value={form.owner ?? ""}

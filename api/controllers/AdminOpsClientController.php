@@ -53,9 +53,9 @@ class AdminOpsClientController
         if ($owner)  { $sql .= ' AND c.owner = ?';  $params[] = $owner; }
         if ($health) { $sql .= ' AND c.health = ?'; $params[] = $health; }
         if ($search) {
-            $sql .= ' AND (c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ?)';
+            $sql .= ' AND (c.name LIKE ? OR c.company LIKE ? OR c.email LIKE ? OR c.phone LIKE ?)';
             $like = '%' . $search . '%';
-            $params[] = $like; $params[] = $like; $params[] = $like;
+            $params[] = $like; $params[] = $like; $params[] = $like; $params[] = $like;
         }
 
         // By Client ID number (CL-0001, CL-0002, ...): new clients get the next
@@ -229,6 +229,7 @@ class AdminOpsClientController
             'tenant_id'       => $tenantId,
             'client_code'     => $code,
             'name'            => $name,
+            'company'         => trim((string)($body['company'] ?? '')),
             'phone'           => trim((string)($body['phone'] ?? '')),
             'email'           => strtolower(trim((string)($body['email'] ?? ''))),
             'source'          => trim((string)($body['source'] ?? '')),
@@ -262,7 +263,7 @@ class AdminOpsClientController
         if (!$client) Response::error('Client not found', 404);
 
         $updates = [];
-        foreach (['name','phone','email','source','owner','notes','current_software','switch_reason'] as $f) {
+        foreach (['name','company','phone','email','source','owner','notes','current_software','switch_reason'] as $f) {
             if (isset($body[$f])) $updates[$f] = trim((string)$body[$f]);
         }
         if (isset($body['source_pitch_id'])) $updates['source_pitch_id'] = !empty($body['source_pitch_id']) ? (int)$body['source_pitch_id'] : null;
@@ -542,6 +543,7 @@ class AdminOpsClientController
             'id'              => (int)$row['id'],
             'client_code'     => $row['client_code'] ?? null,
             'name'            => $row['name'],
+            'company'         => $row['company'] ?? '',
             'phone'           => $row['phone'],
             'email'           => $row['email'],
             'source'          => $row['source'],

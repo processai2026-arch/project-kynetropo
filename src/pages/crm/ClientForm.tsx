@@ -16,6 +16,7 @@ import { HEALTH_OPTIONS } from "./components/crm";
 const EMPTY = {
   client_code: "",
   name: "",
+  company: "",
   phone: "",
   email: "",
   owner: "",
@@ -49,6 +50,7 @@ export default function ClientForm() {
       setForm({
         client_code: c.client_code ?? "",
         name: c.name,
+        company: c.company ?? "",
         phone: c.phone ?? "",
         email: c.email ?? "",
         owner: c.owner ?? "",
@@ -110,8 +112,11 @@ export default function ClientForm() {
                 hint={editing ? "Must be unique" : "Leave blank for the next number"}>
                 <IconInput icon={Hash}><Input id="client_code" className="font-mono uppercase" placeholder={editing ? "" : "Automatic"} value={form.client_code} onChange={(e) => set("client_code", e.target.value)} /></IconInput>
               </Field>
-              <Field label="Client / company name" htmlFor="name" required error={errors.name}>
-                <IconInput icon={Building2}><Input id="name" placeholder="e.g. Biomass ERP" value={form.name} onChange={(e) => set("name", e.target.value)} autoFocus={!editing} /></IconInput>
+              <Field label="Client name" htmlFor="name" required error={errors.name} hint="The person you deal with">
+                <IconInput icon={UserRound}><Input id="name" placeholder="e.g. Mukunthan K" value={form.name} onChange={(e) => set("name", e.target.value)} autoFocus={!editing} /></IconInput>
+              </Field>
+              <Field label="Company" htmlFor="company" hint="Optional">
+                <IconInput icon={Building2}><Input id="company" placeholder="e.g. EcoSudar" value={form.company} onChange={(e) => set("company", e.target.value)} /></IconInput>
               </Field>
               <Field label="Phone" htmlFor="phone">
                 <IconInput icon={Phone}><Input id="phone" placeholder="+91 98765 43210" value={form.phone} onChange={(e) => set("phone", e.target.value)} /></IconInput>
@@ -119,7 +124,7 @@ export default function ClientForm() {
               <Field label="Email" htmlFor="email">
                 <IconInput icon={Mail}><Input id="email" type="email" placeholder="email@company.com" value={form.email} onChange={(e) => set("email", e.target.value)} /></IconInput>
               </Field>
-              <Field label="Owner" htmlFor="owner" hint="Who handles this client">
+              <Field label="Handled by" htmlFor="owner" hint="Who at Kynetropo handles this client">
                 <Input id="owner" value={form.owner} onChange={(e) => set("owner", e.target.value)} />
               </Field>
               <Field label="Health">

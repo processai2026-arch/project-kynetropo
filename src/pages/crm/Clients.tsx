@@ -21,7 +21,7 @@ export default function Clients() {
 
   // In Client ID order, as the API returns them.
   const list = useClientList<OpsClient>(async () => (await opsClientsApi.list()).data ?? [], {
-    searchText: (c) => [c.client_code, c.name, c.phone, c.email, c.owner],
+    searchText: (c) => [c.client_code, c.name, c.company, c.phone, c.email, c.owner],
     sorts: {
       code: (c) => c.client_code,
       name: (c) => c.name.toLowerCase(),
@@ -52,7 +52,7 @@ export default function Clients() {
 
   const columns: Column<OpsClient>[] = [
     { key: "code", label: "Client ID", sortKey: "code", render: (c) => <CodeText code={c.client_code} /> },
-    { key: "name", label: "Client", sortKey: "name", render: (c) => <NameCell id={c.id} name={c.name} sub={c.email || c.source || undefined} /> },
+    { key: "name", label: "Client", sortKey: "name", render: (c) => <NameCell id={c.id} name={c.name} sub={c.company || undefined} /> },
     { key: "contact", label: "Contact", render: (c) => <IconCell icon={Phone} primary={c.phone || "—"} /> },
     { key: "stage", label: "Stage", sortKey: "stage", render: (c) => <span className="text-xs">{c.stage}</span> },
     { key: "health", label: "Health", render: (c) => <HealthBadge value={c.health} /> },
@@ -74,7 +74,7 @@ export default function Clients() {
         );
       },
     },
-    { key: "owner", label: "Owner", sortKey: "owner", render: (c) => c.owner || "—" },
+    { key: "owner", label: "Handled by", sortKey: "owner", render: (c) => c.owner || "—" },
     { key: "followup", label: "Next follow-up", sortKey: "followup", render: (c) => c.next_followup ?? "—" },
     { key: "last", label: "Last contact", sortKey: "contact", render: (c) => (c.days_since_contact != null ? `${c.days_since_contact}d ago` : "—") },
   ];
@@ -92,7 +92,7 @@ export default function Clients() {
       <ListShell
         list={list}
         columns={columns}
-        searchPlaceholder="Client ID, name, phone, email…"
+        searchPlaceholder="Client ID, name, company, phone…"
         itemLabel="clients"
         rowHref={(c) => `/clients/${c.id}`}
         rowLabel={(c) => c.name}
@@ -100,7 +100,7 @@ export default function Clients() {
         filters={<>
           <NativeSelect className="w-44" value={list.filters.stage ?? ""} placeholder="All stages" options={CLIENT_STAGES.map((s) => ({ value: s, label: s }))} onChange={(v) => list.setFilter("stage", v)} />
           <NativeSelect className="w-36" value={list.filters.health ?? ""} placeholder="All health" options={HEALTH_OPTIONS} onChange={(v) => list.setFilter("health", v)} />
-          {owners.length > 0 && <NativeSelect className="w-40" value={list.filters.owner ?? ""} placeholder="All owners" options={owners} onChange={(v) => list.setFilter("owner", v)} />}
+          {owners.length > 0 && <NativeSelect className="w-40" value={list.filters.owner ?? ""} placeholder="All handlers" options={owners} onChange={(v) => list.setFilter("owner", v)} />}
         </>}
         rowActions={(c) => (
           <>

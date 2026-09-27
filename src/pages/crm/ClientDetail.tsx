@@ -100,7 +100,7 @@ export default function ClientDetail() {
         eyebrow={c ? `${c.client_code ?? "Client"} · added ${formatDate(c.created_at)}` : undefined}
         status={c && <HealthBadge value={c.health} />}
         title={c?.name ?? "Client"}
-        subtitle={c && <><UserRound aria-hidden /><span>{c.owner ? `Owner: ${c.owner}` : "No owner yet"} · {c.stage}</span></>}
+        subtitle={c && <><UserRound aria-hidden /><span>{c.company ? `${c.company} · ` : ""}{c.owner ? `Handled by ${c.owner}` : "Not assigned yet"} · {c.stage}</span></>}
         facts={c ? [
           { icon: Hash, label: "Client ID", value: c.client_code ?? "—" },
           { icon: Phone, label: "Call", value: c.phone || "—", href: c.phone ? `tel:${c.phone}` : undefined },
@@ -295,7 +295,8 @@ export default function ClientDetail() {
             headerAction={<Button variant="outline" size="sm" onClick={() => navigate(`/clients/${c.id}/edit`)}><Pencil className="h-4 w-4" /> Edit</Button>}>
             <dl data-field-grid="" className="grid gap-2">
               <InlineField label="Client ID" value={c.client_code} />
-              <InlineField label="Owner" value={c.owner || null} />
+              <InlineField label="Company" value={c.company || null} />
+              <InlineField label="Handled by" value={c.owner || null} />
               <InlineField label="Stage" value={c.stage} />
               <InlineField label="Source" value={c.source || null} />
               <InlineField label="Using now" value={c.current_software || null} />

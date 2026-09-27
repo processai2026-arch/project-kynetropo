@@ -123,7 +123,7 @@ export default function ProjectForm() {
                 hint={editing ? "Moving the project moves its payments to the new client" : undefined}>
                 <NativeSelect value={form.client_id} placeholder="Choose client" options={clientOptions} onChange={(v) => set("client_id", v)} />
               </Field>
-              <Field label="Owner" htmlFor="owner">
+              <Field label="Handled by" htmlFor="owner" hint="Who at Kynetropo handles this project">
                 <Input id="owner" value={form.owner} onChange={(e) => set("owner", e.target.value)} />
               </Field>
               <Field label="Health">

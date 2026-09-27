@@ -69,7 +69,7 @@ export default function ProjectDetail() {
         subtitle={p && <><Users aria-hidden /><Link to={`/clients/${p.client_id}`} className="hover:text-primary">{p.client_code ? `${p.client_code} · ` : ""}{p.client_name}</Link></>}
         facts={p ? [
           { icon: Hash, label: "Project ID", value: p.project_code ?? "—" },
-          { icon: UserRound, label: "Owner", value: p.owner || "—" },
+          { icon: UserRound, label: "Handled by", value: p.owner || "—" },
           { icon: CalendarDays, label: "Deadline", value: p.deadline ? formatDate(p.deadline) : "—" },
           { icon: Activity, label: "Priority", value: <PriorityBadge value={p.priority} /> },
         ] : []}

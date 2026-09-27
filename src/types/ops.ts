@@ -4,7 +4,10 @@ export interface OpsClient {
   id: number;
   /** Client ID shown in the CRM (CL-0001). Auto-numbered oldest first, editable. */
   client_code: string | null;
+  /** The person the team deals with (Mukunthan K). */
   name: string;
+  /** Their business (EcoSudar). Optional. */
+  company: string;
   phone: string;
   email: string;
   source: string;
