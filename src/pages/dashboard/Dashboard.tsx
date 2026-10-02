@@ -84,11 +84,14 @@ export default function Dashboard() {
               )}
               {(data?.today_actions.amc_due_this_month ?? []).length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">AMC Due This Month</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">AMC Due (next 30 days)</p>
                   {data!.today_actions.amc_due_this_month.map(a => (
-                    <p key={a.id} className="text-sm text-card-foreground py-1 truncate">
-                      {a.client_name} — ₹{Number(a.amount).toLocaleString("en-IN")}
-                    </p>
+                    <Link key={a.id} to="/amc" className="flex items-baseline justify-between gap-2 py-1.5 text-sm hover:underline">
+                      <span className="min-w-0 truncate text-card-foreground">{a.client_name} · {a.project_name} — ₹{Number(a.amount).toLocaleString("en-IN")}</span>
+                      <span className={a.days_until_due < 0 ? "shrink-0 text-xs font-medium text-red-600" : "shrink-0 text-xs text-amber-600"}>
+                        {a.days_until_due < 0 ? `${Math.abs(a.days_until_due)}d overdue` : a.days_until_due === 0 ? "today" : `in ${a.days_until_due}d`}
+                      </span>
+                    </Link>
                   ))}
                 </div>
               )}

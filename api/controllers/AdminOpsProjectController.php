@@ -117,6 +117,9 @@ class AdminOpsProjectController
         );
         if (!$client) Response::error('Client not found', 404);
 
+        // The AMC answer is checked first, so a bad one saves nothing.
+        $amc = is_array($body['amc'] ?? null) ? OpsAmc::normalise($body['amc']) : null;
+
         try {
             $code = trim((string)($body['project_code'] ?? '')) !== ''
                 ? OpsCodes::accept($tenantId, OpsCodes::PROJECT, $body['project_code'])
@@ -159,6 +162,10 @@ class AdminOpsProjectController
             'done_by'     => $body['owner'] ?? '',
         ]);
 
+        if ($amc && $amc['plan'] !== 'none') {
+            OpsAmc::create($tenantId, ['id' => $id, 'client_id' => $clientId, 'name' => $name], $amc, (string)($body['owner'] ?? ''));
+        }
+
         $row = Database::fetch(
             "SELECT p.*, c.name AS client_name, c.client_code FROM ops_projects p
              JOIN ops_clients c ON c.id = p.client_id
@@ -179,6 +186,13 @@ class AdminOpsProjectController
             [$id, $tenantId]
         );
         if (!$project) Response::error('Project not found', 404);
+
+        // The AMC answer is checked first, so a bad one saves nothing.
+        $amc = null;
+        if (is_array($body['amc'] ?? null)) {
+            $currentAmc = Database::fetch(OpsAmc::SELECT . ' WHERE a.project_id = ? AND a.tenant_id = ? ORDER BY a.id LIMIT 1', [$id, $tenantId]);
+            $amc = OpsAmc::normalise($body['amc'], $currentAmc ?: null);
+        }
 
         $updates = [];
         foreach (['name','owner','stage','current_work','next_action','founder_note','blocker','next_collection_trigger'] as $f) {
@@ -313,6 +327,18 @@ class AdminOpsProjectController
                 'description' => $description,
                 'done_by'     => $savedBy,
             ]);
+        }
+
+        if ($amc) {
+            $fresh = Database::fetch('SELECT id, client_id, name FROM ops_projects WHERE id = ? AND tenant_id = ? LIMIT 1', [$id, $tenantId]);
+            Database::beginTransaction();
+            try {
+                OpsAmc::saveForProject($tenantId, $fresh, $amc, trim((string)($body['updated_by'] ?? '')));
+                Database::commit();
+            } catch (\Throwable $e) {
+                Database::rollBack();
+                throw $e;
+            }
         }
 
         $row = Database::fetch(

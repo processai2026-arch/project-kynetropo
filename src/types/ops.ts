@@ -257,35 +257,52 @@ export interface OpsAmcRecord {
   project_code: string | null;
   /** The yearly AMC amount. */
   amount: number;
+  /** second_year: AMC from the 2nd year (first year free); first_year: charged from the start. */
+  plan: "second_year" | "first_year";
   /** Nothing was charged for the first year; the amount is first due at renewal. */
   first_year_free: boolean;
   /** The current year is paid for (or is the free first year). */
   term_paid: boolean;
-  /** Still in the free first year (no AMC payment made yet). */
+  /** Still in the free first year. */
   in_free_year: boolean;
+  /** Rolled past its first year: the first-year answers are history now. */
+  renewed: boolean;
+  /** When the contract began; start_date moves on a year at each renewal. */
+  contract_start: string;
   start_date: string;
   renewal_date: string;
   /** When the next AMC payment is due: renewal_date, or start_date while the year is unpaid. */
   due_date: string;
   days_until_due: number | null;
   status: "active" | "due" | "overdue";
+  /** The Finance payment for the current year, when it was paid through the AMC. */
+  payment_id: number | null;
+  paid_on: string | null;
   payment_mode: string | null;
   notes: string | null;
 }
 
+/** AMC from the 2nd year, from the 1st year, or no AMC. */
+export type OpsAmcPlan = "second_year" | "first_year" | "none";
+
+/** The AMC answer, as the AMC endpoints and the project form send it. */
+export interface OpsAmcPlanBody {
+  plan: OpsAmcPlan;
+  /** Price per year. */
+  amount?: number;
+  start_date?: string;
+  renewal_date?: string;
+  /** AMC from the 1st year: paid, so it is in Finance. */
+  first_year_paid?: boolean;
+  payment_date?: string;
+  payment_mode?: string;
+  notes?: string;
+}
+
 /** POST /admin/ops/amc */
-export interface OpsAmcCreateBody {
+export interface OpsAmcCreateBody extends OpsAmcPlanBody {
   client_id: number;
   project_id: number;
-  amount: number;
-  first_year_free: boolean;
-  /** Charged first year only: already paid, so it is recorded in Finance. */
-  first_year_paid?: boolean;
-  start_date: string;
-  renewal_date: string;
-  payment_mode?: string;
-  payment_date?: string;
-  notes?: string;
   recorded_by?: string;
 }
 
@@ -357,7 +374,8 @@ export interface OpsHiringCandidate {
 export interface OpsDashboardStats {
   today_actions: {
     followups_today: { client_name: string; client_id: number; next_followup: string }[];
-    amc_due_this_month: (OpsAmcRecord & { client_name: string; project_name: string })[];
+    /** AMC due within 30 days or overdue. */
+    amc_due_this_month: { id: number; client_id: number; project_id: number; amount: number; client_name: string; project_name: string; due_date: string; days_until_due: number }[];
     meetings_today: OpsMeeting[];
     payments_expected_today: OpsProject[];
     due_comments_today: {

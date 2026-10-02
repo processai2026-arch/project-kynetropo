@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   Bell, ChevronDown, LayoutGrid, LogOut, Maximize2, MessageSquare,
-  Minimize2, Settings, ShoppingCart,
+  Minimize2, RefreshCcw, Settings, ShoppingCart,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -25,7 +25,26 @@ interface ApiNotification {
   message: string;
   time: string;
   read: boolean;
+  /** Where clicking it goes (AMC alerts open the AMC page). */
+  url?: string;
+  urgent?: boolean;
 }
+
+/** What /admin/notifications sends. */
+interface RawNotification {
+  id: string | number;
+  type: string;
+  title?: string;
+  message: string;
+  is_read?: boolean;
+  created_at: string;
+  url?: string;
+  severity?: string;
+}
+
+const toNotification = (n: RawNotification): ApiNotification => ({
+  id: String(n.id), type: n.type, message: n.message, time: n.created_at, read: !!n.is_read, url: n.url, urgent: n.severity === "urgent",
+});
 
 function timeAgo(dateString: string) {
   const diff = Date.now() - new Date(dateString).getTime();
@@ -72,10 +91,11 @@ export function TopNavbar() {
 
   useEffect(() => {
     const fetchNotifications = () => {
-      apiFetch<{ data: ApiNotification[] }>("/admin/notifications")
+      apiFetch<{ data: RawNotification[] }>("/admin/notifications")
         .then((res) => {
-          setNotifications(res.data ?? []);
-          setUnreadCount((res.data ?? []).filter((n) => !n.read).length);
+          const list = (res.data ?? []).map(toNotification);
+          setNotifications(list);
+          setUnreadCount(list.filter((n) => !n.read).length);
         })
         .catch(() => {});
     };
@@ -84,7 +104,7 @@ export function TopNavbar() {
     return () => clearInterval(interval);
   }, []);
 
-  const markAllRead = () => setNotifications(notifications.map((n) => ({ ...n, read: true })));
+  const markAllRead = () => { setNotifications(notifications.map((n) => ({ ...n, read: true }))); setUnreadCount(0); };
 
   return (
     <header className="shrink-0 border-b bg-card shadow-sm">
@@ -163,25 +183,27 @@ export function TopNavbar() {
                   <div className="py-8 text-center text-sm text-muted-foreground">No notifications</div>
                 )}
                 {notifications.map((n) => {
-                  const Icon = n.type === "order" ? ShoppingCart : MessageSquare;
-                  return (
-                    <div
-                      key={n.id}
-                      className={cn(
-                        "flex items-start gap-3 border-b px-4 py-3 transition-colors last:border-0",
-                        !n.read && "bg-muted/30",
-                      )}
-                    >
-                      <div className="pt-0.5">
-                        <Icon className={cn("h-4 w-4", n.type === "order" ? "text-primary" : "text-blue-500")} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm leading-snug text-card-foreground">{n.message}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{timeAgo(n.time)}</p>
-                      </div>
-                      {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                  const amc = n.type === "amc";
+                  const Icon = amc ? RefreshCcw : n.type === "order" ? ShoppingCart : MessageSquare;
+                  const body = <>
+                    <div className="pt-0.5">
+                      <Icon className={cn("h-4 w-4", amc ? (n.urgent ? "text-red-600" : "text-amber-600") : n.type === "order" ? "text-primary" : "text-blue-500")} />
                     </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm leading-snug text-card-foreground">{n.message}</p>
+                      {/* An AMC alert says when it is due in its own text. */}
+                      {!amc && <p className="mt-0.5 text-xs text-muted-foreground">{timeAgo(n.time)}</p>}
+                    </div>
+                    {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                  </>;
+                  const rowClass = cn(
+                    "flex items-start gap-3 border-b px-4 py-3 transition-colors last:border-0",
+                    !n.read && "bg-muted/30",
+                    n.url && "hover:bg-muted/50",
                   );
+                  return n.url
+                    ? <Link key={n.id} to={n.url} className={rowClass}>{body}</Link>
+                    : <div key={n.id} className={rowClass}>{body}</div>;
                 })}
               </div>
             </PopoverContent>

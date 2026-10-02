@@ -1,7 +1,7 @@
 import { apiFetch } from "@/lib/api/client";
 import type {
   OpsClient, OpsClientDetail, OpsProject, OpsMeeting, OpsBug,
-  OpsPayment, OpsExpense, OpsAmcRecord, OpsAmcCreateBody, OpsAmcCollectBody, OpsPitch, OpsEmployee,
+  OpsPayment, OpsExpense, OpsAmcRecord, OpsAmcCreateBody, OpsAmcCollectBody, OpsAmcPlanBody, OpsPitch, OpsEmployee,
   OpsHiringCandidate, OpsDashboardStats, OpsFinanceSummary, OpsProjectDetail,
 } from "@/types/ops";
 
@@ -35,8 +35,9 @@ export const opsClientsApi = {
 export const opsProjectsApi = {
   list:   (p?: Record<string, string>) => apiFetch<{ data: OpsProject[] }>(`/admin/ops/projects${qs(p)}`),
   get:    (id: number) => apiFetch<{ data: OpsProjectDetail }>(`/admin/ops/projects/${id}`),
-  create: (body: Partial<OpsProject>) => apiFetch<{ data: OpsProject }>("/admin/ops/projects", { method: "POST", body: JSON.stringify(body) }),
-  update: (id: number, body: Partial<OpsProject>) => apiFetch<{ data: OpsProject }>(`/admin/ops/projects/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  /** `amc` sets the project's AMC: from the 2nd year, from the 1st year, or none. */
+  create: (body: Partial<OpsProject> & { amc?: OpsAmcPlanBody }) => apiFetch<{ data: OpsProject }>("/admin/ops/projects", { method: "POST", body: JSON.stringify(body) }),
+  update: (id: number, body: Partial<OpsProject> & { amc?: OpsAmcPlanBody }) => apiFetch<{ data: OpsProject }>(`/admin/ops/projects/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   /** Permanently deletes the project with its payments, bugs and meetings. */
   remove: (id: number) => apiFetch<void>(`/admin/ops/projects/${id}`, { method: "DELETE" }),
 };
@@ -77,7 +78,8 @@ export const opsFinanceApi = {
 export const opsAmcApi = {
   list:   (p?: Record<string, string>) => apiFetch<{ data: OpsAmcRecord[] }>(`/admin/ops/amc${qs(p)}`),
   create: (body: OpsAmcCreateBody) => apiFetch<{ data: OpsAmcRecord }>("/admin/ops/amc", { method: "POST", body: JSON.stringify(body) }),
-  update: (id: number, body: Partial<Pick<OpsAmcRecord, "amount" | "start_date" | "renewal_date" | "notes">>) =>
+  /** Anything can change; the first year's Finance payment follows. */
+  update: (id: number, body: OpsAmcPlanBody & { recorded_by?: string }) =>
     apiFetch<{ data: OpsAmcRecord }>(`/admin/ops/amc/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   /** Records this year's AMC payment in Finance; a paid year rolls on to the next. */
   collect: (id: number, body: OpsAmcCollectBody) =>

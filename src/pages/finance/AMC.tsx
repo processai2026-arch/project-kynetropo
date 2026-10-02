@@ -11,10 +11,11 @@ import { Panel } from "@/components/Panel";
 import { opsAmcApi, opsClientsApi, opsProjectsApi } from "@/lib/api/ops";
 import { formatDate } from "@/lib/format";
 import type { OpsAmcRecord, OpsClient, OpsProject } from "@/types/ops";
-import { Plus, Pencil, CheckCircle } from "lucide-react";
+import { Plus, Pencil, CheckCircle, Trash2 } from "lucide-react";
+import { ActionDialog } from "@/components/ActionDialog";
 import { toast } from "sonner";
 import { ScrollableX } from "@/components/ui/scrollable-x";
-import { AmcCollectDialog, AmcFormDialog, AmcStatusBadge, AmcYearBadge, dueText } from "./components/AmcDialogs";
+import { AmcCollectDialog, AmcFormDialog, AmcStatusBadge, AmcYearBadge, amcPlanLabel, dueText } from "./components/AmcDialogs";
 
 const COLUMNS = ["Client", "Project", "Per year", "This year", "Renewal", "Next due", "Status", ""];
 
@@ -27,6 +28,7 @@ export default function AMC() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing]   = useState<OpsAmcRecord | null>(null);
   const [collecting, setCollecting] = useState<OpsAmcRecord | null>(null);
+  const [removing, setRemoving]     = useState<OpsAmcRecord | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -108,7 +110,10 @@ export default function AMC() {
                     <td className="py-3 px-4">
                       <Link to={`/projects/${a.project_id}`} className="text-card-foreground hover:text-primary">{a.project_name}</Link>
                     </td>
-                    <td className="py-3 px-4 font-medium text-card-foreground whitespace-nowrap">₹{Number(a.amount).toLocaleString("en-IN")}</td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <div className="font-medium text-card-foreground">₹{Number(a.amount).toLocaleString("en-IN")}</div>
+                      <div className="text-xs text-muted-foreground">{amcPlanLabel(a)}</div>
+                    </td>
                     <td className="py-3 px-4 whitespace-nowrap">
                       <AmcYearBadge amc={a} />
                       <div className="text-xs text-muted-foreground mt-0.5">from {formatDate(a.start_date)}</div>
@@ -125,6 +130,9 @@ export default function AMC() {
                         <Button variant="ghost" size="icon" onClick={() => setCollecting(a)}
                           title={a.term_paid ? "Collect renewal" : "Collect this year's AMC"} aria-label={`Collect AMC for ${a.project_name}`}>
                           <CheckCircle className="h-4 w-4 text-emerald-600" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => setRemoving(a)} title="Delete" aria-label={`Delete AMC for ${a.project_name}`}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     </td>
@@ -149,6 +157,19 @@ export default function AMC() {
         onOpenChange={(v) => { if (!v) setCollecting(null); }}
         amc={collecting}
         onSaved={load}
+      />
+      <ActionDialog
+        open={removing !== null}
+        onOpenChange={(v) => { if (!v) setRemoving(null); }}
+        title="Delete this AMC?"
+        destructive
+        confirmLabel="Delete AMC"
+        description={removing && <p>
+          {removing.client_name} · {removing.project_name}, ₹{Number(removing.amount).toLocaleString("en-IN")} a year.
+          {!removing.renewed && removing.payment_id ? " Its first-year payment is taken out of Finance too." : " Payments already recorded stay in Finance."}
+        </p>}
+        onConfirm={async () => { if (removing) { await opsAmcApi.remove(removing.id); await load(); } }}
+        successMessage="AMC deleted"
       />
     </RecordListPage>
   );

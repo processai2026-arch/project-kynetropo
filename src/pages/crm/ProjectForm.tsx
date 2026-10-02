@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { CalendarDays, FolderKanban, FolderPlus, Hash, IndianRupee, List, Wallet } from "lucide-react";
+import { CalendarDays, FolderKanban, FolderPlus, Hash, IndianRupee, List, ShieldCheck, Wallet } from "lucide-react";
 import { RecordFormPage, FormLayout, FormSectionCard, IconInput } from "@/components/RecordFormPage";
 import { Field, NativeSelect } from "@/components/Field";
 import { SavingButton } from "@/components/SavingButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { opsClientsApi, opsProjectsApi } from "@/lib/api/ops";
+import { opsAmcApi, opsClientsApi, opsProjectsApi } from "@/lib/api/ops";
 import { errorMessage } from "@/lib/api/errors";
-import type { OpsClient } from "@/types/ops";
+import type { OpsAmcRecord, OpsClient } from "@/types/ops";
 import { HEALTH_OPTIONS, PRIORITY_OPTIONS } from "./components/crm";
+import { AmcPlanFields, amcDraft, amcDraftBody, amcDraftProblem, yearAfter, type AmcDraft } from "@/pages/finance/components/AmcDialogs";
 
 const EMPTY = {
   project_code: "",
@@ -37,6 +38,11 @@ export default function ProjectForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(!!editing);
   const [saving, setSaving] = useState(false);
+  // The project's AMC: from the 2nd year, from the 1st year, or none. Asked on
+  // a new project; on an edit it is sent only when changed.
+  const [amc, setAmc] = useState<AmcDraft>(() => amcDraft(null));
+  const [amcOriginal, setAmcOriginal] = useState<OpsAmcRecord | null>(null);
+  const [amcDirty, setAmcDirty] = useState(false);
 
   useEffect(() => {
     opsClientsApi.list().then((r) => setClients(r.data ?? [])).catch(() => undefined);
@@ -60,7 +66,22 @@ export default function ProjectForm() {
         collection_target_date: p.collection_target_date ?? "",
       });
     }).catch((e) => toast.error(errorMessage(e))).finally(() => setLoading(false));
+    opsAmcApi.list({ project_id: String(editing) }).then((r) => {
+      const current = (r.data ?? [])[0] ?? null;
+      setAmcOriginal(current);
+      setAmc(current ? amcDraft(current) : { ...amcDraft(null), plan: "none" });
+    }).catch(() => undefined);
   }, [editing]);
+
+  const changeAmc = (next: AmcDraft) => {
+    // A new project's AMC usually starts at delivery: take the deadline when the plan is first chosen.
+    if (!editing && amc.plan === null && next.plan && next.plan !== "none" && form.deadline && next.start_date === amc.start_date) {
+      next = { ...next, start_date: form.deadline, renewal_date: next.renewalTouched ? next.renewal_date : yearAfter(form.deadline) };
+    }
+    setAmc(next);
+    setAmcDirty(true);
+    setErrors((e) => ({ ...e, amc: "" }));
+  };
 
   const set = (k: keyof typeof EMPTY, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -69,6 +90,9 @@ export default function ProjectForm() {
     if (!form.name.trim()) local.name = "Project name is required";
     if (!form.client_id) local.client_id = "Choose the client";
     if (editing && !form.project_code.trim()) local.project_code = "Project ID cannot be empty";
+    const sendAmc = !editing || amcDirty;
+    const amcProblem = sendAmc ? amcDraftProblem(amc) : null;
+    if (amcProblem) local.amc = amcProblem;
     setErrors(local);
     if (Object.keys(local).length) return;
     setSaving(true);
@@ -80,6 +104,7 @@ export default function ProjectForm() {
         quoted: Number(form.quoted || 0),
         health: form.health as "green" | "yellow" | "red",
         priority: form.priority as "low" | "medium" | "high" | "critical",
+        ...(sendAmc ? { amc: amcDraftBody(amc) } : {}),
       };
       const res = editing ? await opsProjectsApi.update(editing, body) : await opsProjectsApi.create(body);
       toast.success(editing ? "Project updated" : `Project ${res.data.project_code ?? ""} created`);
@@ -139,6 +164,10 @@ export default function ProjectForm() {
               <Field label="Start date" htmlFor="start_date"><Input id="start_date" type="date" value={form.start_date} onChange={(e) => set("start_date", e.target.value)} /></Field>
               <Field label="Deadline" htmlFor="deadline"><Input id="deadline" type="date" value={form.deadline} onChange={(e) => set("deadline", e.target.value)} /></Field>
             </div>
+          </FormSectionCard>
+          <FormSectionCard icon={ShieldCheck} tone="amber" title="AMC" description="Yearly maintenance, separate from the quoted amount">
+            <AmcPlanFields draft={amc} onChange={changeAmc} original={amcOriginal} idPrefix="prj-amc" />
+            {errors.amc && <p className="mt-2 text-xs text-destructive">{errors.amc}</p>}
           </FormSectionCard>
         </>}
         side={

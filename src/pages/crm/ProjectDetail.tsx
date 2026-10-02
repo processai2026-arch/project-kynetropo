@@ -30,7 +30,7 @@ import { initialsOf } from "@/lib/initials";
 import type { OpsAmcRecord, OpsPayment } from "@/types/ops";
 import { HealthBadge, PROJECT_STAGES, PriorityBadge, rupees } from "./components/crm";
 import { PAYMENT_MODES, PAYMENT_TYPES, PaymentDialog } from "./components/PaymentDialog";
-import { AmcCollectDialog, AmcFormDialog, AmcStatusBadge, AmcYearBadge, dueText } from "@/pages/finance/components/AmcDialogs";
+import { AmcCollectDialog, AmcFormDialog, AmcStatusBadge, AmcYearBadge, amcPlanLabel, dueText } from "@/pages/finance/components/AmcDialogs";
 
 const label = (options: { value: string; label: string }[], v: string) => options.find((o) => o.value === v)?.label ?? humanise(v);
 
@@ -173,13 +173,14 @@ export default function ProjectDetail() {
               <ScrollableX>
                 <table className="w-full text-sm">
                   <thead><tr>
-                    <th className="text-right">Per year</th><th className="text-left">This year</th><th className="text-left">Renewal</th>
+                    <th className="text-left">AMC</th><th className="text-right">Per year</th><th className="text-left">This year</th><th className="text-left">Renewal</th>
                     <th className="text-left">Next due</th><th className="text-left">Status</th><th />
                   </tr></thead>
                   <tbody>
-                    {amcList.length === 0 && <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No AMC for this project</td></tr>}
+                    {amcList.length === 0 && <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">No AMC for this project</td></tr>}
                     {amcList.map((a) => (
                       <tr key={a.id}>
+                        <td className="whitespace-nowrap">{amcPlanLabel(a)}</td>
                         <td className="text-right font-medium tabular-nums">{rupees(a.amount)}</td>
                         <td className="whitespace-nowrap"><AmcYearBadge amc={a} /> <span className="text-xs text-muted-foreground">from {formatDate(a.start_date)}</span></td>
                         <td className="whitespace-nowrap">{formatDate(a.renewal_date)}</td>
