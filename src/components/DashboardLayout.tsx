@@ -8,6 +8,7 @@ import { ChatContextProvider } from "@/contexts/ChatContext";
 import { ChatWidget } from "@/components/ChatWidget";
 import { ModulesDialog } from "@/components/ModulesDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { PullIndicator, usePullToRefresh } from "@/components/phone/PullToRefresh";
 
 interface DashboardLayoutContextType {
   modulesDialogOpen: boolean;
@@ -31,6 +32,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
    * and the page is rendered on its own. Desktop is completely unaffected.
    */
   const salesAppShell = isMobile && pathname.startsWith("/sales");
+  // The phone app reloads on a pull from the top, and every screen opens at its top (Diamond Fencing's shell).
+  const pull = usePullToRefresh(salesAppShell);
+  useEffect(() => { if (salesAppShell) window.scrollTo(0, 0); }, [pathname, salesAppShell]);
 
   // Load this tenant's company profile once so generated documents (invoices,
   // quotations) show the tenant's own name/address/GSTIN — not a hardcoded one.
@@ -39,7 +43,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   if (salesAppShell) {
     return (
       <DashboardLayoutContext.Provider value={{ modulesDialogOpen, setModulesDialogOpen }}>
-        <main className="min-h-screen w-full bg-background p-4">{children}</main>
+        <PullIndicator {...pull} />
+        <main className="mx-auto min-h-[100dvh] w-full max-w-2xl bg-background p-4">{children}</main>
       </DashboardLayoutContext.Provider>
     );
   }

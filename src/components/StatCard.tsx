@@ -55,22 +55,30 @@ export function StatCard({
     // already carried by the icon chip — quietly, where it doesn't compete
     // with the number.
     <div
+      data-stat-card=""
       className={cn(
         "rounded-xl border p-5 shadow-sm transition-shadow hover:shadow-md",
-        tinted
-          ? cn("flex items-center gap-4", a.tile, a.border)
-          : "bg-card flex items-start justify-between",
+        tinted ? cn("flex items-center gap-4", a.tile, a.border) : "bg-card",
       )}
     >
       {tinted && (
-        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-card shadow-sm">
-          <Icon className={cn("h-6 w-6", a.icon)} />
+        <div data-stat-icon="" className={cn("grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-card shadow-sm", a.icon)}>
+          <Icon className="h-6 w-6" />
         </div>
       )}
 
-      <div className="min-w-0">
-        <p className="text-sm text-muted-foreground truncate">{title}</p>
-        <p className="text-2xl font-bold mt-1 text-card-foreground eco-nums">{value}</p>
+      <div className="min-w-0 flex-1">
+        {/* The icon sits beside the label, so the number below gets the card's full width
+            (the enterprise tile: label on top, then the number, then its note). */}
+        <div className="flex items-center justify-between gap-3">
+          <p data-stat-label="" className="text-sm text-muted-foreground truncate">{title}</p>
+          {!tinted && (
+            <div data-stat-icon="" className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-xl", a.tile, a.icon)}>
+              <Icon className="h-5 w-5" />
+            </div>
+          )}
+        </div>
+        <p className="text-2xl font-bold mt-1 text-card-foreground eco-nums truncate" title={value}>{value}</p>
         {/* Rendered even when empty: a row of cards where only some carry a
             caption would otherwise sit at different internal heights, and the
             numbers above them would stop lining up across the row. */}
@@ -87,12 +95,6 @@ export function StatCard({
           {subtitle ?? "\u00A0"}
         </p>
       </div>
-
-      {!tinted && (
-        <div className={cn("p-3 rounded-xl shrink-0", a.tile)}>
-          <Icon className={cn("h-6 w-6", a.icon)} />
-        </div>
-      )}
     </div>
   );
 }

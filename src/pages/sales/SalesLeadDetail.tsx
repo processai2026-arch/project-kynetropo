@@ -37,6 +37,7 @@ import type {
   SalesLeadDetail as LeadDetail,
 } from "@/types/sales";
 import { RecordProfileHeader } from "@/components/RecordProfileHeader";
+import { ActionBar, usePhoneApp } from "@/components/phone/PhoneKit";
 import type { ProfileFact } from "@/components/RecordProfileHeader";
 import { DetailStats } from "@/components/DetailStats";
 import { StatCard } from "@/components/StatCard";
@@ -74,6 +75,7 @@ export default function SalesLeadDetail() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { can, me } = useSalesAccess();
+  const phone = usePhoneApp();
   const confirm = useConfirm();
 
   const [lead, setLead] = useState<LeadDetail | null>(null);
@@ -406,8 +408,23 @@ export default function SalesLeadDetail() {
         </div>
       )}
 
-      {/* Primary actions — sticky on mobile so they are always one thumb away. */}
-      <section className="sticky bottom-16 z-30 -mx-1 rounded-2xl border bg-card/95 p-3 shadow-lg backdrop-blur md:static md:bottom-auto md:mx-0 md:shadow-sm">
+      {/* Primary actions. In the phone app they sit in the page, and the two everyday ones are
+          also kept at the bottom (Diamond Fencing's action bar), so nothing on the lead is covered. */}
+      {phone && (can("sales.calls.create") || can("sales.followups.create")) && (
+        <ActionBar>
+          <div className="grid grid-cols-2 gap-2">
+            {can("sales.calls.create") && (
+              <Button className="h-12 text-base" onClick={() => setDialog("call")}><Phone className="mr-1.5 h-5 w-5" />Log Call</Button>
+            )}
+            {can("sales.followups.create") && (
+              <Button className="h-12 text-base" variant="secondary" onClick={() => setDialog("followup")}><CalendarClock className="mr-1.5 h-5 w-5" />Follow-Up</Button>
+            )}
+          </div>
+        </ActionBar>
+      )}
+      <section className={phone
+        ? "rounded-2xl border bg-card p-3"
+        : "sticky bottom-16 z-30 -mx-1 rounded-2xl border bg-card/95 p-3 shadow-lg backdrop-blur md:static md:bottom-auto md:mx-0 md:shadow-sm"}>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {can("sales.calls.create") && (
             <Button className="h-11" onClick={() => setDialog("call")}>

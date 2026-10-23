@@ -19,6 +19,7 @@ import { ViewAsSwitcher } from "@/components/sales/ViewAsSwitcher";
 import { TemperatureBadge, formatDate, formatTime, humanise } from "@/components/sales/SalesBits";
 import type { SalesDashboard as Dashboard, SalesFollowup, SalesMeeting } from "@/types/sales";
 import { cn } from "@/lib/utils";
+import { SalesPhoneHome } from "./phone/SalesPhoneHome";
 
 /**
  * Sales Home — "what do I need to do today?".
@@ -32,26 +33,6 @@ function greeting(): string {
   if (h < 12) return "Good morning";
   if (h < 17) return "Good afternoon";
   return "Good evening";
-}
-
-function MetricRow({ items }: { items: { label: string; value: number; tone?: "danger" | "default" }[] }) {
-  return (
-    <div className="rounded-2xl border bg-card shadow-sm divide-y">
-      {items.map((m) => (
-        <div key={m.label} className="flex items-center justify-between px-4 py-3">
-          <span className="text-sm text-muted-foreground">{m.label}</span>
-          <span
-            className={cn(
-              "text-xl font-bold tabular-nums",
-              m.tone === "danger" && m.value > 0 ? "text-destructive" : "text-card-foreground",
-            )}
-          >
-            {String(m.value).padStart(2, "0")}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function FollowupCard({ item, overdue }: { item: SalesFollowup; overdue?: boolean }) {
@@ -228,29 +209,20 @@ export default function SalesDashboard() {
   const s = data.summary;
   const firstName = (me?.name ?? "").split(" ")[0];
 
+  // The phone app's Home (Diamond Fencing's phone design).
+  if (isMobile) {
+    return (
+      <SalesLayout>
+        <div className="space-y-5">
+          <SalesPhoneHome data={data} name={me?.name ?? ""} can={can} />
+        </div>
+      </SalesLayout>
+    );
+  }
+
   return (
     <SalesLayout>
       <RecordListPage>
-      {isMobile ? (
-        <>
-          {/* Phone: greeting, one compact metrics block, then the work itself. */}
-          <header className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm text-muted-foreground">{greeting()}{firstName ? `, ${firstName}` : ""}</p>
-              <h1 className="text-2xl font-bold text-foreground">Today's Sales</h1>
-            </div>
-            <ViewAsSwitcher className="shrink-0" />
-          </header>
-
-          <MetricRow
-            items={[
-              { label: "Follow-Ups Today", value: s.followups_today },
-              { label: "Overdue", value: s.followups_overdue, tone: "danger" },
-              { label: "Meetings Today", value: s.meetings_today },
-            ]}
-          />
-        </>
-      ) : (
         <>
           {/*
            * Desktop uses the platform's own dashboard furniture — PageHeader,
@@ -323,7 +295,6 @@ export default function SalesDashboard() {
             </div>
           </SectionCard>
         </>
-      )}
 
       {/* Lead temperature summary */}
       <div className="grid grid-cols-3 gap-3">
@@ -497,13 +468,6 @@ export default function SalesDashboard() {
 
       </div>
 
-      {/* The desktop carries the server time in the header chip already. */}
-      {isMobile && (
-        <div className="flex items-center justify-center gap-2 pt-2 text-xs text-muted-foreground">
-          <CalendarDays className="h-3.5 w-3.5" />
-          Server time {new Date(data.server_time.replace(" ", "T")).toLocaleString("en-IN")}
-        </div>
-      )}
       </RecordListPage>
     </SalesLayout>
   );

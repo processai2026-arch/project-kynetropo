@@ -25,7 +25,6 @@ interface ScrollableXProps {
 export function ScrollableX({ children, className }: ScrollableXProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const mirrorRef  = useRef<HTMLDivElement>(null);
-  const syncing    = useRef(false);
 
   const [bar, setBar] = useState<{
     visible: boolean;
@@ -48,23 +47,22 @@ export function ScrollableX({ children, className }: ScrollableXProps) {
     });
   }, []);
 
-  // Sync content → mirror
+  /*
+   * Each side follows the other only when they actually differ. A flag set around the
+   * assignment never worked: the echoing scroll event arrives after the flag is cleared,
+   * and with display scaling (125% on most laptops) scrollLeft is fractional and rounds
+   * differently on each element, so the two kept writing each other back — the table
+   * stuck and jittered under the wheel or the bar. (Same fix as Eco Sudar and Diamond Fencing.)
+   */
   const onContentScroll = useCallback(() => {
-    if (!syncing.current && mirrorRef.current && contentRef.current) {
-      syncing.current = true;
-      mirrorRef.current.scrollLeft = contentRef.current.scrollLeft;
-      syncing.current = false;
-    }
+    const m = mirrorRef.current, c = contentRef.current;
+    if (m && c && Math.abs(m.scrollLeft - c.scrollLeft) > 1) m.scrollLeft = c.scrollLeft;
     refresh();
   }, [refresh]);
 
-  // Sync mirror → content
   const onMirrorScroll = useCallback(() => {
-    if (!syncing.current && mirrorRef.current && contentRef.current) {
-      syncing.current = true;
-      contentRef.current.scrollLeft = mirrorRef.current.scrollLeft;
-      syncing.current = false;
-    }
+    const m = mirrorRef.current, c = contentRef.current;
+    if (m && c && Math.abs(m.scrollLeft - c.scrollLeft) > 1) c.scrollLeft = m.scrollLeft;
   }, []);
 
   useEffect(() => {

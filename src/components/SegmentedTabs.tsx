@@ -45,6 +45,7 @@ export function SegmentedTabs<T extends string>({
     // control rather than as loose buttons floating on the page.
     <div
       role="tablist"
+      data-segmented=""
       className={cn(
         "inline-flex w-fit items-center gap-1 rounded-lg bg-muted p-1",
         className,

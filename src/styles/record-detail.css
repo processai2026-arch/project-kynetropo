@@ -447,3 +447,14 @@
 /* The facts strip already closes the header; the page's own space-y-6 is the gap to the figures. */
 .record-detail [data-profile] { padding-bottom: 0.25rem; }
 .record-detail [data-profile-facts] { padding-top: 0.9rem; }
+
+/*
+ * A record in the phone app (RecordProfileHeader's phone version): its coloured bar runs to
+ * the screen edges, so the page must not clip sideways, and it keeps the app's own sky blue
+ * (the deeper record-page blue is a desktop signal) — the same blue as the rest of the phone app.
+ */
+.record-detail:has([data-phone-profile]) {
+  overflow-x: visible;
+  --primary: 200 70% 52%;
+  --ring: 200 70% 52%;
+}

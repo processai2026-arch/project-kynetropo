@@ -22,6 +22,7 @@ import type { SalesTask, SalesTaskDetail, TaskBucket, TaskCounts } from "@/types
 import { cn } from "@/lib/utils";
 import { usePaged } from "@/hooks/usePaged";
 import { PaginationBar } from "@/components/PaginationBar";
+import { Avatar, Chips, Empty, HeroAvatar, HeroBar, List, Loading, Pill as PhonePill, Row, shortDate, usePhoneApp } from "@/components/phone/PhoneKit";
 
 /**
  * Tasks — work one person handed another.
@@ -84,6 +85,7 @@ function DueLine({ task }: { task: SalesTask }) {
 export default function SalesTasks() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { can, me } = useSalesAccess();
+  const phone = usePhoneApp();
   const confirm = useConfirm();
 
   const requested = (searchParams.get("bucket") as TaskBucket) ?? "mine";
@@ -272,6 +274,183 @@ export default function SalesTasks() {
     );
   }
 
+  const dialogs = (
+    <>
+      {/* ── The task itself: details, history and the discussion ───────────── */}
+      <Dialog open={open !== null} onOpenChange={(o) => { if (!o) { setOpen(null); void load(); } }}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          {open && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="pr-6">{open.title}</DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <Pill className={STATUS_STYLES[open.status] ?? STATUS_STYLES.open}>{humanise(open.status)}</Pill>
+                  <Pill className={PRIORITY_STYLES[open.priority] ?? PRIORITY_STYLES.normal}>{open.priority}</Pill>
+                  <DueLine task={open} />
+                  {open.task_code && <span>{open.task_code}</span>}
+                </div>
+
+                <div className="rounded-xl border bg-muted/30 p-3 text-sm">
+                  <p>
+                    <span className="text-muted-foreground">For</span>{" "}
+                    <span className="font-medium">{open.assigned_to_name}</span>
+                    <span className="text-muted-foreground"> · from </span>
+                    <span className="font-medium">{open.assigned_by_name || "—"}</span>
+                  </p>
+                  {open.description && (
+                    <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{open.description}</p>
+                  )}
+                </div>
+
+                {open.status === "completed" && (
+                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm">
+                    <p className="font-medium text-emerald-700 dark:text-emerald-400">
+                      Completed {formatDateTime(open.completed_at)}
+                    </p>
+                    {open.completion_notes && (
+                      <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{open.completion_notes}</p>
+                    )}
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {open.reviewed_at
+                        ? `Accepted ${formatDateTime(open.reviewed_at)}`
+                        : "Waiting for the person who assigned it to accept the work."}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2">{actions(open)}</div>
+
+                {open.activity.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold">History</h3>
+                    <ul className="mt-2 space-y-2">
+                      {openHistory.pageItems.map((a) => (
+                        <li key={a.id} className="flex gap-2 text-xs text-muted-foreground">
+                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/50" />
+                          <span className="min-w-0">
+                            <span className="font-medium text-card-foreground">{humanise(a.action)}</span>
+                            {a.actor_name ? ` · ${a.actor_name}` : ""} · {formatDateTime(a.created_at)}
+                            {a.notes ? <span className="block">{a.notes}</span> : null}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    {openHistory.totalPages > 1 && (
+                      <PaginationBar page={openHistory.page} totalPages={openHistory.totalPages} total={openHistory.total}
+                        onPage={openHistory.setPage} itemLabel="entries" />
+                    )}
+                  </div>
+                )}
+
+                {can("sales.comments.view") && (
+                  <div>
+                    <h3 className="text-sm font-semibold">Discussion</h3>
+                    <CommentThread
+                      className="mt-2"
+                      entityType="task"
+                      entityId={open.id}
+                      initialComments={open.comments}
+                    />
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Marking it done ────────────────────────────────────────────────── */}
+      <Dialog open={completing !== null} onOpenChange={(o) => !o && setCompleting(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark this task done</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleComplete} className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {completing?.assigned_by_name
+                ? `${completing.assigned_by_name} will be told it is finished.`
+                : "The person who assigned it will be told."}
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="task-done-notes">What did you do? (optional)</Label>
+              <Textarea
+                id="task-done-notes"
+                rows={3}
+                value={completionNotes}
+                onChange={(e) => setCompletionNotes(e.target.value)}
+                placeholder="Quotation sent and acknowledged over the phone"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setCompleting(null)}>
+                Cancel
+              </Button>
+              <Button type="submit">Mark done</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <TaskDialog
+        open={dialogOpen}
+        task={editing}
+        onClose={() => { setDialogOpen(false); setEditing(null); }}
+        onSaved={(saved) => {
+          applySaved(saved);
+          // A newly given task lands in "I assigned", not wherever you were.
+          if (!editing && saved.assigned_to !== me?.user_id && bucket !== "given") setBucket("given");
+          else void load();
+        }}
+      />
+    </>
+  );
+
+  const openTask = (id: number) =>
+    void salesTasksApi.get(id).then(setOpen).catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Could not open that task"));
+
+  // The phone app (Diamond Fencing's phone design): the buckets as chips, the tasks as chat
+  // rows. Tap one for the whole task, where its buttons (start, done, edit…) are.
+  if (phone) {
+    return (
+      <SalesLayout onCreated={() => void load()}>
+        <div className="space-y-3">
+          <HeroBar eyebrow={`${counts.mine} mine · ${counts.overdue} overdue`} title="Tasks" right={<HeroAvatar name={me?.name} to="/sales/more" />}>
+            {can("sales.tasks.create") && (
+              <button type="button" onClick={() => { setEditing(null); setDialogOpen(true); }}
+                className="inline-flex h-10 items-center gap-1.5 rounded-full bg-white px-4 text-sm font-semibold text-primary active:bg-white/90">
+                <Plus className="h-4 w-4" /> Give a task
+              </button>
+            )}
+          </HeroBar>
+          <Chips<TaskBucket> value={bucket} onChange={(b) => { setBucket(b); setSearchParams(b === "mine" ? {} : { bucket: b }, { replace: true }); }}
+            options={TABS.map((t) => ({ value: t.key, label: t.label, count: (counts as unknown as Record<string, number>)[t.key] || undefined }))} />
+          {loading ? <Loading /> : error ? (
+            <Empty icon={ClipboardList} text={error} action={<Button variant="outline" onClick={() => void load()}>Try again</Button>} />
+          ) : items.length === 0 ? (
+            <Empty icon={ClipboardList} text={bucket === "overdue" ? "Nothing overdue." : bucket === "completed" ? "Nothing done yet." : "No tasks here."} />
+          ) : (
+            <List>
+              {items.map((task) => (
+                <Row key={task.id} onClick={() => openTask(task.id)}
+                  avatar={<Avatar icon={ClipboardList} tone={task.is_overdue ? "danger" : task.priority === "critical" || task.priority === "high" ? "warning" : "primary"} />}
+                  title={task.title}
+                  meta={task.due_date ? <span className={cn(task.is_overdue && "font-medium text-destructive")}>{shortDate(task.due_date)}</span> : undefined}
+                  sub={`${task.is_assignee ? `From ${task.assigned_by_name || "—"}` : `For ${task.assigned_to_name}`}${task.lead_company || task.lead_name ? ` · ${task.lead_company || task.lead_name}` : ""}`}
+                  end={<PhonePill tone={task.status === "completed" ? "success" : task.status === "in_progress" ? "primary" : task.status === "cancelled" ? "muted" : task.is_overdue ? "danger" : "muted"}>
+                    {task.status === "completed" && !task.reviewed_at && task.is_assigner ? "Check it" : humanise(task.status)}
+                  </PhonePill>} />
+              ))}
+            </List>
+          )}
+          {dialogs}
+        </div>
+      </SalesLayout>
+    );
+  }
+
   return (
     <SalesLayout onCreated={() => void load()}>
       <RecordListPage>
@@ -413,135 +592,7 @@ export default function SalesTasks() {
         </div>
       )}
 
-      {/* ── The task itself: details, history and the discussion ───────────── */}
-      <Dialog open={open !== null} onOpenChange={(o) => { if (!o) { setOpen(null); void load(); } }}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-          {open && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="pr-6">{open.title}</DialogTitle>
-              </DialogHeader>
-
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <Pill className={STATUS_STYLES[open.status] ?? STATUS_STYLES.open}>{humanise(open.status)}</Pill>
-                  <Pill className={PRIORITY_STYLES[open.priority] ?? PRIORITY_STYLES.normal}>{open.priority}</Pill>
-                  <DueLine task={open} />
-                  {open.task_code && <span>{open.task_code}</span>}
-                </div>
-
-                <div className="rounded-xl border bg-muted/30 p-3 text-sm">
-                  <p>
-                    <span className="text-muted-foreground">For</span>{" "}
-                    <span className="font-medium">{open.assigned_to_name}</span>
-                    <span className="text-muted-foreground"> · from </span>
-                    <span className="font-medium">{open.assigned_by_name || "—"}</span>
-                  </p>
-                  {open.description && (
-                    <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{open.description}</p>
-                  )}
-                </div>
-
-                {open.status === "completed" && (
-                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm">
-                    <p className="font-medium text-emerald-700 dark:text-emerald-400">
-                      Completed {formatDateTime(open.completed_at)}
-                    </p>
-                    {open.completion_notes && (
-                      <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{open.completion_notes}</p>
-                    )}
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {open.reviewed_at
-                        ? `Accepted ${formatDateTime(open.reviewed_at)}`
-                        : "Waiting for the person who assigned it to accept the work."}
-                    </p>
-                  </div>
-                )}
-
-                <div className="flex flex-wrap gap-2">{actions(open)}</div>
-
-                {open.activity.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold">History</h3>
-                    <ul className="mt-2 space-y-2">
-                      {openHistory.pageItems.map((a) => (
-                        <li key={a.id} className="flex gap-2 text-xs text-muted-foreground">
-                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/50" />
-                          <span className="min-w-0">
-                            <span className="font-medium text-card-foreground">{humanise(a.action)}</span>
-                            {a.actor_name ? ` · ${a.actor_name}` : ""} · {formatDateTime(a.created_at)}
-                            {a.notes ? <span className="block">{a.notes}</span> : null}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                    {openHistory.totalPages > 1 && (
-                      <PaginationBar page={openHistory.page} totalPages={openHistory.totalPages} total={openHistory.total}
-                        onPage={openHistory.setPage} itemLabel="entries" />
-                    )}
-                  </div>
-                )}
-
-                {can("sales.comments.view") && (
-                  <div>
-                    <h3 className="text-sm font-semibold">Discussion</h3>
-                    <CommentThread
-                      className="mt-2"
-                      entityType="task"
-                      entityId={open.id}
-                      initialComments={open.comments}
-                    />
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Marking it done ────────────────────────────────────────────────── */}
-      <Dialog open={completing !== null} onOpenChange={(o) => !o && setCompleting(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Mark this task done</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleComplete} className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              {completing?.assigned_by_name
-                ? `${completing.assigned_by_name} will be told it is finished.`
-                : "The person who assigned it will be told."}
-            </p>
-            <div className="space-y-1.5">
-              <Label htmlFor="task-done-notes">What did you do? (optional)</Label>
-              <Textarea
-                id="task-done-notes"
-                rows={3}
-                value={completionNotes}
-                onChange={(e) => setCompletionNotes(e.target.value)}
-                placeholder="Quotation sent and acknowledged over the phone"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setCompleting(null)}>
-                Cancel
-              </Button>
-              <Button type="submit">Mark done</Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <TaskDialog
-        open={dialogOpen}
-        task={editing}
-        onClose={() => { setDialogOpen(false); setEditing(null); }}
-        onSaved={(saved) => {
-          applySaved(saved);
-          // A newly given task lands in "I assigned", not wherever you were.
-          if (!editing && saved.assigned_to !== me?.user_id && bucket !== "given") setBucket("given");
-          else void load();
-        }}
-      />
+      {dialogs}
       </RecordListPage>
     </SalesLayout>
   );

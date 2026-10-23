@@ -1,6 +1,8 @@
 import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { useEffect } from "react";
+import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
+import { applySkin } from "@/lib/uiSkin";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -38,6 +40,7 @@ function PageLoader() {
 
 function ProtectedRoutes() {
   const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -50,7 +53,7 @@ function ProtectedRoutes() {
     );
   }
 
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
 
   return (
     <DashboardLayout>
@@ -67,6 +70,13 @@ function ProtectedRoutes() {
   );
 }
 
+/** The enterprise look follows the screen: on for the ERP, off for the Sales app on a phone. */
+function SkinFollowsRoute() {
+  const { pathname } = useLocation();
+  useEffect(() => { applySkin(pathname); }, [pathname]);
+  return null;
+}
+
 function LoginRoute() {
   const { isAuthenticated, loading } = useAuth();
   if (loading) return null;
@@ -80,6 +90,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <SkinFollowsRoute />
         <AuthProvider>
           <ConfirmProvider>
             {/*

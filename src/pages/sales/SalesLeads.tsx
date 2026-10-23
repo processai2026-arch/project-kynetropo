@@ -12,7 +12,9 @@ import { useTeamMembers, namesakeHint } from "@/hooks/useTeamMembers";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { RecordListPage } from "@/components/RecordListPage";
 import { PageHeader } from "@/components/PageHeader";
-import { LeadStatusBadge, TemperatureBadge, formatDate, formatTime } from "@/components/sales/SalesBits";
+import { LeadStatusBadge, TemperatureBadge, formatDate, formatTime, humanise } from "@/components/sales/SalesBits";
+import { Avatar, Chips, Empty, HeroAvatar, HeroBar, List, Loading, PhoneSelect, Row, SearchBox, shortDate, usePhoneApp } from "@/components/phone/PhoneKit";
+import { TempPill } from "./phone/SalesPhoneHome";
 import { LeadFormDialog } from "@/components/sales/LeadFormDialog";
 import { useConfirm } from "@/components/ConfirmDialog";
 import type { SalesLead } from "@/types/sales";
@@ -129,7 +131,8 @@ function LeadCard({
 
 export default function SalesLeads() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { can, viewAs } = useSalesAccess();
+  const { can, viewAs, me } = useSalesAccess();
+  const phone = usePhoneApp();
   const confirm = useConfirm();
 
   const [items, setItems] = useState<SalesLead[]>([]);
@@ -245,6 +248,69 @@ export default function SalesLeads() {
       toast.error(err instanceof Error ? err.message : "Could not delete the lead");
     }
   };
+
+  const leadForm = (      <LeadFormDialog
+      open={formOpen}
+      lead={editingLead}
+      onClose={() => {
+        setFormOpen(false);
+        setEditingLead(null);
+      }}
+      onSaved={(saved) => {
+        // Patch the row in place on an edit so the list does not jump; a new
+        // lead has to come from the server to land in the right filter.
+        if (editingLead) {
+          setItems((prev) => prev.map((l) => (l.id === saved.id ? { ...l, ...saved } : l)));
+        } else {
+          void load();
+        }
+      }}
+    />
+  );
+
+  // The phone app (Diamond Fencing's phone design): search in the header, temperature chips,
+  // then the leads as chat-style rows. Editing and deleting are on the lead itself.
+  if (phone) {
+    return (
+      <SalesLayout>
+        <div className="space-y-3">
+          <HeroBar eyebrow={loading ? "Loading…" : `${items.length} lead${items.length === 1 ? "" : "s"}`} title="Leads"
+            right={<HeroAvatar name={me?.name} to="/sales/more" />}>
+            <SearchBox onHero value={search} onChange={setSearch} placeholder="Search name, company, phone" />
+          </HeroBar>
+          <Chips value={temperature} onChange={setTemperature}
+            options={[{ value: "all", label: "All" }, ...TEMPERATURES.map((t) => ({ value: t, label: humanise(t) }))]} />
+          <div className="-mt-1 grid grid-cols-2 gap-2">
+            {!viewAs && (
+              <PhoneSelect label="Owner" value={owner} onChange={setOwner} options={[
+                { value: "all", label: "All owners" },
+                ...people.map((pp) => ({ value: String(pp.user_id), label: pp.name })),
+                { value: "none", label: "Unassigned" },
+              ]} />
+            )}
+            <PhoneSelect label="Status" value={status} onChange={setStatus}
+              options={[{ value: "all", label: "All statuses" }, ...STATUSES.map((st) => ({ value: st, label: humanise(st) }))]} />
+          </div>
+          {loading ? <Loading /> : error ? (
+            <Empty icon={Users} text={error} action={<Button variant="outline" onClick={() => void load()}>Try again</Button>} />
+          ) : items.length === 0 ? (
+            <Empty icon={Users} text={search || temperature !== "all" || status !== "all" ? "No leads match these filters." : "No leads yet."} />
+          ) : (
+            <List>
+              {items.map((lead) => (
+                <Row key={lead.id} to={`/sales/leads/${lead.id}`} avatar={<Avatar name={lead.company || lead.name} />}
+                  title={lead.company || lead.name}
+                  meta={lead.next_followup_at ? shortDate(lead.next_followup_at) : undefined}
+                  sub={[lead.contact_person || lead.name, humanise(lead.status)].filter(Boolean).join(" · ")}
+                  end={<TempPill value={lead.temperature} />} />
+              ))}
+            </List>
+          )}
+          {leadForm}
+        </div>
+      </SalesLayout>
+    );
+  }
 
   return (
     <SalesLayout>
@@ -381,23 +447,7 @@ export default function SalesLeads() {
         </>
       )}
 
-      <LeadFormDialog
-        open={formOpen}
-        lead={editingLead}
-        onClose={() => {
-          setFormOpen(false);
-          setEditingLead(null);
-        }}
-        onSaved={(saved) => {
-          // Patch the row in place on an edit so the list does not jump; a new
-          // lead has to come from the server to land in the right filter.
-          if (editingLead) {
-            setItems((prev) => prev.map((l) => (l.id === saved.id ? { ...l, ...saved } : l)));
-          } else {
-            void load();
-          }
-        }}
-      />
+      {leadForm}
       </RecordListPage>
     </SalesLayout>
   );

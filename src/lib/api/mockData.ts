@@ -1,3 +1,4 @@
+import { getSalesMock } from "./salesMockData";
 // Mock API data for all Kynetropo Ops endpoints
 // Used when VITE_USE_MOCK_API=true
 
@@ -136,6 +137,9 @@ const DASHBOARD_STATS = {
 export function getMockResponse(path: string, method: string, body?: unknown): unknown {
   const url = path.replace(/\?.*$/, ""); // strip query params
   const ok = (data: unknown) => ({ success: true, data });
+
+  // Sales module (its own sample data)
+  if (url.startsWith("/admin/sales")) return getSalesMock(url, method, new URLSearchParams(path.split("?")[1] ?? ""));
 
   // Dashboard
   if (url === "/admin/ops/dashboard-stats") return ok(DASHBOARD_STATS);

@@ -26,9 +26,12 @@ import type { SalesFollowup } from "@/types/sales";
 export function FollowupDetailDialog({
   followup,
   onClose,
+  onEdit,
 }: {
   followup: SalesFollowup | null;
   onClose: () => void;
+  /** Offers "Edit date, time or purpose" here — the phone app's rows have no room for it. */
+  onEdit?: (f: SalesFollowup) => void;
 }) {
   const { can } = useSalesAccess();
   const f = followup;
@@ -56,6 +59,11 @@ export function FollowupDetailDialog({
                 </span>
                 {f.lead_temperature && <TemperatureBadge value={f.lead_temperature} />}
               </div>
+              {onEdit && f.status === "pending" && (
+                <button type="button" className="text-sm font-medium text-primary underline" onClick={() => onEdit(f)}>
+                  Edit date, time or purpose
+                </button>
+              )}
 
               <div>
                 <h3 className="text-sm font-semibold text-card-foreground">What it is for</h3>

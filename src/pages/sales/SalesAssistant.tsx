@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { salesAiApi } from "@/lib/api/salesAi";
 import { SalesLayout } from "@/components/sales/SalesLayout";
+import { BarButton, TopBar, usePhoneApp } from "@/components/phone/PhoneKit";
 import { RecordListPage } from "@/components/RecordListPage";
 import { cn } from "@/lib/utils";
 import type {
@@ -37,6 +38,7 @@ let msgSeq = 0;
 const nextId = () => `m${Date.now()}_${msgSeq++}`;
 
 export default function SalesAssistant() {
+  const phone = usePhoneApp();
   const [messages, setMessages] = useState<SalesAiChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -164,7 +166,9 @@ export default function SalesAssistant() {
   return (
     <SalesLayout>
       <RecordListPage>
-      <div className="flex h-[calc(100dvh-8rem)] gap-4">
+      {/* The phone app's bar (Diamond Fencing's design) replaces the chat card's own heading. */}
+      {phone && <TopBar title="AI Assistant" sub="Ask, or tell it what to do" right={<BarButton icon={Plus} label="New chat" onClick={startNew} />} />}
+      <div className={phone ? "flex h-[calc(100dvh-6.5rem)] gap-4" : "flex h-[calc(100dvh-8rem)] gap-4"}>
         {/* History rail (desktop) */}
         <aside className="hidden w-64 shrink-0 flex-col rounded-2xl border bg-card md:flex">
           <div className="flex items-center justify-between border-b p-3">
@@ -210,7 +214,7 @@ export default function SalesAssistant() {
 
         {/* Chat column */}
         <section className="flex min-w-0 flex-1 flex-col rounded-2xl border bg-card">
-          <header className="flex items-center gap-2 border-b p-4">
+          <header className={cn("items-center gap-2 border-b p-4", phone ? "hidden" : "flex")}>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <Sparkles className="h-5 w-5" />
             </div>

@@ -1,0 +1,344 @@
+/*
+ * The enterprise look — dense, flat, square, quiet (SAP / Oracle / NetSuite), the same skin
+ * as Eco Sudar's admin and Diamond Fencing's ERP.
+ *
+ * ## The switch
+ *
+ * Every rule hangs off `html[data-ui="enterprise"]`, set by lib/uiSkin.ts. It is on for the
+ * whole system on a computer. On a phone the Sales app (the installed app, and its sign-in)
+ * keeps its phone look instead, so the attribute is taken off there. Remove this file's
+ * import in main.tsx and the app is the soft skin it was before; nothing else was rewritten
+ * to get here.
+ *
+ * ## What changes
+ *
+ *   density   a 15px root, so every rem-sized thing (Tailwind included) shrinks together
+ *   shape     4px corners instead of 12–14px; square status tags
+ *   colour    one deeper corporate blue, a light grey page under white cards,
+ *             no gradients, no glass, no pastel tiles
+ *   noise     no initials discs in lists, no soft shadows on flat cards
+ *
+ * The overrides out-rank the skins by specificity alone (the html attribute adds one
+ * attribute selector to whatever they set), so import order does not matter.
+ */
+
+/* ── Tokens ───────────────────────────────────────────────────────────────── */
+
+html[data-ui="enterprise"] {
+  font-size: 15px;
+  --radius: 0.3rem;
+}
+html[data-ui="enterprise"]:not(.dark) {
+  --primary: 208 88% 40%;
+  --ring: 208 88% 40%;
+  --border: 214 16% 86%;
+  --input: 214 16% 80%;
+  --muted: 210 18% 96%;
+  --sidebar-background: 210 20% 98.5%;
+  --sidebar-border: 214 16% 86%;
+  --sidebar-primary: 208 80% 93%;
+  --sidebar-primary-foreground: 208 90% 30%;
+  --sidebar-primary-icon: 208 88% 40%;
+  --sidebar-accent: 210 20% 93%;
+  --sidebar-accent-foreground: 222 47% 11%;
+  --sidebar-ring: 208 88% 40%;
+}
+html[data-ui="enterprise"].dark {
+  --primary: 208 80% 55%;
+  --ring: 208 80% 55%;
+}
+
+html[data-ui="enterprise"] body { letter-spacing: 0; }
+html[data-ui="enterprise"] :is(.eco-nums, td, [data-list-num]) { font-variant-numeric: tabular-nums; }
+
+/* ── Shape ────────────────────────────────────────────────────────────────── */
+
+html[data-ui="enterprise"] :is(.rounded-xl, .rounded-2xl, .rounded-3xl) { border-radius: 0.4rem; }
+html[data-ui="enterprise"] .rounded-lg { border-radius: 0.3rem; }
+/* A status reads as a tag, not a pill (switches, dots and avatars keep their circles). */
+html[data-ui="enterprise"] .inline-flex.rounded-full.border { border-radius: 0.2rem; }
+
+/* ── Flat surfaces ────────────────────────────────────────────────────────── */
+
+/* Cards are separated by their 1px border, not by a soft shadow. Floating things
+   (dialogs, menus) keep theirs. */
+html[data-ui="enterprise"] main :is(.shadow-sm, .shadow, .hover\:shadow-md:hover) { box-shadow: none; }
+html[data-ui="enterprise"] :is(.backdrop-blur, .backdrop-blur-sm, .backdrop-blur-md, .backdrop-blur-lg) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Strong gradients (buttons, badges) become the one solid blue; pale washes behind panels simply go. */
+html[data-ui="enterprise"] :is([class~="from-sky-300"], [class~="from-sky-400"], [class~="from-sky-500"], [class~="from-violet-500"]) {
+  background-image: none;
+  background-color: hsl(var(--primary));
+}
+html[data-ui="enterprise"] :is([class~="from-indigo-50"], [class~="from-indigo-50/60"], [class~="from-sky-50/80"], [class~="from-primary/[0.09]"]) {
+  background-image: none;
+}
+html[data-ui="enterprise"] [class*="shadow-indigo-"] { --tw-shadow-color: rgb(15 23 42 / 0.18); }
+
+/* Figure tiles: white, bordered. */
+html[data-ui="enterprise"]:not(.dark) [data-stat-card] { background: hsl(var(--card)); border-color: hsl(var(--border)); padding: 0.95rem 1.05rem; }
+
+/* ── The shell ────────────────────────────────────────────────────────────── */
+
+html[data-ui="enterprise"]:not(.dark) main { background: hsl(210 20% 97%); }
+
+html[data-ui="enterprise"]:not(.dark) [data-sidebar="sidebar"] {
+  background: hsl(210 20% 98.5%);
+  border-right-color: hsl(var(--border));
+}
+html[data-ui="enterprise"]:not(.dark) [data-sidebar="sidebar"] .bg-sidebar-border { background-color: hsl(var(--border)); }
+/* The active item: a tinted row with a blue edge, not a filled chip. */
+html[data-ui="enterprise"] [data-sidebar="menu-button"][data-active="true"],
+html[data-ui="enterprise"] [data-sidebar="sidebar"] a[aria-current="page"] {
+  box-shadow: inset 3px 0 0 hsl(var(--primary));
+  border-radius: 0.2rem;
+}
+html[data-ui="enterprise"] [data-sidebar="menu-button"] { border-radius: 0.2rem; }
+/* The open group's name is written in the sidebar's "primary" — now a pale fill for the active
+   row — so it takes the one blue instead (it went near-invisible otherwise). */
+html[data-ui="enterprise"] .text-sidebar-primary { color: hsl(var(--primary)); }
+
+html[data-ui="enterprise"]:not(.dark) header:has(+ main) {
+  background: hsl(var(--card));
+  border-bottom-color: hsl(var(--border));
+}
+html[data-ui="enterprise"]:not(.dark) header:has(+ main) > div + div { border-top-color: hsl(var(--border)); }
+html[data-ui="enterprise"]:not(.dark) header:has(+ main) button[aria-label="Search everything"] {
+  border-radius: 0.3rem;
+  background: hsl(var(--muted));
+}
+
+/* ── Page headings ────────────────────────────────────────────────────────── */
+
+html[data-ui="enterprise"] main h1,
+html[data-ui="enterprise"] .record-list h1,
+html[data-ui="enterprise"] .record-form h1 {
+  font-size: 1.35rem;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  line-height: 1.2;
+}
+
+/* ── Lists ────────────────────────────────────────────────────────────────── */
+
+html[data-ui="enterprise"] .record-list [data-list-card] {
+  border-radius: 0.3rem;
+  box-shadow: none;
+}
+html[data-ui="enterprise"] .record-list [data-list-card] > [data-list-filters] {
+  min-height: 0;
+  padding: 0.55rem 0.7rem;
+}
+html[data-ui="enterprise"] .record-list [data-list-filters] :is(button[role="combobox"], input),
+html[data-ui="enterprise"] .record-list [data-list-filters] > button:not([role="combobox"]):not([aria-label^="Clear"]) {
+  height: 2.05rem;
+  border-radius: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+html[data-ui="enterprise"] .record-list [data-list-filters] button[role="combobox"] > span { font-weight: 500; }
+html[data-ui="enterprise"] .record-list [data-list-filters] :is(input, button[role="combobox"]) { background: hsl(var(--card)); }
+
+html[data-ui="enterprise"] .record-list table { font-size: 0.875rem; }
+html[data-ui="enterprise"] .record-list thead th,
+html[data-ui="enterprise"] .record-list thead th > button:not([role="checkbox"]) {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+html[data-ui="enterprise"] .record-list thead th { background: hsl(var(--muted)); border-bottom: 1px solid hsl(var(--border)); }
+html[data-ui="enterprise"] .record-list tbody td {
+  height: 2.65rem;
+  padding: 0.35rem 0.75rem;
+}
+html[data-ui="enterprise"] .record-list tbody tr:nth-child(even) { background: hsl(210 20% 98.6%); }
+html[data-ui="enterprise"] .record-list tbody tr:hover { background: hsl(var(--primary) / 0.05); }
+/* The pinned actions column paints its own (opaque) background, so it carries the row's stripe and hover too. */
+html[data-ui="enterprise"] .record-list tbody tr:nth-child(even) td[data-list-actions] { background: hsl(210 20% 98.6%); }
+html[data-ui="enterprise"] .record-list tbody tr:hover td[data-list-actions] {
+  background: color-mix(in srgb, hsl(var(--primary)) 5%, hsl(var(--card)));
+}
+html[data-ui="enterprise"] .record-list table[data-list-compact] tbody td { height: 2.3rem; padding-block: 0.25rem; }
+
+/* No initials discs: the name is the identity. */
+html[data-ui="enterprise"] .record-list [data-list-avatar] { display: none; }
+html[data-ui="enterprise"] .record-list [data-list-cell] { gap: 0.5rem; }
+html[data-ui="enterprise"] .record-list [data-list-cell] strong { font-size: 0.875rem; font-weight: 600; max-width: 16rem; }
+html[data-ui="enterprise"] .record-list [data-list-cell] small { font-size: 0.75rem; margin-top: 0; }
+
+html[data-ui="enterprise"] .record-list tbody td [data-list-status] {
+  min-width: 0;
+  border-radius: 0.2rem;
+  padding: 0.12rem 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+html[data-ui="enterprise"] .record-list tbody td .badge { min-width: 0; }
+
+html[data-ui="enterprise"] .record-list [data-list-actions] > button { border-radius: 0.25rem; }
+html[data-ui="enterprise"] .record-list [data-list-pager] { min-height: 0; padding: 0.4rem 0.75rem; }
+/* Page buttons are square; the Rows drop-down is sized by its number, never squeezed to an icon. */
+html[data-ui="enterprise"] .record-list [data-list-pager] button:not([role="combobox"]) { width: 1.9rem; height: 1.9rem; }
+html[data-ui="enterprise"] .record-list [data-list-pager] button[role="combobox"] { width: auto; min-width: 4.5rem; height: 1.9rem; gap: 0.5rem; }
+
+html[data-ui="enterprise"] .record-list [data-list-tabs] > [role="tablist"] { border-radius: 0.3rem 0.3rem 0 0; }
+html[data-ui="enterprise"] .record-list [data-list-tabs] [role="tab"] { padding: 0.45rem 0.9rem; min-width: 0; }
+
+html[data-ui="enterprise"] .record-list [data-panel] { border-radius: 0.3rem; box-shadow: none; }
+html[data-ui="enterprise"] .record-list [data-panel-head] { min-height: 0; background: hsl(var(--muted) / 0.6); }
+
+/* ── Forms ────────────────────────────────────────────────────────────────── */
+
+html[data-ui="enterprise"] .record-form [data-form-section],
+html[data-ui="enterprise"] .record-form [data-panel] { border-radius: 0.3rem; box-shadow: none; }
+html[data-ui="enterprise"] .record-form :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, button[role="combobox"]) { min-height: 2.15rem; }
+/* A field is white with a border — the grey fill read as disabled. */
+html[data-ui="enterprise"]:not(.dark) .record-form :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:disabled), select, textarea, button[role="combobox"]) {
+  background-color: hsl(var(--card));
+  border-color: hsl(var(--input));
+}
+html[data-ui="enterprise"] .record-form :is([data-form-page-icon], [data-form-section-icon]) {
+  border-radius: 0.3rem;
+  background: hsl(var(--muted));
+  color: hsl(var(--primary));
+}
+
+/* ── Record pages ─────────────────────────────────────────────────────────── */
+
+/* The wave behind a record's header, a little heavier, carried to the page's right edge. */
+html[data-ui="enterprise"] .record-detail {
+  width: auto;
+  margin-right: -1rem;
+  padding-right: 1rem;
+}
+html[data-ui="enterprise"] .record-detail [data-profile-waves] {
+  right: -1rem;
+  width: 60%;
+  stroke: hsl(var(--primary) / 0.17);
+  stroke-width: 1.35;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 28%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 28%);
+}
+@media (min-width: 768px) {
+  html[data-ui="enterprise"] .record-detail { margin-right: -1.5rem; padding-right: 1.5rem; }
+  html[data-ui="enterprise"] .record-detail [data-profile-waves] { right: -1.5rem; }
+}
+/* The mark stays a disc: a circle reads as an identity. */
+html[data-ui="enterprise"] .record-detail [data-profile-mark] {
+  background: hsl(var(--primary));
+  box-shadow: none;
+  border-radius: 50%;
+}
+html[data-ui="enterprise"] .record-detail [data-profile-title] { font-size: 1.45rem; font-weight: 650; }
+html[data-ui="enterprise"] .record-detail :is([data-panel], [data-profile-aside]) { border-radius: 0.3rem; box-shadow: none; }
+html[data-ui="enterprise"] .record-detail [data-panel-head] { background: hsl(var(--muted) / 0.6); }
+
+/* Header facts: a quiet icon, no tinted tile — the value is what you read. */
+html[data-ui="enterprise"] .record-detail [data-profile-fact] > span:first-child {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.3rem;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+}
+html[data-ui="enterprise"] .record-detail [data-profile-fact] > span:first-child svg { width: 1.05rem; height: 1.05rem; }
+html[data-ui="enterprise"] .record-detail [data-profile-fact] dt { text-transform: uppercase; letter-spacing: 0.03em; font-size: 0.68rem; }
+
+/* Figures (key performance tiles): white and bordered, label on top, then the number, then its note. */
+html[data-ui="enterprise"] [data-stat-card] p.text-2xl { font-size: 1.4rem; font-weight: 650; }
+/* The figure's icon: small, in the tile's own colour on a faint wash of the same colour. */
+html[data-ui="enterprise"] [data-stat-icon] {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  padding: 0;
+  border-radius: 0.3rem;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  box-shadow: none;
+}
+html[data-ui="enterprise"] [data-stat-icon] svg { width: 1.1rem; height: 1.1rem; }
+html[data-ui="enterprise"] [data-stat-label] { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
+/* record-detail.css lays a record page's tiles out by position (pastel, icon first, number above
+   its label); here they are the same white tiles as everywhere else. */
+html[data-ui="enterprise"] .record-detail [data-detail-stats] > div {
+  display: block;
+  padding: 0.95rem 1.05rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.3rem;
+}
+html[data-ui="enterprise"]:not(.dark) .record-detail [data-detail-stats] > div { background: hsl(var(--card)); }
+html[data-ui="enterprise"].dark .record-detail [data-detail-stats] > div { background: hsl(var(--card)); }
+html[data-ui="enterprise"] .record-detail [data-detail-stats] > div > div:is(:first-child, :last-child) { display: block; padding: 0; border-radius: 0; }
+html[data-ui="enterprise"] .record-detail [data-detail-stats] > div > div:first-child p:is(:first-child, :nth-child(2), :last-child) { order: 0; color: inherit; white-space: nowrap; }
+html[data-ui="enterprise"] .record-detail [data-detail-stats] [data-stat-label] { color: hsl(var(--muted-foreground)); font-size: 0.72rem; margin: 0; }
+html[data-ui="enterprise"] .record-detail [data-detail-stats] [data-stat-card] p.text-2xl { margin-top: 0.3rem; font-size: 1.4rem; line-height: 1.15; }
+html[data-ui="enterprise"] .record-detail [data-detail-stats] [data-stat-card] p.text-xs { margin-top: 0.2rem; font-size: 0.75rem; }
+html[data-ui="enterprise"] .record-detail [data-detail-stats] [data-stat-icon] svg { width: 1.1rem; height: 1.1rem; }
+
+/* Panel headings: a plain title on a grey bar; the icon is a hint, not a badge. */
+html[data-ui="enterprise"] [data-panel-icon] {
+  width: 1.4rem;
+  height: 1.4rem;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+}
+html[data-ui="enterprise"] :is(.record-detail, .record-list) [data-panel-head] h2 { font-size: 0.9rem; font-weight: 600; }
+html[data-ui="enterprise"] .record-detail [data-field] dt { color: hsl(var(--muted-foreground)); }
+
+/* ── Side panels and dialogs ──────────────────────────────────────────────── */
+
+/* A lighter dim behind a side panel or dialog: the page stays readable, as in SAP. */
+html[data-ui="enterprise"] .fixed.inset-0[class*="bg-black/80"] { background-color: rgb(15 23 42 / 0.32); }
+html[data-ui="enterprise"] [role="dialog"] { border-radius: 0.3rem; }
+html[data-ui="enterprise"] [role="dialog"][data-state].fixed.inset-y-0 { border-radius: 0; box-shadow: -4px 0 16px rgb(15 23 42 / 0.12); }
+
+/* ── Loading ──────────────────────────────────────────────────────────────── */
+
+/* Ghost placeholders (SAP Fiori): square grey blocks with a slow light sweep. */
+html[data-ui="enterprise"] .animate-pulse.bg-muted {
+  border-radius: 0.2rem;
+  background: linear-gradient(90deg, hsl(var(--muted)) 0%, hsl(var(--muted)) 35%, hsl(210 16% 91%) 50%, hsl(var(--muted)) 65%, hsl(var(--muted)) 100%);
+  background-size: 250% 100%;
+  animation: es-ghost 1.6s linear infinite;
+}
+@keyframes es-ghost {
+  from { background-position: 100% 0; }
+  to   { background-position: -150% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui="enterprise"] .animate-pulse.bg-muted { animation: none; }
+}
+
+/* ── Tabs ─────────────────────────────────────────────────────────────────── */
+
+/* The default tab strip becomes an underline strip: plain labels on one rule, the chosen one blue with a bar under it.
+   A two-way switch (SegmentedTabs) is not a strip of pages: it keeps its filled choice. */
+html[data-ui="enterprise"] [role="tablist"].bg-muted:not([data-segmented]) {
+  height: auto;
+  gap: 0.25rem;
+  padding: 0;
+  border-bottom: 1px solid hsl(var(--border));
+  border-radius: 0;
+  background: transparent;
+}
+html[data-ui="enterprise"] [role="tablist"].bg-muted:not([data-segmented]) > [role="tab"] {
+  margin-bottom: -1px;
+  padding: 0.6rem 0.95rem;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: hsl(var(--muted-foreground));
+  font-weight: 500;
+}
+html[data-ui="enterprise"] [role="tablist"].bg-muted:not([data-segmented]) > [role="tab"]:hover { color: hsl(var(--foreground)); }
+html[data-ui="enterprise"] [role="tablist"].bg-muted:not([data-segmented]) > [role="tab"][data-state="active"] {
+  border-bottom-color: hsl(var(--primary));
+  color: hsl(var(--primary));
+  font-weight: 600;
+}

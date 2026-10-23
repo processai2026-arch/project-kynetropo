@@ -11,6 +11,7 @@ export function ProfileWaves() {
     <svg data-profile-waves="" viewBox="0 0 600 190" fill="none" aria-hidden="true">
       {Array.from({ length: 18 }, (_, i) => (
         <path
+          vectorEffect="non-scaling-stroke"
           key={i}
           d={`M0 ${105 + i * 3} C100 ${-25 + i * 4}, 155 ${195 - i}, 280 ${95 + i * 2} S430 ${-35 + i * 4}, 600 ${30 + i * 4}`}
         />

@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { ProfileWaves } from "@/components/ProfileWaves";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { TopBar, usePhoneApp } from "@/components/phone/PhoneKit";
 
 /**
  * The top of a record page (mpTV-erp's Operator/Customer profile block):
@@ -64,6 +65,10 @@ export function RecordProfileHeader({
   className,
 }: RecordProfileHeaderProps) {
   const navigate = useNavigate();
+  // The Sales app on a phone: Diamond Fencing's record screen instead.
+  if (usePhoneApp()) {
+    return <PhoneProfile {...{ backTo, crumb, icon: Icon, mark, eyebrow, status, title, subtitle, facts, aside, actions, loading }} />;
+  }
 
   return (
     <header data-profile="" className={cn("rounded-xl border bg-card shadow-sm", className)}>
@@ -182,3 +187,51 @@ export function ProfileLinkCard({ icon: Icon, label, value, onClick }: { icon: L
 }
 
 export default RecordProfileHeader;
+
+/**
+ * A record on the phone app (Diamond Fencing's design): the coloured bar with the back arrow,
+ * the record's circle, name and status on a white card, its facts as plain rows (a phone
+ * number dials, an e-mail writes), then its buttons.
+ */
+function PhoneProfile({ backTo, crumb, icon: Icon, mark, eyebrow, status, title, subtitle, facts = [], aside, actions, loading }:
+  Pick<RecordProfileHeaderProps, "backTo" | "crumb" | "icon" | "mark" | "eyebrow" | "status" | "title" | "subtitle" | "facts" | "aside" | "actions" | "loading">) {
+  return (
+    <div data-phone-profile="" className="space-y-3">
+      <TopBar back={backTo} title={loading ? title : crumb || title} sub={eyebrow} />
+      <section className="overflow-hidden rounded-2xl border bg-card">
+        <div className="flex items-center gap-3 p-4">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary text-lg font-semibold text-primary-foreground">
+            {mark ?? <Icon className="h-6 w-6" />}
+          </span>
+          <div className="min-w-0 flex-1">
+            {loading ? <Skeleton className="h-6 w-40" /> : <h2 className="truncate text-lg font-bold text-foreground">{title}</h2>}
+            {status ? <div className="mt-1 flex flex-wrap items-center gap-1.5">{status}</div> : null}
+            {subtitle ? <div className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground [&_svg]:h-4 [&_svg]:w-4">{subtitle}</div> : null}
+          </div>
+        </div>
+        {facts.length > 0 && (
+          <dl className="divide-y border-t">
+            {facts.map((f) => {
+              const FactIcon = f.icon;
+              const body = (
+                <>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"><FactIcon className="h-5 w-5" /></span>
+                  <span className="min-w-0 flex-1">
+                    <dd className="truncate font-medium text-foreground">{f.value}</dd>
+                    <dt className="text-xs text-muted-foreground">{f.label}</dt>
+                  </span>
+                </>
+              );
+              const cls = "flex min-h-14 items-center gap-3 px-4 py-2.5";
+              return f.href
+                ? <a key={f.label} href={f.href} target={f.external ? "_blank" : undefined} rel={f.external ? "noreferrer" : undefined} className={cn(cls, "active:bg-muted/70")}>{body}</a>
+                : <div key={f.label} className={cls}>{body}</div>;
+            })}
+          </dl>
+        )}
+      </section>
+      {actions && <div className="grid grid-cols-2 gap-2 [&>*]:w-full">{actions}</div>}
+      {aside}
+    </div>
+  );
+}

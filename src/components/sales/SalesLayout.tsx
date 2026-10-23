@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Home, Users, UserCheck, CalendarClock, ClipboardList, Trophy, MoreHorizontal } from "lucide-react";
+import { Home, Users, CalendarClock, ClipboardList, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
@@ -9,56 +9,69 @@ import { useKeepPushRegistered } from "@/hooks/usePushNotifications";
 import { SalesQuickAdd } from "@/components/sales/SalesQuickAdd";
 import { ViewAsBanner } from "@/components/sales/ViewAsSwitcher";
 import { AppDestroyedGate } from "@/components/sales/challenge/AppDestroyedGate";
+import { salesFollowupsApi } from "@/lib/api/sales";
+import { isPhoneTab } from "@/components/phone/PhoneKit";
 
 /**
- * Mobile bottom-tab navigation for the sales module (spec §5).
+ * The phone app's tabs (Diamond Fencing's design): five, so every label fits — Home, Leads,
+ * Follow-Ups, Tasks, More. Clients, Challenges, Meetings and the rest are under More. The open
+ * tab's icon sits in a tinted pill; Follow-Ups carries how many are due today or overdue.
  *
- * Desktop keeps the application's existing sidebar — the tabs render only
- * below the app's 768px mobile breakpoint, so the desktop UI is untouched.
- * Calls are deliberately NOT a tab: logging a call belongs inside the lead
- * and follow-up workflow, and is reachable from the quick-add button.
+ * Shown on the main screens only: an opened lead, meeting or challenge has its back arrow
+ * instead. Desktop keeps the sidebar — the tabs render only below the 768px breakpoint.
  */
 const TABS = [
-  { label: "Home",       to: "/sales",            icon: Home,          permission: "sales.dashboard.view" },
-  { label: "Leads",      to: "/sales/leads",      icon: Users,         permission: "sales.leads.view" },
-  // Converted leads. Same permission as Leads because it is the same records —
-  // anyone who can see the pipeline can see who came out of it.
-  { label: "Clients",    to: "/sales/clients",    icon: UserCheck,     permission: "sales.leads.view" },
-  { label: "Follow-Ups", to: "/sales/followups",  icon: CalendarClock, permission: "sales.followups.view" },
-  { label: "Tasks",      to: "/sales/tasks",      icon: ClipboardList, permission: "sales.tasks.view" },
-  { label: "Challenges", to: "/sales/challenges", icon: Trophy,        permission: "sales.challenges.view" },
-  { label: "More",       to: "/sales/more",       icon: MoreHorizontal, permission: null },
+  { label: "Home",       to: "/sales",           icon: Home,           permission: "sales.dashboard.view" },
+  { label: "Leads",      to: "/sales/leads",     icon: Users,          permission: "sales.leads.view" },
+  { label: "Follow-Ups", to: "/sales/followups", icon: CalendarClock,  permission: "sales.followups.view" },
+  { label: "Tasks",      to: "/sales/tasks",     icon: ClipboardList,  permission: "sales.tasks.view" },
+  { label: "More",       to: "/sales/more",      icon: MoreHorizontal, permission: null },
 ] as const;
 
 export function SalesBottomTabs() {
   const { pathname } = useLocation();
   const { can } = useSalesAccess();
+  const [due, setDue] = useState(0);
+  const canFollowups = can("sales.followups.view");
+
+  useEffect(() => {
+    if (!canFollowups) return;
+    let live = true;
+    salesFollowupsApi.list("today")
+      .then((r) => { if (live) setDue((r.counts?.today ?? 0) + (r.counts?.overdue ?? 0)); })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, [pathname, canFollowups]);
 
   const visible = TABS.filter((t) => t.permission === null || can(t.permission));
-  if (visible.length <= 1) return null;
+  if (visible.length <= 1 || !isPhoneTab(pathname)) return null;
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 backdrop-blur md:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      className="fixed inset-x-0 bottom-0 z-40 border-t bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
       aria-label="Sales navigation"
     >
-      <ul className="grid" style={{ gridTemplateColumns: `repeat(${visible.length}, minmax(0, 1fr))` }}>
+      <ul className="mx-auto grid max-w-2xl" style={{ gridTemplateColumns: `repeat(${visible.length}, minmax(0, 1fr))` }}>
         {visible.map((tab) => {
           // "/sales" must only match exactly, or every sales route lights it up.
           const active = tab.to === "/sales" ? pathname === "/sales" : pathname.startsWith(tab.to);
+          const badge = tab.to === "/sales/followups" ? due : 0;
           return (
             <li key={tab.to}>
               <Link
                 to={tab.to}
                 aria-current={active ? "page" : undefined}
-                className={cn(
-                  // 56px tall keeps the touch target comfortably above the 44px minimum
-                  "flex h-14 flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors",
-                  active ? "text-primary" : "text-muted-foreground hover:text-foreground",
-                )}
+                className={cn("flex min-h-16 flex-col items-center justify-center gap-1 text-xs",
+                  active ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}
               >
-                <tab.icon className={cn("h-5 w-5", active && "stroke-[2.5]")} />
+                <span className={cn("relative flex h-8 w-14 items-center justify-center rounded-full", active && "bg-primary/15 text-primary")}>
+                  <tab.icon className="h-6 w-6" />
+                  {badge > 0 && (
+                    <span className="absolute -right-0.5 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[11px] font-bold text-white">
+                      {badge > 99 ? "99+" : badge}
+                    </span>
+                  )}
+                </span>
                 <span className="w-full truncate px-0.5 text-center leading-none">{tab.label}</span>
               </Link>
             </li>
@@ -85,6 +98,8 @@ export function SalesLayout({
 }) {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const tab = isPhoneTab(pathname);
   const { me, can, loading, lockout } = useSalesAccess();
 
   // Poll for follow-ups falling due, meetings starting and challenge deadlines.
@@ -106,12 +121,12 @@ export function SalesLayout({
     <div
       className="space-y-5"
       /*
-       * Clears the bottom tab bar (3.5rem) AND the quick-add button floating
-       * above it (its top edge sits 8rem up), plus a gap. Anything less and the
+       * Clears the bottom tab bar (4rem, main screens only) AND the Add button
+       * floating above it, plus a gap. Anything less and the
        * last control on a page — the Post button under a comment box, usually —
        * ends up underneath a button that does something else entirely.
        */
-      style={isMobile ? { paddingBottom: "calc(9.5rem + env(safe-area-inset-bottom))" } : undefined}
+      style={isMobile ? { paddingBottom: `calc(${tab ? "10rem" : "6rem"} + env(safe-area-inset-bottom))` } : undefined}
     >
       {/*
         Whose figures these are, said on every screen. Forgetting you are

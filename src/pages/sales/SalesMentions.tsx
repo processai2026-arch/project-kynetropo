@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { formatDateTime } from "@/components/sales/SalesBits";
 import type { SalesMention } from "@/types/sales";
 import { cn } from "@/lib/utils";
+import { Avatar, Empty, List, Loading, Pill, Row, shortDate, usePhoneApp } from "@/components/phone/PhoneKit";
 
 /**
  * Every time a colleague named you in a comment.
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils";
  */
 export default function SalesMentions() {
   const navigate = useNavigate();
+  const phone = usePhoneApp();
   const [items, setItems] = useState<SalesMention[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +62,32 @@ export default function SalesMentions() {
   }, []);
 
   useEffect(load, [load]);
+
+  // The phone app (Diamond Fencing's phone design): each mention a chat row — who, where,
+  // what they wrote — tap to go there.
+  if (phone) {
+    return (
+      <SalesLayout>
+        <div className="space-y-3">
+          <PageHeader title="Mentioned" subtitle="Where someone named you" />
+          {loading ? <Loading /> : error ? (
+            <Empty icon={AtSign} text={error} action={<Button variant="outline" onClick={load}>Try again</Button>} />
+          ) : items.length === 0 ? (
+            <Empty icon={AtSign} text="Nobody has mentioned you yet. Type @ in any comment to call someone in." />
+          ) : (
+            <List>
+              {items.map((m) => (
+                <Row key={m.comment_id} onClick={() => navigate(m.url)} avatar={<Avatar name={m.author_name} />}
+                  title={<>{m.author_name} <span className="font-normal text-muted-foreground">· {m.where}</span></>}
+                  meta={shortDate(m.created_at)} sub={m.body}
+                  end={unreadOnArrival.current.has(m.comment_id) ? <Pill tone="primary">New</Pill> : null} />
+              ))}
+            </List>
+          )}
+        </div>
+      </SalesLayout>
+    );
+  }
 
   return (
     <SalesLayout>

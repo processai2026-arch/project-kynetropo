@@ -21,6 +21,8 @@ import { FollowupCompleteDialog, OutcomeBadge } from "@/components/sales/Followu
 import { TemperatureBadge, formatDate, formatTime, humanise, subjectLabel, subjectPath } from "@/components/sales/SalesBits";
 import type { FollowupBucket, SalesFollowup } from "@/types/sales";
 import { cn } from "@/lib/utils";
+import { Avatar, Chips, Empty, HeroAvatar, HeroBar, List, Loading, Row, usePhoneApp } from "@/components/phone/PhoneKit";
+import { TempPill, dueAt } from "./phone/SalesPhoneHome";
 
 const BUCKETS: { key: FollowupBucket; label: string }[] = [
   { key: "today", label: "Today" },
@@ -46,6 +48,7 @@ function belongsToBucket(f: SalesFollowup, bucket: FollowupBucket): boolean {
 export default function SalesFollowUps() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { can, me } = useSalesAccess();
+  const phone = usePhoneApp();
 
   const initial = (searchParams.get("bucket") as FollowupBucket) ?? "today";
   const [bucket, setBucket] = useState<FollowupBucket>(
@@ -106,6 +109,119 @@ export default function SalesFollowUps() {
     next.delete("followup");
     setSearchParams(next, { replace: true });
   }, [deepLink, items, searchParams, setSearchParams]);
+
+  const dialogs = (
+    <>
+      <FollowupDetailDialog
+        followup={viewing}
+        onEdit={phone && can("sales.followups.create") && viewing && canEditFollowup(viewing, me ?? null)
+          ? (f) => { setViewing(null); setEditing(f); } : undefined}
+        onClose={() => {
+          setViewing(null);
+          // A comment may have been added from inside it.
+          void load();
+        }}
+      />
+
+      <CommentThreadDialog
+        open={thread !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setThread(null);
+            void load();
+          }
+        }}
+        title={thread ? `Follow-up — ${subjectLabel(thread)}` : "Comments"}
+        entityType="followup"
+        entityId={thread?.id ?? 0}
+      />
+
+      <FollowupEditDialog
+        followup={editing}
+        onClose={() => setEditing(null)}
+        onSaved={(updated) => {
+          // Patch in place when the row still belongs in this bucket; otherwise
+          // reload, because a reschedule can move it to Today, Overdue or Upcoming.
+          if (updated && belongsToBucket(updated, bucket)) {
+            setItems((prev) => prev.map((f) => (f.id === updated.id ? { ...f, ...updated } : f)));
+          } else {
+            void load();
+          }
+        }}
+      />
+
+      <LogCallDialog
+        open={callingOn !== null}
+        lead={
+          callingOn
+            ? { id: callingOn.lead_id, name: callingOn.lead_name, company: callingOn.lead_company }
+            : null
+        }
+        onClose={() => setCallingOn(null)}
+        onLogged={() => void load()}
+      />
+
+      <FollowupCompleteDialog
+        followup={completing}
+        onClose={() => setCompleting(null)}
+        onCompleted={() => void load()}
+      />
+    </>
+  );
+
+  // The phone app (Diamond Fencing's phone design): the buckets as chips, the follow-ups as
+  // chat rows. Tap one for the whole record; the round buttons log the call or complete it.
+  if (phone) {
+    return (
+      <SalesLayout>
+        <div className="space-y-3">
+          <HeroBar eyebrow={`${counts.today} today · ${counts.overdue} overdue`} title="Follow-Ups"
+            right={<HeroAvatar name={me?.name} to="/sales/more" />} />
+          <Chips<FollowupBucket> value={bucket} onChange={setBucket}
+            options={BUCKETS.map((b) => ({ value: b.key, label: b.label, count: counts[b.key] || undefined }))} />
+          {loading ? <Loading /> : error ? (
+            <Empty icon={CalendarClock} text={error} action={<Button variant="outline" onClick={() => void load()}>Try again</Button>} />
+          ) : items.length === 0 ? (
+            <Empty icon={CalendarClock} text={bucket === "overdue" ? "Nothing overdue — well done." : `No ${bucket} follow-ups.`} />
+          ) : (
+            <List>
+              {items.map((f) => {
+                const name = subjectLabel(f);
+                const pending = f.status === "pending";
+                return (
+                  <div key={f.id} className="flex items-center">
+                    <div className="min-w-0 flex-1">
+                      <Row onClick={() => setViewing(f)} avatar={<Avatar name={name} />} title={name}
+                        meta={<span className={cn(bucket === "overdue" && "font-medium text-destructive")}>{dueAt(f)}</span>}
+                        sub={f.status === "completed" ? (f.outcome_notes || humanise(f.outcome) || "Completed") : (f.purpose || f.lead_contact_person || "")}
+                        end={f.status === "completed" ? <OutcomeBadge value={f.outcome} /> : <TempPill value={f.lead_temperature} />} />
+                    </div>
+                    {pending && (
+                      <div className="mr-3 flex shrink-0 gap-2">
+                        {can("sales.calls.create") && f.lead_id && (
+                          <button type="button" aria-label={`Log a call with ${name}`} onClick={() => setCallingOn(f)}
+                            className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary active:bg-primary/20">
+                            <Phone className="h-5 w-5" />
+                          </button>
+                        )}
+                        {can("sales.followups.complete") && (
+                          <button type="button" aria-label={`Complete the follow-up with ${name}`} onClick={() => setCompleting(f)}
+                            className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-700 active:bg-emerald-500/20">
+                            <CheckCircle2 className="h-5 w-5" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </List>
+          )}
+          {dialogs}
+        </div>
+      </SalesLayout>
+    );
+  }
 
   return (
     <SalesLayout>
@@ -296,58 +412,7 @@ export default function SalesFollowUps() {
         </div>
       )}
 
-      <FollowupDetailDialog
-        followup={viewing}
-        onClose={() => {
-          setViewing(null);
-          // A comment may have been added from inside it.
-          void load();
-        }}
-      />
-
-      <CommentThreadDialog
-        open={thread !== null}
-        onOpenChange={(o) => {
-          if (!o) {
-            setThread(null);
-            void load();
-          }
-        }}
-        title={thread ? `Follow-up — ${subjectLabel(thread)}` : "Comments"}
-        entityType="followup"
-        entityId={thread?.id ?? 0}
-      />
-
-      <FollowupEditDialog
-        followup={editing}
-        onClose={() => setEditing(null)}
-        onSaved={(updated) => {
-          // Patch in place when the row still belongs in this bucket; otherwise
-          // reload, because a reschedule can move it to Today, Overdue or Upcoming.
-          if (updated && belongsToBucket(updated, bucket)) {
-            setItems((prev) => prev.map((f) => (f.id === updated.id ? { ...f, ...updated } : f)));
-          } else {
-            void load();
-          }
-        }}
-      />
-
-      <LogCallDialog
-        open={callingOn !== null}
-        lead={
-          callingOn
-            ? { id: callingOn.lead_id, name: callingOn.lead_name, company: callingOn.lead_company }
-            : null
-        }
-        onClose={() => setCallingOn(null)}
-        onLogged={() => void load()}
-      />
-
-      <FollowupCompleteDialog
-        followup={completing}
-        onClose={() => setCompleting(null)}
-        onCompleted={() => void load()}
-      />
+      {dialogs}
       </RecordListPage>
     </SalesLayout>
   );

@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { formatDate } from "@/components/sales/SalesBits";
 import type { OpsClient } from "@/types/ops";
 import { cn } from "@/lib/utils";
+import { Avatar, Block, Chips, Empty, List, Loading, Pill, Row, SearchBox, usePhoneApp, type Tone } from "@/components/phone/PhoneKit";
 
 /**
  * Clients — the customer records from the admin dashboard, read-only.
@@ -140,6 +141,7 @@ function ClientCard({ client }: { client: OpsClient }) {
 }
 
 export default function SalesClients() {
+  const phone = usePhoneApp();
   const list = useClientList<OpsClient>(
     async () => (await opsClientsApi.list()).data ?? [],
     {
@@ -169,6 +171,47 @@ export default function SalesClients() {
       ),
     [list.allRows],
   );
+
+
+  // The phone app (Diamond Fencing's phone design): round search, stages as chips, the totals,
+  // then the clients as chat rows — tap one to open its sales record.
+  if (phone) {
+    const PAY_TONE: Record<string, Tone> = { paid: "success", partial: "warning", pending: "muted", overdue: "danger" };
+    return (
+      <SalesLayout>
+        <div className="space-y-3">
+          <PageHeader title="Clients" subtitle="Read-only — edited in the admin dashboard" />
+          <SearchBox value={list.search} onChange={list.setSearch} placeholder="Search name, phone, e-mail" />
+          {stages.length > 1 && (
+            <Chips value={list.filters.stage ?? ""} onChange={(v) => list.setFilter("stage", v)}
+              options={[{ value: "", label: "All" }, ...stages.map((st) => ({ value: st, label: st }))]} />
+          )}
+          {list.initialLoading ? <Loading /> : list.allRows.length === 0 ? (
+            <Empty icon={Building2} text={list.isFiltered ? "No clients match these filters." : "No clients yet."} />
+          ) : (
+            <>
+              <Block>
+                <div className="grid grid-cols-3 gap-3 p-4">
+                  <Money label="Amount" value={totals.quoted} />
+                  <Money label="Paid" value={totals.received} tone="text-emerald-700" />
+                  <Money label="Balance" value={totals.balance} tone={totals.balance > 0 ? "text-red-600" : undefined} />
+                </div>
+              </Block>
+              <List title={`${list.allRows.length} client${list.allRows.length === 1 ? "" : "s"}`}>
+                {list.allRows.map((c) => (
+                  <Row key={c.id} to={c.sales_lead_id ? `/sales/leads/${c.sales_lead_id}` : undefined}
+                    avatar={<Avatar name={c.name} />} title={c.name}
+                    meta={c.balance_due ? <span className={cn(c.balance_due > 0 && "text-red-600")}>{inr(c.balance_due)} due</span> : undefined}
+                    sub={[c.company || c.project_name, c.stage].filter(Boolean).join(" · ")}
+                    end={c.payment_status ? <Pill tone={PAY_TONE[c.payment_status] ?? "muted"}>{c.payment_status}</Pill> : null} />
+                ))}
+              </List>
+            </>
+          )}
+        </div>
+      </SalesLayout>
+    );
+  }
 
   return (
     <SalesLayout>

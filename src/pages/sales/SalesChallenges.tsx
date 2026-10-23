@@ -20,6 +20,7 @@ import { ChallengeStatusBadge, formatDateTime } from "@/components/sales/SalesBi
 import { ChallengeTimer } from "@/components/sales/ChallengeTimer";
 import type { ChallengeCounts, ChallengeStatus, SalesChallenge } from "@/types/sales";
 import { cn } from "@/lib/utils";
+import { Avatar, Chips, Empty, List, Loading, Row, shortDate, usePhoneApp } from "@/components/phone/PhoneKit";
 
 const FILTERS: { key: ChallengeStatus | ""; label: string }[] = [
   { key: "available", label: "Available" },
@@ -35,6 +36,7 @@ const EMPTY_COUNTS: ChallengeCounts = {
 
 export default function SalesChallenges() {
   const { can } = useSalesAccess();
+  const phone = usePhoneApp();
   const [filter, setFilter] = useState<ChallengeStatus | "">("available");
   const [items, setItems] = useState<SalesChallenge[]>([]);
   const [counts, setCounts] = useState<ChallengeCounts>(EMPTY_COUNTS);
@@ -101,6 +103,146 @@ export default function SalesChallenges() {
       setSaving(false);
     }
   };
+
+  const createDialog = (
+    <>
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>New Challenge</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="ch-title">Title *</Label>
+              <Input
+                id="ch-title"
+                value={form.title}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                placeholder="Get requirement confirmation from ABC Technologies"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ch-desc">Description</Label>
+              <Textarea
+                id="ch-desc"
+                rows={3}
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="ch-deadline">Deadline *</Label>
+                <Input
+                  id="ch-deadline"
+                  type="datetime-local"
+                  value={form.deadline}
+                  onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Priority</Label>
+                <Select value={form.priority} onValueChange={(v) => setForm((f) => ({ ...f, priority: v }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Challenging who?</Label>
+              {people.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Loading people…</p>
+              ) : (
+                <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl border p-2">
+                  {people.map((p) => (
+                    <label
+                      key={p.user_id}
+                      className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted"
+                    >
+                      <Checkbox
+                        checked={assignees.includes(p.user_id)}
+                        onCheckedChange={() =>
+                          setAssignees((a) =>
+                            a.includes(p.user_id) ? a.filter((x) => x !== p.user_id) : [...a, p.user_id],
+                          )
+                        }
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm">{p.name}</span>
+                        {/* Offering a challenge to the wrong namesake means the
+                            person it was meant for never sees it at all. */}
+                        {namesakeHint(p) && (
+                          <span className="block text-[11px] text-muted-foreground">{namesakeHint(p)}</span>
+                        )}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                {assignees.length === 0
+                  ? "Nobody selected — offered to the whole sales team; the first to accept takes it."
+                  : `Offered to ${assignees.length} ${assignees.length === 1 ? "person" : "people"}; the first to accept takes it.`}
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The deadline is validated and enforced against server time.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving…" : "Create"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+
+  // The phone app (Diamond Fencing's phone design): the lists as chips, each challenge a chat
+  // row with its clock — tap one to accept it or see it through.
+  if (phone) {
+    return (
+      <SalesLayout>
+        <div className="space-y-3">
+          <PageHeader title="Challenges" action={can("sales.challenges.create") ? (
+            <Button size="sm" className="h-9" onClick={() => setFormOpen(true)}><Plus className="mr-1.5 h-4 w-4" />New</Button>
+          ) : undefined} />
+          <Chips value={filter} onChange={(v) => setFilter(v as ChallengeStatus | "")}
+            options={FILTERS.map((f) => ({ value: f.key, label: f.label, count: f.key ? counts[f.key as keyof ChallengeCounts] || undefined : undefined }))} />
+          {loading ? <Loading /> : error ? (
+            <Empty icon={Trophy} text={error} action={<Button variant="outline" onClick={() => void load()}>Try again</Button>} />
+          ) : items.length === 0 ? (
+            <Empty icon={Trophy} text="No challenges in this list." />
+          ) : (
+            <List>
+              {items.map((c) => (
+                <Row key={c.id} to={`/sales/challenges/${c.id}`}
+                  avatar={<Avatar icon={Trophy} tone={c.status === "completed" ? "success" : c.status === "expired" ? "danger" : c.is_actionable ? "warning" : "muted"} />}
+                  title={c.title}
+                  meta={c.is_actionable ? <ChallengeTimer secondsRemaining={c.seconds_remaining} seedKey={c.server_time} /> : shortDate(c.deadline)}
+                  sub={c.accepted_by_name ? `Taken by ${c.accepted_by_name}` : c.status === "available" ? (c.can_accept ? "Yours to take" : c.i_created_it ? "You set this one" : "Offered to someone else") : (c.lead_company || c.lead_name || "")}
+                  end={<ChallengeStatusBadge value={c.status} />} />
+              ))}
+            </List>
+          )}
+          {createDialog}
+        </div>
+      </SalesLayout>
+    );
+  }
 
   return (
     <SalesLayout>
@@ -215,108 +357,7 @@ export default function SalesChallenges() {
         </div>
       )}
 
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>New Challenge</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="ch-title">Title *</Label>
-              <Input
-                id="ch-title"
-                value={form.title}
-                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="Get requirement confirmation from ABC Technologies"
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="ch-desc">Description</Label>
-              <Textarea
-                id="ch-desc"
-                rows={3}
-                value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="ch-deadline">Deadline *</Label>
-                <Input
-                  id="ch-deadline"
-                  type="datetime-local"
-                  value={form.deadline}
-                  onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))}
-                  required
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Priority</Label>
-                <Select value={form.priority} onValueChange={(v) => setForm((f) => ({ ...f, priority: v }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="normal">Normal</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Challenging who?</Label>
-              {people.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Loading people…</p>
-              ) : (
-                <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl border p-2">
-                  {people.map((p) => (
-                    <label
-                      key={p.user_id}
-                      className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted"
-                    >
-                      <Checkbox
-                        checked={assignees.includes(p.user_id)}
-                        onCheckedChange={() =>
-                          setAssignees((a) =>
-                            a.includes(p.user_id) ? a.filter((x) => x !== p.user_id) : [...a, p.user_id],
-                          )
-                        }
-                      />
-                      <span className="min-w-0">
-                        <span className="block text-sm">{p.name}</span>
-                        {/* Offering a challenge to the wrong namesake means the
-                            person it was meant for never sees it at all. */}
-                        {namesakeHint(p) && (
-                          <span className="block text-[11px] text-muted-foreground">{namesakeHint(p)}</span>
-                        )}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
-              <p className="text-[11px] text-muted-foreground">
-                {assignees.length === 0
-                  ? "Nobody selected — offered to the whole sales team; the first to accept takes it."
-                  : `Offered to ${assignees.length} ${assignees.length === 1 ? "person" : "people"}; the first to accept takes it.`}
-              </p>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              The deadline is validated and enforced against server time.
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Saving…" : "Create"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {createDialog}
       </RecordListPage>
     </SalesLayout>
   );

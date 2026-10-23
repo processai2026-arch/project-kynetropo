@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff } from "lucide-react";
+import { Download, Eye, EyeOff, Share } from "lucide-react";
+import { isInstalledApp, useInstallApp } from "@/hooks/useInstallApp";
 import { toast } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
 
@@ -16,6 +17,9 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  // Back to where they were going (the installed app opens on /sales); on a phone with
+  // nowhere in particular, the Sales app — the phone's app — rather than the ERP dashboard.
+  const from = (useLocation().state as { from?: string } | null)?.from;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,8 +27,8 @@ const Login = () => {
 
     const success = await login(email, password);
     if (success) {
-      toast.success("Welcome back, Admin!");
-      navigate("/");
+      toast.success("Welcome back!");
+      navigate(from && from !== "/login" ? from : window.matchMedia("(max-width: 767px)").matches ? "/sales" : "/", { replace: true });
     } else {
       toast.error("Invalid email, password, or unauthorized access");
     }
@@ -34,7 +38,8 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-primary/5 p-4">
-      <Card className="w-full max-w-md shadow-2xl">
+      <div className="w-full max-w-md">
+      <Card className="w-full shadow-2xl">
         <CardHeader className="text-center space-y-4 pb-2">
           <Link to="/" className="mx-auto inline-flex items-center gap-2 text-2xl font-bold tracking-tight">
             <BrandLogo className="h-10 max-w-[210px]" fallbackClassName="text-2xl" />
@@ -91,8 +96,33 @@ const Login = () => {
           </p>
         </CardContent>
       </Card>
+      <InstallCard />
+      </div>
     </div>
   );
 };
+
+/**
+ * Install puts Kynetropo on the home screen as an app — the same card as Diamond Fencing's
+ * sign-in. Chrome and Edge offer it; on an iPhone it is Share → Add to Home Screen.
+ */
+function InstallCard() {
+  const { canInstall, install } = useInstallApp();
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (isInstalledApp()) return null;
+  if (canInstall) {
+    return (
+      <Button type="button" variant="outline" className="mt-4 w-full bg-card" onClick={() => void install()}>
+        <Download className="h-4 w-4" /> Install Kynetropo on this device
+      </Button>
+    );
+  }
+  if (!ios) return null;
+  return (
+    <p className="mt-4 flex items-center justify-center gap-1.5 rounded-lg border bg-card p-3 text-center text-xs text-muted-foreground">
+      To install Kynetropo: tap <Share className="h-3.5 w-3.5" aria-label="Share" /> then “Add to Home Screen”
+    </p>
+  );
+}
 
 export default Login;

@@ -22,6 +22,8 @@ import { opsClientsApi } from "@/lib/api/ops";
 import type { OpsClient } from "@/types/ops";
 import type { SalesLead } from "@/types/sales";
 import { cn } from "@/lib/utils";
+import { useLocation } from "react-router-dom";
+import { isPhoneTab } from "@/components/phone/PhoneKit";
 
 /**
  * The quick-add surface for the mobile sales app: one button that reaches every
@@ -280,6 +282,7 @@ function LeadPicker({
 
 export function SalesQuickAdd({ onCreated }: { onCreated?: () => void }) {
   const { can } = useSalesAccess();
+  const { pathname } = useLocation();
   const [action, setAction] = useState<Action>(null);
   const [saving, setSaving] = useState(false);
   const [lead, setLead] = useState<SalesLead | null>(null);
@@ -334,19 +337,20 @@ export function SalesQuickAdd({ onCreated }: { onCreated?: () => void }) {
     { key: "challenge" as const, label: "New Challenge", icon: Trophy, show: can("sales.challenges.create") },
   ].filter((i) => i.show);
 
-  if (items.length === 0) return null;
+  // Only on the main screens, as in Diamond Fencing: a record or an inner list has its own buttons.
+  if (items.length === 0 || !isPhoneTab(pathname)) return null;
 
   return (
     <>
-      {/* Sits above the bottom tabs, clear of the home indicator. */}
+      {/* The phone app's one big button (Diamond Fencing's), above the tabs. */}
       <button
         type="button"
         aria-label="Quick add"
         onClick={() => setAction("menu")}
-        className="fixed right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 md:hidden"
-        style={{ bottom: "calc(4.5rem + env(safe-area-inset-bottom))" }}
+        className="fixed right-4 z-40 flex h-14 items-center gap-2 rounded-2xl bg-primary px-5 text-base font-semibold text-primary-foreground shadow-lg transition-transform active:scale-95 md:hidden"
+        style={{ bottom: "calc(5rem + env(safe-area-inset-bottom))" }}
       >
-        <Plus className="h-6 w-6" />
+        <Plus className="h-6 w-6" /> Add
       </button>
 
       {/* Action menu */}

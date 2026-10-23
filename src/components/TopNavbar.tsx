@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
-  Bell, ChevronDown, LayoutGrid, LogOut, Maximize2, MessageSquare,
+  Bell, ChevronDown, Download, LayoutGrid, LogOut, Maximize2, MessageSquare,
   Minimize2, RefreshCcw, Settings, ShoppingCart,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -18,6 +18,8 @@ import { ACCENTS, MODULE } from "@/lib/accents";
 import { WorkspaceTabs } from "@/components/WorkspaceTabs";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { useInstallApp } from "@/hooks/useInstallApp";
 
 interface ApiNotification {
   id: string;
@@ -58,6 +60,7 @@ function timeAgo(dateString: string) {
 export function TopNavbar() {
   const { adminEmail, userName, role, logout } = useAuth();
   const { setModulesDialogOpen } = useDashboardLayout();
+  const { canInstall, install } = useInstallApp();
   const [notifications, setNotifications] = useState<ApiNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -157,6 +160,23 @@ export function TopNavbar() {
           <div className="sm:hidden">
             <GlobalSearch compact />
           </div>
+
+          {/* Install, while the browser offers it (Diamond Fencing's header button). */}
+          {canInstall && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => void install().then((ok) => { if (ok) toast.success("Kynetropo is installed — find it in the Start menu or on the home screen"); })}
+                  aria-label="Install Kynetropo on this device"
+                  className="rounded-lg p-2 transition-colors hover:bg-muted"
+                >
+                  <Download className="h-5 w-5 text-muted-foreground" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Install Kynetropo on this device</TooltipContent>
+            </Tooltip>
+          )}
 
           <Popover>
             <PopoverTrigger asChild>
