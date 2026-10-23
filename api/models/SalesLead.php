@@ -154,8 +154,11 @@ class SalesLead
 
     public static function create(array $data, ?int $createdBy): int
     {
+        // Numbered oldest to newest like clients and projects: the next number
+        // after the highest in use (LD-0042 when LD-0041 is the newest).
         $id = Database::insert('sales_leads', [
             'tenant_id'      => Database::tenantId(),
+            'lead_code'      => OpsCodes::next(Database::tenantId(), OpsCodes::LEAD),
             'name'           => $data['name'],
             'company'        => (string)($data['company'] ?? ''),
             'contact_person' => (string)($data['contact_person'] ?? ''),
@@ -174,13 +177,87 @@ class SalesLead
             'created_by'     => $createdBy,
         ]);
 
-        // Human-readable code, derived from the row id so it is always unique.
-        Database::execute(
-            'UPDATE sales_leads SET lead_code = ? WHERE id = ? AND tenant_id = ?',
-            ['LD-' . str_pad((string)$id, 5, '0', STR_PAD_LEFT), $id, Database::tenantId()]
-        );
-
         return $id;
+    }
+
+    /**
+     * A customer keyed in on the CRM side, recorded as the lead it once was:
+     * converted, linked to the customer, owned by the person handling it. Every
+     * customer started as a lead, so Leads holds the whole pipeline.
+     */
+    public static function recordCustomer(int $clientId, array $client, ?array $actor): int
+    {
+        [$source, $chapter] = self::splitSource((string)($client['source'] ?? ''));
+        $name = (string)$client['name'];
+        $id = self::create([
+            'name'             => $name,
+            'company'          => (string)($client['company'] ?? ''),
+            'contact_person'   => $name,
+            'phone'            => (string)($client['phone'] ?? ''),
+            'email'            => (string)($client['email'] ?? ''),
+            'source'           => $source,
+            'source_chapter'   => $chapter,
+            'assigned_to'      => self::userNamed((string)($client['owner'] ?? '')),
+            'status'           => 'converted',
+            'temperature'      => 'hot',
+            'acquired_on'      => date('Y-m-d'),
+            'current_software' => (string)($client['current_software'] ?? ''),
+            'switch_reason'    => ($client['switch_reason'] ?? '') !== '' ? $client['switch_reason'] : null,
+        ], isset($actor['user_id']) ? (int)$actor['user_id'] : null);
+
+        // Not converted_client_created: undoing this lead must never delete the customer.
+        Database::execute(
+            'UPDATE sales_leads SET converted_client_id = ?, converted_at = NOW() WHERE id = ? AND tenant_id = ?',
+            [$clientId, $id, Database::tenantId()]
+        );
+        SalesActivity::log(
+            $id, 'lead_converted', 'Customer added in the CRM', $actor,
+            'Recorded as a converted lead for customer ' . ($client['client_code'] ?? $name)
+        );
+        return $id;
+    }
+
+    /** A free-text source as a lead's: "YES Meet Kanchipuram" is YES, chapter Kanchipuram. */
+    public static function splitSource(string $raw): array
+    {
+        $raw = trim($raw);
+        if (preg_match('/^yes\b(?:\s+meet\b)?[\s:\-–—\/]*(.*)$/iu', $raw, $m)) {
+            return ['yes', mb_substr(trim($m[1]), 0, 120)];
+        }
+        return [mb_substr($raw, 0, 60), ''];
+    }
+
+    /**
+     * The sales user a customer's "handled by" names: the same name, else the
+     * same first word ("Karthik" → "karthi s"); among namesakes, the one who
+     * already holds leads. Null when nobody matches.
+     */
+    private static function userNamed(string $owner): ?int
+    {
+        $owner = mb_strtolower(trim($owner));
+        if ($owner === '') {
+            return null;
+        }
+        $users = Database::fetchAll(
+            "SELECT u.user_id, u.name,
+                    (SELECT COUNT(*) FROM sales_leads l WHERE l.tenant_id = u.tenant_id AND l.assigned_to = u.user_id) AS leads
+               FROM users u
+              WHERE u.tenant_id = ? AND u.user_type = 'admin' AND u.is_active = 1
+              ORDER BY leads DESC, u.user_id",
+            [Database::tenantId()]
+        );
+        $first = static fn (string $s): string => (string)preg_split('/\s+/', mb_strtolower(trim($s)))[0];
+        foreach ($users as $u) {
+            if (mb_strtolower(trim((string)$u['name'])) === $owner) return (int)$u['user_id'];
+        }
+        foreach ($users as $u) {
+            $a = $first((string)$u['name']);
+            $b = $first($owner);
+            if (mb_strlen($a) >= 4 && mb_strlen($b) >= 4 && (str_starts_with($a, $b) || str_starts_with($b, $a))) {
+                return (int)$u['user_id'];
+            }
+        }
+        return null;
     }
 
     public static function update(int $id, array $data): void

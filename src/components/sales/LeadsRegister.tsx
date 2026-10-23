@@ -123,8 +123,12 @@ export function LeadsRegister() {
 
   const list = useClientList<SalesLead>(() => loadAllLeads(owner), {
     searchText: (l) => [l.lead_code, l.name, l.company, l.contact_person, l.phone, l.email, l.source, l.source_chapter],
+    // Newest on top: lead codes run oldest to newest (LD-0001 is the first lead), so the
+    // list opens on the highest code; any column header re-sorts it.
+    defaultSort: "code",
+    defaultDir: "desc",
     sorts: {
-      code: (l) => l.id,
+      code: (l) => Number((l.lead_code ?? "").replace(/\D/g, "")) || l.id,
       name: (l) => (l.company || l.name).toLowerCase(),
       source: (l) => sourceLabel(l.source, l.source_chapter).toLowerCase(),
       temperature: (l) => TEMP_RANK[l.temperature],

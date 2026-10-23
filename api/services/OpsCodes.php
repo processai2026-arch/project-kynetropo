@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * Client and project IDs shown in the CRM: CL-0001, PRJ-0001, …
+ * Client, project and lead IDs shown in the CRM: CL-0001, PRJ-0001, LD-0001, …
  *
  * A new record gets the next number after the highest one already used, so the
  * numbers run oldest to newest (database/125_add_client_project_codes.sql
@@ -13,6 +13,7 @@ class OpsCodes
 {
     public const CLIENT  = ['table' => 'ops_clients',  'column' => 'client_code',  'prefix' => 'CL-',  'label' => 'Client ID'];
     public const PROJECT = ['table' => 'ops_projects', 'column' => 'project_code', 'prefix' => 'PRJ-', 'label' => 'Project ID'];
+    public const LEAD    = ['table' => 'sales_leads',  'column' => 'lead_code',    'prefix' => 'LD-',  'label' => 'Lead ID'];
 
     private const MAX_LENGTH = 30;
 

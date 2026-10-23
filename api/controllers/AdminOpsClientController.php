@@ -247,6 +247,15 @@ class AdminOpsClientController
         $this->logActivity($tenantId, 'client', $id, 'created', 'Client created', $body['owner'] ?? '');
 
         $row = Database::fetch('SELECT * FROM ops_clients WHERE id = ? LIMIT 1', [$id]);
+
+        // Every customer was a lead first: one keyed in here joins Leads as converted.
+        // Wrapped so a sales module that is missing or failing never stops the client being saved.
+        try {
+            SalesLead::recordCustomer($id, $row, $request->user);
+        } catch (\Throwable $e) {
+            error_log('[OpsClient] could not record client ' . $id . ' as a lead: ' . $e->getMessage());
+        }
+
         Response::success($this->format($row), 'Created', 201);
     }
 
