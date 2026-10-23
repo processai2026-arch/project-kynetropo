@@ -78,6 +78,8 @@ class AdminSalesLeadController
 
         $temperature = $this->validTemperature($request->input('temperature', 'warm'));
         $status      = $this->validStatus($request->input('status', 'new'));
+        $source      = trim((string)$request->input('source', ''));
+        $chapter     = $this->validChapter($source, $request->input('source_chapter'));
         $acquiredOn  = $this->validAcquiredOn($request->input('acquired_on'));
 
         // Only someone who may assign leads can hand one to another user;
@@ -94,7 +96,8 @@ class AdminSalesLeadController
             'contact_person' => trim((string)$request->input('contact_person', '')),
             'phone'          => trim((string)$request->input('phone', '')),
             'email'          => $email,
-            'source'         => trim((string)$request->input('source', '')),
+            'source'         => $source,
+            'source_chapter' => $chapter,
             'assigned_to'    => $assignedTo,
             'status'         => $status,
             'temperature'    => $temperature,
@@ -135,6 +138,15 @@ class AdminSalesLeadController
             if ($request->input($col) !== null) {
                 $data[$col] = $request->input($col);
             }
+        }
+
+        // A YES lead names its chapter; any other source carries none.
+        if ($request->input('source') !== null || $request->input('source_chapter') !== null) {
+            $source = trim((string)$request->input('source', (string)$raw['source']));
+            $data['source'] = $source;
+            $data['source_chapter'] = $this->validChapter(
+                $source, $request->input('source_chapter', $raw['source_chapter'] ?? '')
+            );
         }
 
         if ($request->input('email') !== null) {
@@ -722,6 +734,7 @@ class AdminSalesLeadController
             'phone'          => 'Phone',
             'email'          => 'Email',
             'source'         => 'Source',
+            'source_chapter' => 'YES chapter',
             'status'         => 'Status',
             'temperature'    => 'Temperature',
             'acquired_on'    => 'Client received on',
@@ -774,6 +787,19 @@ class AdminSalesLeadController
             Response::error('Invalid status. Allowed: ' . implode(', ', SalesLead::STATUSES), 422);
         }
         return $value;
+    }
+
+    /** The YES chapter a lead came through: required for a YES lead, blank for any other source. */
+    private function validChapter(string $source, mixed $chapter): string
+    {
+        if (strtolower($source) !== 'yes') {
+            return '';
+        }
+        $chapter = mb_substr(trim((string)$chapter), 0, 120);
+        if ($chapter === '') {
+            Response::error('Which YES chapter did this lead come from?', 422);
+        }
+        return $chapter;
     }
 
     /** Assignment target must be a real, active admin user in this tenant. */

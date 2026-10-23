@@ -1,20 +1,21 @@
 // Headset, not LifeBuoy: the ring-and-spokes life ring reads as a wheel or a
 // target at 20px, which is not "talk to someone".
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  Bell, ChevronDown, Download, LayoutGrid, LogOut, Maximize2, MessageSquare,
-  Minimize2, RefreshCcw, Settings, ShoppingCart,
+  Bell, ChevronDown, LayoutGrid, LogOut, Maximize2, MessageSquare,
+  Minimize2, MonitorDown, RefreshCcw, Settings, ShoppingCart, UserRound,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api/client";
 import { useDashboardLayout } from "@/hooks/useDashboardLayout";
 import { useActiveModule } from "@/hooks/useActiveModule";
 import { sectionIcons } from "@/lib/navigation";
-import { ACCENTS, MODULE } from "@/lib/accents";
+import { usePrefs } from "@/lib/prefs";
 import { WorkspaceTabs } from "@/components/WorkspaceTabs";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,11 @@ const toNotification = (n: RawNotification): ApiNotification => ({
   id: String(n.id), type: n.type, message: n.message, time: n.created_at, read: !!n.is_read, url: n.url, urgent: n.severity === "urgent",
 });
 
+function initialsOf(name: string | null | undefined): string {
+  const parts = (name ?? "").trim().split(/[\s@.]+/).filter(Boolean);
+  return (parts.map((p) => p[0]).join("").slice(0, 2) || "?").toUpperCase();
+}
+
 function timeAgo(dateString: string) {
   const diff = Date.now() - new Date(dateString).getTime();
   const mins = Math.floor(diff / 60000);
@@ -64,6 +70,8 @@ export function TopNavbar() {
   const [notifications, setNotifications] = useState<ApiNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const navigate = useNavigate();
   const path = useLocation().pathname;
   const isSettings = path.startsWith("/settings");
 
@@ -72,7 +80,8 @@ export function TopNavbar() {
   const activeModule = useActiveModule();
   const moduleLabel = activeModule?.label ?? "All Modules";
   const ModuleIcon = sectionIcons[moduleLabel] ?? LayoutGrid;
-  const moduleAccent = ACCENTS[MODULE[moduleLabel] ?? "slate"];
+  // With every module in the sidebar there is nothing to switch, so the header says nothing.
+  const allModules = usePrefs().sidebarAllModules;
 
   // Keep the icon in sync with the browser's fullscreen state — including when
   // the user presses Esc to exit (no click), which still fires the event.
@@ -116,33 +125,22 @@ export function TopNavbar() {
           under 10% so the controls on top keep full contrast. */}
       <div className="flex h-14 items-center justify-between gap-2 bg-gradient-to-r from-primary/[0.09] via-primary/[0.03] to-transparent px-3 md:px-6">
         <div className="flex min-w-0 items-center gap-2 md:gap-3">
-
-          {/*
-            The launcher says which module you are in and opens the picker. It
-            was a bare four-dot grid in the rail: a control that told you nothing
-            about where you were, next to a heading that was the one place that
-            did. Naming it here turns "open the module list" into "switch
-            module", which is what people are actually doing when they click it.
-          */}
-          <button
-            type="button"
-            onClick={() => setModulesDialogOpen(true)}
-            aria-haspopup="dialog"
-            aria-label={`Module: ${moduleLabel}. Switch module`}
-            title="Switch module"
-            className="flex shrink-0 items-center gap-2 rounded-lg py-1 pl-1 pr-2 transition-colors hover:bg-muted"
-          >
-            <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", moduleAccent.tile)}>
-              <ModuleIcon className={cn("h-[18px] w-[18px]", moduleAccent.icon)} />
-            </span>
-            {/* Hidden on the narrowest screens, where the header is already
-                carrying the rail trigger, search and the utilities — the tinted
-                glyph and caret still read as the same control. */}
-            <span className="hidden max-w-[10rem] truncate text-sm font-semibold text-foreground md:block">
-              {moduleLabel}
-            </span>
-            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-          </button>
+          <SidebarTrigger className="shrink-0 lg:hidden" />
+          {/* One module at a time (Settings → Sidebar): the switch names the module you are in. */}
+          {!allModules && (
+            <button
+              type="button"
+              onClick={() => setModulesDialogOpen(true)}
+              aria-haspopup="dialog"
+              title={`Switch module — currently ${moduleLabel}`}
+              aria-label={`Switch module — currently ${moduleLabel}`}
+              className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-card-foreground shadow-sm transition-colors hover:bg-muted"
+            >
+              <ModuleIcon className="h-5 w-5 text-primary" />
+              <span className="hidden max-w-32 truncate md:block">{moduleLabel}</span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </button>
+          )}
         </div>
 
         {/* Search takes the middle and grows into it. Pinned to the right beside
@@ -160,23 +158,6 @@ export function TopNavbar() {
           <div className="sm:hidden">
             <GlobalSearch compact />
           </div>
-
-          {/* Install, while the browser offers it (Diamond Fencing's header button). */}
-          {canInstall && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => void install().then((ok) => { if (ok) toast.success("Kynetropo is installed — find it in the Start menu or on the home screen"); })}
-                  aria-label="Install Kynetropo on this device"
-                  className="rounded-lg p-2 transition-colors hover:bg-muted"
-                >
-                  <Download className="h-5 w-5 text-muted-foreground" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Install Kynetropo on this device</TooltipContent>
-            </Tooltip>
-          )}
 
           <Popover>
             <PopoverTrigger asChild>
@@ -251,6 +232,23 @@ export function TopNavbar() {
             <TooltipContent side="bottom">Settings</TooltipContent>
           </Tooltip>
 
+          {/* Install, while the browser offers it after Settings, as in Diamond Fencing's header. */}
+          {canInstall && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => void install().then((ok) => { if (ok) toast.success("Kynetropo is installed — find it in the Start menu or on the home screen"); })}
+                  aria-label="Install Kynetropo on this device"
+                  className="rounded-lg p-2 transition-colors hover:bg-muted"
+                >
+                  <MonitorDown className="h-5 w-5 text-muted-foreground" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Install Kynetropo on this device</TooltipContent>
+            </Tooltip>
+          )}
+
           <button
             onClick={toggleFullscreen}
             title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
@@ -275,39 +273,42 @@ export function TopNavbar() {
             and burying the way out of the app three screens deep is the one
             place nobody thinks to look.
           */}
-          <Popover>
+          {/* The account menu: who you are, your profile, and the way out. */}
+          <Popover open={accountOpen} onOpenChange={setAccountOpen}>
             <PopoverTrigger asChild>
               <button
                 type="button"
                 aria-label={adminEmail ? `Account — signed in as ${adminEmail}` : "Account"}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold uppercase text-primary-foreground transition-opacity hover:opacity-90"
               >
-                {(userName || adminEmail || "?").charAt(0)}
+                {initialsOf(userName || adminEmail)}
               </button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-64 p-0">
-              <div className="space-y-1 p-4">
-                <p className="text-sm font-semibold text-card-foreground">{userName || "Account"}</p>
-                {/* break-all: an address longer than the panel would otherwise
-                    push it wider than the button it hangs off. */}
-                <p className="break-all text-xs text-muted-foreground">
-                  {adminEmail || "No address on this account"}
-                </p>
+              <div className="border-b p-3">
+                <p className="truncate text-sm font-medium text-card-foreground">{userName || "Signed in"}</p>
+                {/* break-all: an address longer than the panel would otherwise push it wider. */}
+                {adminEmail && <p className="mt-0.5 break-all text-xs text-muted-foreground">{adminEmail}</p>}
                 {role && (
-                  <span className="mt-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium capitalize text-primary">
+                  <span className="mt-2 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium capitalize text-primary">
                     {role}
                   </span>
                 )}
               </div>
-              <div className="border-t p-1">
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
-                >
-                  <LogOut className="h-4 w-4" /> Sign out
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => { setAccountOpen(false); navigate("/settings"); }}
+                className="flex w-full items-center gap-2 border-b px-3 py-2.5 text-sm text-card-foreground transition-colors hover:bg-muted"
+              >
+                <UserRound className="h-4 w-4 text-muted-foreground" /> My profile
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAccountOpen(false); logout(); }}
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-destructive transition-colors hover:bg-destructive/10"
+              >
+                <LogOut className="h-4 w-4" /> Sign out
+              </button>
             </PopoverContent>
           </Popover>
         </div>

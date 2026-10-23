@@ -30,7 +30,7 @@ import { ConvertLeadDialog } from "@/components/sales/ConvertLeadDialog";
 import { LeadFormDialog } from "@/components/sales/LeadFormDialog";
 import {
   LeadStatusBadge, MeetingLink, TemperatureBadge,
-  formatDate, formatDateTime, formatTime, humanise,
+  formatDate, formatDateTime, formatTime, humanise, sourceLabel,
 } from "@/components/sales/SalesBits";
 import type {
   CommentEntityType, LeadTemperature, SalesFollowup, SalesMeeting,
@@ -305,7 +305,7 @@ export default function SalesLeadDetail() {
   const scheduledMeetings = lead.meetings.filter((m) => m.status === "scheduled");
 
   const initials = (lead.company || lead.name).split(/\s+/).slice(0, 2).map((w: string) => w[0]?.toUpperCase() ?? "").join("");
-  const eyebrow = [lead.lead_code, lead.source ? humanise(lead.source) : null, `added ${formatDate(lead.acquired_on ?? lead.created_at)}`].filter(Boolean).join(" · ");
+  const eyebrow = [lead.lead_code, lead.source ? sourceLabel(lead.source, lead.source_chapter) : null, `added ${formatDate(lead.acquired_on ?? lead.created_at)}`].filter(Boolean).join(" · ");
   const factsData: Array<ProfileFact | null> = [
     lead.phone ? { icon: Phone, label: "Phone", value: lead.phone, href: `tel:${lead.phone}` } : null,
     lead.email ? { icon: Mail, label: "Email", value: lead.email, href: `mailto:${lead.email}` } : null,

@@ -1,19 +1,22 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, PanelLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { apiFetch } from "@/lib/api/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { RecordListPage } from "@/components/RecordListPage";
 import { PageHeader } from "@/components/PageHeader";
 import { Panel } from "@/components/Panel";
+import { setPrefs, usePrefs } from "@/lib/prefs";
 
 const GSTIN_REGEX = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 
 export default function Settings() {
   const { adminEmail, userName } = useAuth();
+  const prefs = usePrefs();
 
   const [profile, setProfile]   = useState({ name: userName ?? "", phone: "" });
   const [savingProfile, setSavingProfile] = useState(false);
@@ -83,7 +86,9 @@ export default function Settings() {
     <RecordListPage>
       <PageHeader title="Settings" />
 
-      <div className="max-w-2xl space-y-6">
+      {/* Diamond Fencing's settings layout: the forms, with this device's choices beside them. */}
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,42rem)_minmax(0,22rem)]">
+      <div className="space-y-6">
         <Panel title="Profile">
           <div className="space-y-4">
             <div className="space-y-1.5">
@@ -151,6 +156,18 @@ export default function Settings() {
             </Button>
           </div>
         </Panel>
+      </div>
+
+      <Panel title={<span className="inline-flex items-center gap-2"><PanelLeft className="h-4 w-4 text-primary" /> Sidebar</span>}
+        subtitle="Saved on this device as soon as it is changed">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <Label htmlFor="sidebar-all" className="text-sm font-medium text-card-foreground">Every module in the sidebar</Label>
+            <p className="text-xs text-muted-foreground">Off: one module at a time, switched from the header</p>
+          </div>
+          <Switch id="sidebar-all" checked={prefs.sidebarAllModules} onCheckedChange={(v) => setPrefs({ sidebarAllModules: v })} />
+        </div>
+      </Panel>
       </div>
     </RecordListPage>
   );

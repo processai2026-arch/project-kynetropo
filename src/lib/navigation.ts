@@ -20,6 +20,7 @@ import {
   MoreHorizontal,
   BarChart3,
   Sparkles,
+  UserPlus,
 } from "lucide-react";
 
 export type MenuItem = { title: string; url: string; icon: typeof LayoutDashboard };
@@ -31,8 +32,11 @@ export const sections: MenuSection[] = [
     items: [{ title: "Dashboard", url: "/", icon: LayoutDashboard }],
   },
   {
+    // Leads sit with Clients: a lead is a client not yet won, and converting one
+    // makes the client. The page keeps its /sales/leads address (the phone app's).
     label: "CRM",
     items: [
+      { title: "Leads",    url: "/sales/leads", icon: UserPlus },
       { title: "Clients",  url: "/clients",  icon: Users },
       { title: "Projects", url: "/projects", icon: FolderKanban },
     ],
@@ -43,7 +47,6 @@ export const sections: MenuSection[] = [
     label: "Sales",
     items: [
       { title: "Sales Dashboard", url: "/sales",                icon: Target },
-      { title: "Leads",           url: "/sales/leads",          icon: Users },
       { title: "Follow-Ups",      url: "/sales/followups",      icon: CalendarClock },
       { title: "Sales Meetings",  url: "/sales/meetings",       icon: CalendarDays },
       { title: "Call History",    url: "/sales/calls",          icon: Phone },
@@ -178,7 +181,7 @@ export function routeIcon(pathname: string): MenuItem["icon"] {
   }
   if (EXTRA_ROUTE_ICONS[path]) return EXTRA_ROUTE_ICONS[path];
 
-  if (/^\/sales\/leads\//.test(path)) return Users;
+  if (/^\/sales\/leads\//.test(path)) return UserPlus;
   if (/^\/sales\/challenges\//.test(path)) return Trophy;
   if (/^\/clients\//.test(path)) return Users;
   if (/^\/projects\//.test(path)) return FolderKanban;
@@ -231,6 +234,26 @@ export function routeSection(pathname: string): MenuSection | null {
 }
 
 /**
+ * Which of a module's pages the current address belongs to: the exact page, or
+ * the page whose address is the longest start of it (`/clients/4` → Clients).
+ * Judged across the module at once, so `/sales/leads/7` lights Leads and not
+ * the Sales dashboard at `/sales` as well.
+ */
+export function activeItemUrl(pathname: string, items: readonly MenuItem[]): string | null {
+  const path = normalise(pathname);
+  let best: string | null = null;
+  let len = -1;
+  for (const item of items) {
+    const hit = item.url === path || (item.url !== "/" && path.startsWith(item.url + "/"));
+    if (hit && item.url.length > len) {
+      best = item.url;
+      len = item.url.length;
+    }
+  }
+  return best;
+}
+
+/**
  * A representative glyph per module — sections carry no icon of their own.
  *
  * Lives here rather than in the launcher because the header shows the module
@@ -243,6 +266,7 @@ export const sectionIcons: Record<string, MenuItem["icon"]> = {
   Sales: Target,
   Delivery: Bug,
   Finance: IndianRupee,
+  Reports: BarChart3,
   Growth: Megaphone,
   Team: UserCog,
   System: Settings,

@@ -15,12 +15,14 @@ import { Plus, Pencil, CheckCircle, Trash2 } from "lucide-react";
 import { ActionDialog } from "@/components/ActionDialog";
 import { toast } from "sonner";
 import { ScrollableX } from "@/components/ui/scrollable-x";
+import { usePagedRows } from "@/hooks/usePagedRows";
 import { AmcCollectDialog, AmcFormDialog, AmcStatusBadge, AmcYearBadge, amcPlanLabel, dueText } from "./components/AmcDialogs";
 
 const COLUMNS = ["Client", "Project", "Per year", "This year", "Renewal", "Next due", "Status", ""];
 
 export default function AMC() {
   const [items, setItems]       = useState<OpsAmcRecord[]>([]);
+  const paged = usePagedRows(items, "AMC records");
   const [clients, setClients]   = useState<OpsClient[]>([]);
   const [projects, setProjects] = useState<OpsProject[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -99,7 +101,7 @@ export default function AMC() {
               {!loading && items.length === 0 && (
                 <tr><td colSpan={COLUMNS.length} className="px-6 py-8 text-center text-muted-foreground text-sm">No AMC records found</td></tr>
               )}
-              {!loading && items.map(a => {
+              {!loading && paged.rows.map(a => {
                 const rowColor = a.status === "overdue" ? "bg-red-50/40" : a.status === "due" ? "bg-amber-50/40" : "";
                 return (
                   <tr key={a.id} className={cn("border-b hover:bg-muted/30 transition-colors", rowColor)}>
@@ -142,6 +144,7 @@ export default function AMC() {
             </tbody>
           </table>
         </ScrollableX>
+        {paged.bar}
       </Panel>
 
       <AmcFormDialog

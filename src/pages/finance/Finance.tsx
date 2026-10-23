@@ -17,6 +17,7 @@ import type { OpsPayment, OpsExpense, OpsFinanceSummary, OpsClient, OpsProject }
 import { IndianRupee, Plus, Trash2, TrendingUp, TrendingDown, Wallet, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollableX } from "@/components/ui/scrollable-x";
+import { usePagedRows } from "@/hooks/usePagedRows";
 
 const EMPTY_PAY = { client_id: 0, project_id: 0, amount: 0, type: "advance", mode: "bank_transfer", reference: "", payment_date: "", notes: "" };
 const EMPTY_EXP = { category: "other", amount: 0, description: "", project_id: undefined as number | undefined, date: "", added_by: "" };
@@ -32,6 +33,8 @@ export default function Finance() {
   const [summary, setSummary]   = useState<OpsFinanceSummary | null>(null);
   const [payments, setPayments] = useState<OpsPayment[]>([]);
   const [expenses, setExpenses] = useState<OpsExpense[]>([]);
+  const pagedPayments = usePagedRows(payments, "payments");
+  const pagedExpenses = usePagedRows(expenses, "expenses");
   const [clients, setClients]   = useState<OpsClient[]>([]);
   const [projects, setProjects] = useState<OpsProject[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -198,7 +201,7 @@ export default function Finance() {
                 {!loading && payments.length === 0 && (
                   <tr><td colSpan={9} className="py-8 text-center text-muted-foreground text-sm">No payments this month</td></tr>
                 )}
-                {!loading && payments.map(p => (
+                {!loading && pagedPayments.rows.map(p => (
                   <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
                     <td className="py-3 px-4 text-card-foreground">{p.payment_date}</td>
                     <td className="py-3 px-4 text-card-foreground">
@@ -220,6 +223,7 @@ export default function Finance() {
               </tbody>
             </table>
           </ScrollableX>
+          {pagedPayments.bar}
         </Panel>
       )}
 
@@ -241,7 +245,7 @@ export default function Finance() {
                 {!loading && expenses.length === 0 && (
                   <tr><td colSpan={7} className="py-8 text-center text-muted-foreground text-sm">No expenses this month</td></tr>
                 )}
-                {!loading && expenses.map(e => (
+                {!loading && pagedExpenses.rows.map(e => (
                   <tr key={e.id} className="border-b hover:bg-muted/30 transition-colors">
                     <td className="py-3 px-4 text-card-foreground">{e.date}</td>
                     <td className="py-3 px-4 capitalize text-card-foreground">{e.category}</td>
@@ -259,6 +263,7 @@ export default function Finance() {
               </tbody>
             </table>
           </ScrollableX>
+          {pagedExpenses.bar}
         </Panel>
       )}
 

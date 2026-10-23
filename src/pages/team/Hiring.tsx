@@ -16,6 +16,7 @@ import type { OpsHiringCandidate } from "@/types/ops";
 import { Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollableX } from "@/components/ui/scrollable-x";
+import { usePagedRows } from "@/hooks/usePagedRows";
 
 const decisionStyles: Record<string, string> = {
   pending:  "bg-amber-50 text-amber-600 border-amber-200",
@@ -31,6 +32,7 @@ const EMPTY: Partial<OpsHiringCandidate> = {
 
 export default function Hiring() {
   const [items, setItems]       = useState<OpsHiringCandidate[]>([]);
+  const paged = usePagedRows(items, "candidates");
   const [loading, setLoading]   = useState(true);
   const [decisionFilter, setDecisionFilter] = useState("all");
   const [formOpen, setFormOpen] = useState(false);
@@ -124,7 +126,7 @@ export default function Hiring() {
               {!loading && items.length === 0 && (
                 <tr><td colSpan={11} className="px-6 py-8 text-center text-muted-foreground text-sm">No candidates</td></tr>
               )}
-              {!loading && items.map(c => (
+              {!loading && paged.rows.map(c => (
                 <tr key={c.id} className="border-b hover:bg-muted/30 transition-colors">
                   <td className="py-3 px-3 font-medium text-card-foreground">{c.name}</td>
                   <td className="py-3 px-3 text-card-foreground">{c.assignment_sent ?? "—"}</td>
@@ -148,6 +150,7 @@ export default function Hiring() {
             </tbody>
           </table>
         </ScrollableX>
+        {paged.bar}
       </Panel>
 
       <Dialog open={formOpen} onOpenChange={v => { if (!saving) setFormOpen(v); }}>

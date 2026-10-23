@@ -51,13 +51,18 @@ export interface ClientListOptions<T> {
 
 const SIZE_KEY = "eco_page_size";
 
-function storedSize(): number {
+/** The rows-per-page last chosen on any list, so every list opens at the same size. */
+export function storedSize(): number {
   try {
     const n = Number(localStorage.getItem(SIZE_KEY));
     return (PAGE_SIZES as readonly number[]).includes(n) ? n : DEFAULT_PAGE_SIZE;
   } catch {
     return DEFAULT_PAGE_SIZE;
   }
+}
+
+export function rememberSize(size: number): void {
+  try { localStorage.setItem(SIZE_KEY, String(size)); } catch { /* private mode: keep it for this page only */ }
 }
 
 export function useClientList<T>(load: () => Promise<T[]>, options: ClientListOptions<T> = {}): ListState<T> {
@@ -131,7 +136,7 @@ export function useClientList<T>(load: () => Promise<T[]>, options: ClientListOp
   const setPerPage = useCallback((size: number) => {
     setPerPageState(size);
     setPage(1);
-    try { localStorage.setItem(SIZE_KEY, String(size)); } catch { /* private mode: keep it for this page only */ }
+    rememberSize(size);
   }, []);
 
   const isFiltered = search.trim() !== "" || Object.values(filters).some(Boolean);

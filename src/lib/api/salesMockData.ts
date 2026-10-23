@@ -34,7 +34,7 @@ const lead = (id: number, company: string, person: string, phone: string, status
 
 const LEADS: SalesLead[] = [
   lead(1, "Sri Murugan Textiles", "Murugan S", "9840011122", "qualified", "hot", `${d(0)} 11:00:00`),
-  lead(2, "Anbu Hardware", "Anbu R", "9840033344", "contacted", "warm", `${d(0)} 15:30:00`, "Kaushik"),
+  { ...lead(2, "Anbu Hardware", "Anbu R", "9840033344", "contacted", "warm", `${d(0)} 15:30:00`, "Kaushik"), source: "yes", source_chapter: "Kanchipuram" },
   lead(3, "Kaveri Rice Mill", "Selvam K", "9840055566", "proposal", "hot", `${d(-1)} 12:00:00`),
   lead(4, "Lakshmi Jewellers", "Lakshmi P", "9840077788", "new", "cold", null, "Karthi"),
   lead(5, "Green Agro Pellets", "Ravi M", "9840099900", "meeting_scheduled", "warm", `${d(2)} 10:00:00`),

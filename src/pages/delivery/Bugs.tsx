@@ -17,6 +17,7 @@ import type { OpsBug, OpsProject, OpsEmployee } from "@/types/ops";
 import { Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollableX } from "@/components/ui/scrollable-x";
+import { usePagedRows } from "@/hooks/usePagedRows";
 
 const priorityStyles: Record<string, string> = {
   p0_critical: "bg-red-50 text-red-600 border-red-200",
@@ -46,6 +47,7 @@ const EMPTY: Partial<OpsBug> = {
 export default function Bugs() {
   const navigate  = useNavigate();
   const [items, setItems]       = useState<OpsBug[]>([]);
+  const paged = usePagedRows(items, "bugs");
   const [projects, setProjects] = useState<OpsProject[]>([]);
   const [employees, setEmployees] = useState<OpsEmployee[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -157,7 +159,7 @@ export default function Bugs() {
               {!loading && items.length === 0 && (
                 <tr><td colSpan={10} className="px-6 py-8 text-center text-muted-foreground text-sm">No bugs found</td></tr>
               )}
-              {!loading && items.map(b => (
+              {!loading && paged.rows.map(b => (
                 <tr
                   key={b.id}
                   className="border-b hover:bg-muted/30 transition-colors cursor-pointer"
@@ -184,6 +186,7 @@ export default function Bugs() {
             </tbody>
           </table>
         </ScrollableX>
+        {paged.bar}
       </Panel>
 
       <Dialog open={formOpen} onOpenChange={v => { if (!saving) setFormOpen(v); }}>

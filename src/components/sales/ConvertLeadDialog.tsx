@@ -50,7 +50,8 @@ export function ConvertLeadDialog({
       company: lead.company ?? "",
       phone: lead.phone ?? "",
       email: lead.email ?? "",
-      source: lead.source || "sales_lead",
+      // A YES lead tells the client record which chapter it came through.
+      source: lead.source === "yes" ? `YES${lead.source_chapter ? ` — ${lead.source_chapter}` : ""}` : lead.source || "sales_lead",
       owner: lead.assigned_to_name ?? "",
       stage: "Onboarding",
       health: "green",

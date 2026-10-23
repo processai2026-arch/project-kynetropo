@@ -51,6 +51,7 @@ const EMPTY = {
   phone: "",
   email: "",
   source: "",
+  source_chapter: "",
   temperature: "warm" as LeadTemperature,
   status: "new" as LeadStatus,
   notes: "",
@@ -95,6 +96,7 @@ export function LeadFormDialog({
             phone: lead.phone ?? "",
             email: lead.email ?? "",
             source: lead.source ?? "",
+            source_chapter: lead.source_chapter ?? "",
             temperature: lead.temperature ?? "warm",
             status: lead.status ?? "new",
             notes: lead.notes ?? "",
@@ -121,6 +123,10 @@ export function LeadFormDialog({
       toast.error("That email address does not look right");
       return;
     }
+    if (form.source === "yes" && !form.source_chapter.trim()) {
+      toast.error("Which YES chapter did this lead come from?");
+      return;
+    }
     setSaving(true);
     try {
       const body: Record<string, unknown> = {
@@ -130,6 +136,7 @@ export function LeadFormDialog({
         phone: form.phone.trim(),
         email: form.email.trim(),
         source: form.source,
+        source_chapter: form.source === "yes" ? form.source_chapter.trim() : "",
         temperature: form.temperature,
         notes: form.notes,
         acquired_on: form.acquired_on,
@@ -205,7 +212,8 @@ export function LeadFormDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="lead-source">Source</Label>
-              <SourceSelect id="lead-source" value={form.source} onChange={(v) => set("source", v)} />
+              <SourceSelect id="lead-source" value={form.source} onChange={(v) => set("source", v)}
+                chapter={form.source_chapter} onChapter={(v) => set("source_chapter", v)} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="lead-acquired">Client came in on</Label>

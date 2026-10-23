@@ -9,8 +9,15 @@ import type { ChallengeStatus, LeadStatus, LeadTemperature } from "@/types/sales
 /** Lead sources the backend already recognises. */
 export const LEAD_SOURCES = [
   "website", "referral", "cold_call", "email", "social",
-  "event", "walk_in", "partner", "other",
+  "event", "walk_in", "partner", "yes", "other",
 ] as const;
+
+/** A source as people say it: "YES" is the business network, not the word. */
+export function sourceLabel(source: string | null | undefined, chapter?: string | null): string {
+  if (!source) return "";
+  if (source.toLowerCase() === "yes") return chapter ? `YES · ${chapter}` : "YES";
+  return source.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
 
 const CUSTOM = "__custom__";
 
@@ -18,14 +25,20 @@ const CUSTOM = "__custom__";
  * Lead source picker: the standard list, plus "Other — type your own" for
  * anything not covered. The custom value is stored verbatim, so a source like
  * "IndiaMART" survives exactly as typed rather than collapsing into "other".
+ * Choosing YES (the business network) asks which chapter the lead came from.
  */
 export function SourceSelect({
   value,
   onChange,
+  chapter = "",
+  onChapter,
   id = "lead-source",
 }: {
   value: string;
   onChange: (value: string) => void;
+  /** The YES chapter, asked for only while the source is YES. */
+  chapter?: string;
+  onChapter?: (value: string) => void;
   id?: string;
 }) {
   const isPreset = (v: string) => (LEAD_SOURCES as readonly string[]).includes(v);
@@ -55,8 +68,8 @@ export function SourceSelect({
         </SelectTrigger>
         <SelectContent>
           {LEAD_SOURCES.map((s) => (
-            <SelectItem key={s} value={s} className="capitalize">
-              {s.replace(/_/g, " ")}
+            <SelectItem key={s} value={s} className={s === "yes" ? undefined : "capitalize"}>
+              {s === "yes" ? "YES (business network)" : s.replace(/_/g, " ")}
             </SelectItem>
           ))}
           <SelectItem value={CUSTOM}>Other — type your own</SelectItem>
@@ -71,6 +84,20 @@ export function SourceSelect({
           maxLength={60}
           onChange={(e) => onChange(e.target.value)}
         />
+      )}
+
+      {value === "yes" && onChapter && (
+        <div className="space-y-1">
+          <label htmlFor={`${id}-chapter`} className="text-xs font-medium text-foreground">Which YES chapter? *</label>
+          <Input
+            id={`${id}-chapter`}
+            autoFocus
+            placeholder="e.g. Kanchipuram"
+            value={chapter}
+            maxLength={120}
+            onChange={(e) => onChapter(e.target.value)}
+          />
+        </div>
       )}
     </div>
   );

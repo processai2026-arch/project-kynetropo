@@ -52,18 +52,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <ChatContextProvider>
       {/*
-        Collapsed is the default. The rail carries the icon AND its name, so
-        collapsed is still a readable menu rather than a memory test — and it
-        gives the page back roughly 150px, which is the difference between a
-        table fitting and not fitting on a laptop.
-
-        6.5rem, not the shadcn default of 3rem: a 48px rail can only hold a
-        glyph. This one holds a two-line label under it.
+        Diamond Fencing's sizes: 16rem open, a 5.25rem rail collapsed (not
+        shadcn's 3rem) so each item keeps a readable label under its glyph.
+        Open by default; the brand at the top of the sidebar collapses it.
       */}
-      <SidebarProvider
-        defaultOpen={false}
-        style={{ "--sidebar-width-icon": "6.5rem" } as React.CSSProperties}
-      >
+      <SidebarProvider style={{ "--sidebar-width-icon": "5.25rem" } as React.CSSProperties}>
         <DashboardLayoutContext.Provider value={{ modulesDialogOpen, setModulesDialogOpen }}>
           <div className="min-h-screen flex w-full">
             <AppSidebar />

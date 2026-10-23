@@ -17,6 +17,7 @@ import type { OpsPitch } from "@/types/ops";
 import { Plus, Pencil, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollableX } from "@/components/ui/scrollable-x";
+import { usePagedRows } from "@/hooks/usePagedRows";
 
 const typeLabels: Record<string, string> = {
   yes_meeting: "YES Meeting", business_forum: "Business Forum",
@@ -28,6 +29,7 @@ const EMPTY = { name: "", date: "", venue: "", city: "", type: "yes_meeting", sp
 
 export default function Pitches() {
   const [items, setItems]   = useState<OpsPitch[]>([]);
+  const paged = usePagedRows(items, "pitch events");
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing]   = useState<OpsPitch | null>(null);
@@ -111,7 +113,7 @@ export default function Pitches() {
               {!loading && items.length === 0 && (
                 <tr><td colSpan={11} className="px-6 py-8 text-center text-muted-foreground text-sm">No pitch events yet</td></tr>
               )}
-              {!loading && items.map(p => (
+              {!loading && paged.rows.map(p => (
                 <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
                   <td className="py-3 px-4 font-medium text-card-foreground">{p.name}</td>
                   <td className="py-3 px-4 text-card-foreground">{p.date}</td>
@@ -140,6 +142,7 @@ export default function Pitches() {
             </tbody>
           </table>
         </ScrollableX>
+        {paged.bar}
       </Panel>
 
       <Dialog open={formOpen} onOpenChange={v => { if (!saving) setFormOpen(v); }}>

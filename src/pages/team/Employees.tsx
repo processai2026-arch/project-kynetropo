@@ -16,6 +16,7 @@ import type { OpsEmployee } from "@/types/ops";
 import { Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollableX } from "@/components/ui/scrollable-x";
+import { usePagedRows } from "@/hooks/usePagedRows";
 
 const roleLabels: Record<string, string> = {
   founder: "Founder", qa_tester: "QA Tester", sales_caller: "Sales Caller",
@@ -37,6 +38,7 @@ const EMPTY: Partial<OpsEmployee> = {
 
 export default function Employees() {
   const [items, setItems]         = useState<OpsEmployee[]>([]);
+  const paged = usePagedRows(items, "people");
   const [loading, setLoading]     = useState(true);
   const [statusFilter, setStatus] = useState("active");
   const [formOpen, setFormOpen]   = useState(false);
@@ -108,7 +110,7 @@ export default function Employees() {
               {!loading && items.length === 0 && (
                 <tr><td colSpan={9} className="px-6 py-8 text-center text-muted-foreground text-sm">No employees found</td></tr>
               )}
-              {!loading && items.map(emp => (
+              {!loading && paged.rows.map(emp => (
                 <tr key={emp.id} className="border-b hover:bg-muted/30 transition-colors">
                   <td className="py-3 px-4 font-medium text-card-foreground">{emp.name}</td>
                   <td className="py-3 px-4 text-card-foreground">{emp.phone || "—"}</td>
@@ -132,6 +134,7 @@ export default function Employees() {
             </tbody>
           </table>
         </ScrollableX>
+        {paged.bar}
       </Panel>
 
       <Dialog open={formOpen} onOpenChange={v => { if (!saving) setFormOpen(v); }}>

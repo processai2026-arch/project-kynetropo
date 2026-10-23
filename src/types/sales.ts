@@ -65,6 +65,8 @@ export interface SalesLead {
   phone: string;
   email: string;
   source: string;
+  /** Which YES chapter a lead came through; blank for any other source. */
+  source_chapter?: string;
   assigned_to: number | null;
   assigned_to_name: string | null;
   status: LeadStatus;

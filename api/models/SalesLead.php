@@ -20,11 +20,11 @@ class SalesLead
 
     public const SOURCES = [
         'website', 'referral', 'cold_call', 'email', 'social',
-        'event', 'walk_in', 'partner', 'other',
+        'event', 'walk_in', 'partner', 'yes', 'other',
     ];
 
     private const COLUMNS = [
-        'name', 'company', 'contact_person', 'phone', 'email', 'source',
+        'name', 'company', 'contact_person', 'phone', 'email', 'source', 'source_chapter',
         'assigned_to', 'status', 'temperature', 'notes', 'acquired_on',
         'current_software', 'switch_reason',
     ];
@@ -162,6 +162,7 @@ class SalesLead
             'phone'          => (string)($data['phone'] ?? ''),
             'email'          => (string)($data['email'] ?? ''),
             'source'         => (string)($data['source'] ?? ''),
+            'source_chapter' => (string)($data['source_chapter'] ?? ''),
             'assigned_to'    => !empty($data['assigned_to']) ? (int)$data['assigned_to'] : null,
             'status'         => $data['status'] ?? 'new',
             'temperature'    => $data['temperature'] ?? 'warm',
@@ -362,6 +363,8 @@ class SalesLead
             'phone'                => $row['phone'],
             'email'                => $row['email'],
             'source'               => $row['source'],
+            // Which YES chapter the lead came through; blank for any other source.
+            'source_chapter'       => $row['source_chapter'] ?? '',
             'assigned_to'          => $row['assigned_to'] !== null ? (int)$row['assigned_to'] : null,
             'assigned_to_name'     => $row['assigned_to_name'] ?? null,
             'status'               => $row['status'],

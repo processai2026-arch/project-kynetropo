@@ -15,6 +15,7 @@ import type { OpsMeeting, OpsClient, OpsProject } from "@/types/ops";
 import { Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollableX } from "@/components/ui/scrollable-x";
+import { usePagedRows } from "@/hooks/usePagedRows";
 
 const typeLabels: Record<string, string> = {
   google_meet: "Google Meet", in_person: "In-Person",
@@ -28,6 +29,7 @@ const EMPTY: Partial<OpsMeeting> = {
 
 export default function Meetings() {
   const [items, setItems]       = useState<OpsMeeting[]>([]);
+  const paged = usePagedRows(items, "meetings");
   const [clients, setClients]   = useState<OpsClient[]>([]);
   const [projects, setProjects] = useState<OpsProject[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -123,7 +125,7 @@ export default function Meetings() {
               {!loading && items.length === 0 && (
                 <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground text-sm">No meetings found</td></tr>
               )}
-              {!loading && items.map(m => (
+              {!loading && paged.rows.map(m => (
                 <tr key={m.id} className="border-b hover:bg-muted/30 transition-colors">
                   <td className="py-3 px-4 text-card-foreground">
                     {new Date(m.date).toLocaleDateString("en-IN", { day:"2-digit", month:"short", year:"numeric" })}
@@ -144,6 +146,7 @@ export default function Meetings() {
             </tbody>
           </table>
         </ScrollableX>
+        {paged.bar}
       </Panel>
 
       <Dialog open={formOpen} onOpenChange={v => { if (!saving) setFormOpen(v); }}>
