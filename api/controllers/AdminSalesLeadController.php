@@ -34,6 +34,7 @@ class AdminSalesLeadController
             'meeting_from'  => $request->query('meeting_from'),
             'created_from'  => $request->query('created_from'),
             'created_to'    => $request->query('created_to'),
+            'sort'          => $request->query('sort'),
         ], $scope, (int)$request->query('page', 1), (int)$request->query('limit', 100));
 
         Response::paginated($result['rows'], $result['pagination']);

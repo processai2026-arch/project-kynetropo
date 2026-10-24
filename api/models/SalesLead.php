@@ -102,6 +102,12 @@ class SalesLead
 
         $whereClause = implode(' AND ', $where);
 
+        // 'code': newest lead first by its number (LD-0041, LD-0040…), the phone app's
+        // list. Otherwise the working order: hot first, then whoever is due soonest.
+        $orderBy = ($filters['sort'] ?? '') === 'code'
+            ? "CAST(SUBSTRING(l.lead_code, 4) AS UNSIGNED) DESC, l.id DESC"
+            : "FIELD(l.temperature,'hot','warm','cold'), (l.next_followup_at IS NULL), l.next_followup_at ASC, l.created_at DESC";
+
         $total = Database::count(
             "SELECT COUNT(*) AS cnt FROM sales_leads l WHERE $whereClause",
             $params
@@ -112,9 +118,7 @@ class SalesLead
                FROM sales_leads l
                LEFT JOIN users u ON u.user_id = l.assigned_to
               WHERE $whereClause
-              ORDER BY FIELD(l.temperature,'hot','warm','cold'),
-                       (l.next_followup_at IS NULL), l.next_followup_at ASC,
-                       l.created_at DESC
+              ORDER BY $orderBy
               LIMIT ? OFFSET ?",
             [...$params, $limit, ($page - 1) * $limit]
         );

@@ -222,6 +222,8 @@ export type LeadFilters = {
   followup_to?: string;
   created_from?: string;
   created_to?: string;
+  /** "code": newest lead number first. Left out: hot first, then the soonest follow-up. */
+  sort?: "code";
   page?: number;
   limit?: number;
 };

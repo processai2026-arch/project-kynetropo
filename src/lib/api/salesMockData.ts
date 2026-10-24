@@ -25,7 +25,7 @@ const PERMISSIONS = [
 
 const lead = (id: number, company: string, person: string, phone: string, status: SalesLead["status"],
   temperature: SalesLead["temperature"], next: string | null, owner = "Naresh"): SalesLead => ({
-  id, lead_code: `L-${String(id).padStart(4, "0")}`, name: person, company, contact_person: person, phone, email: "",
+  id, lead_code: `LD-${String(id).padStart(4, "0")}`, name: person, company, contact_person: person, phone, email: "",
   source: "Referral", assigned_to: 1, assigned_to_name: owner, status, temperature, next_followup_at: next,
   next_meeting_at: null, last_activity_at: `${d(-1)} 16:10:00`, last_outcome: "interested", notes: null, acquired_on: d(-20),
   current_software: "Tally", switch_reason: null, converted_client_id: null, converted_project_id: null, converted_at: null,
@@ -124,8 +124,16 @@ export function getSalesMock(url: string, method: string, query: URLSearchParams
   if (url === "/admin/sales/leads/chapters") return ok(["Bangalore", "Dindugal", "Kanchipuram"]);
   if (url === "/admin/sales/leads") {
     const status = query.get("status");
-    const rows = status === "converted" ? [] : LEADS;
-    return { success: true, data: rows, pagination: page(rows.length) };
+    // Enough rows to page through: the five above plus filler.
+    const all = status === "converted" ? [] : [...LEADS, ...Array.from({ length: 55 }, (_, i) =>
+      lead(6 + i, `Sample Traders ${6 + i}`, `Contact ${6 + i}`, `98400${String(10000 + i)}`, "new", (["hot", "warm", "cold"] as const)[i % 3], null))];
+    if (query.get("sort") === "code") all.sort((a, b) => b.id - a.id);
+    const p = Math.max(1, Number(query.get("page") || 1));
+    const limit = Number(query.get("limit") || 50);
+    return {
+      success: true, data: all.slice((p - 1) * limit, p * limit),
+      pagination: { page: p, limit, total: all.length, total_pages: Math.ceil(all.length / limit) },
+    };
   }
   const leadMatch = url.match(/^\/admin\/sales\/leads\/(\d+)$/);
   if (leadMatch) {
