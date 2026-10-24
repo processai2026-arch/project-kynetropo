@@ -26,8 +26,6 @@ import {
 } from "@/components/sales/FollowupEditDialog";
 import { FollowupCompleteDialog } from "@/components/sales/FollowupCompleteDialog";
 import { CommentButton, CommentThread, CommentThreadDialog } from "@/components/sales/CommentThread";
-import { ConvertLeadDialog } from "@/components/sales/ConvertLeadDialog";
-import { LeadFormDialog } from "@/components/sales/LeadFormDialog";
 import {
   LeadStatusBadge, MeetingLink, TemperatureBadge,
   formatDate, formatDateTime, formatTime, humanise, sourceLabel,
@@ -86,9 +84,7 @@ export default function SalesLeadDetail() {
   /** The follow-up being completed. Same dialog as the follow-ups page: the
       answer is worth the same here, and a bare "Done" recorded none of it. */
   const [completingFollowup, setCompletingFollowup] = useState<SalesFollowup | null>(null);
-  const [editOpen, setEditOpen] = useState(false);
   const [thread, setThread] = useState<{ type: CommentEntityType; id: number; title: string } | null>(null);
-  const [convertOpen, setConvertOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [outcomeMeeting, setOutcomeMeeting] = useState<SalesMeeting | null>(null);
   const [editingMeeting, setEditingMeeting] = useState<SalesMeeting | null>(null);
@@ -452,7 +448,7 @@ export default function SalesLeadDetail() {
             </Button>
           )}
           {can("sales.leads.edit") && (
-            <Button className="h-11" variant="outline" onClick={() => setEditOpen(true)}>
+            <Button className="h-11" variant="outline" onClick={() => navigate(`/sales/leads/${leadId}/edit`)}>
               <Pencil className="mr-1.5 h-4 w-4" />
               Edit Lead
             </Button>
@@ -492,7 +488,7 @@ export default function SalesLeadDetail() {
                   Onboarding
                 </Button>
               )}
-              <Button className="h-11" variant="outline" disabled={saving} onClick={() => setConvertOpen(true)}>
+              <Button className="h-11" variant="outline" disabled={saving} onClick={() => navigate(`/sales/leads/${leadId}/convert`)}>
                 <CheckCircle2 className="mr-1.5 h-4 w-4" />
                 Convert
               </Button>
@@ -750,15 +746,6 @@ export default function SalesLeadDetail() {
         onSaved={() => void load()}
       />
 
-      <LeadFormDialog
-        open={editOpen}
-        lead={lead}
-        onClose={() => setEditOpen(false)}
-        // A full reload rather than a local patch: the header, the timeline and
-        // the schedule all read from this record, and the edit adds a timeline
-        // entry the page should show straight away.
-        onSaved={() => void load()}
-      />
 
       <FollowupEditDialog
         followup={editingFollowup}
@@ -774,12 +761,6 @@ export default function SalesLeadDetail() {
         onCompleted={() => void load()}
       />
 
-      <ConvertLeadDialog
-        lead={lead}
-        open={convertOpen}
-        onOpenChange={setConvertOpen}
-        onConverted={() => void load()}
-      />
 
       <CommentThreadDialog
         open={thread !== null}

@@ -15,6 +15,10 @@ declare(strict_types=1);
  *   first_year   AMC from the 1st year: charged from the start; paid or not.
  *   none         No AMC.
  *
+ * Each answer carries a reason (kept on the project, since "no AMC" has no AMC
+ * row), and an AMC can include storage: the GB the base price covers, and the
+ * price of each extra block a year (20 GB in ₹4,000; every 10 GB more, ₹500).
+ *
  * The first-year answers stay editable until the contract renews. Paying,
  * unpaying or repricing a first year changes its AMC payment in Finance to
  * match, so Finance always shows what the AMC says. AMC payments never touch
@@ -26,7 +30,7 @@ final class OpsAmc
     public const PLANS = ['second_year', 'first_year', 'none'];
 
     public const SELECT = "SELECT a.*, c.name AS client_name, c.company AS client_company, p.name AS project_name,
-                                  p.project_code, pay.payment_date AS paid_on,
+                                  p.project_code, p.amc_reason, pay.payment_date AS paid_on,
                                   IF(a.term_paid, a.renewal_date, a.start_date) AS due_date,
                                   DATEDIFF(IF(a.term_paid, a.renewal_date, a.start_date), CURDATE()) AS days_until_due
                              FROM ops_amc_records a
@@ -39,7 +43,9 @@ final class OpsAmc
      * one, so a form can be checked before anything is saved.
      *
      * $in: plan (or first_year_free), amount, start_date, renewal_date,
-     *      first_year_paid, payment_date, payment_mode, notes.
+     *      first_year_paid, payment_date, payment_mode, notes, reason,
+     *      storage_gb, storage_step_gb, storage_step_price.
+     * A reason left out is left as it is (null here).
      * $current: the record being edited, for the values left out.
      */
     public static function normalise(array $in, ?array $current = null): array
@@ -48,7 +54,8 @@ final class OpsAmc
         if ($plan === null && array_key_exists('first_year_free', $in)) $plan = !empty($in['first_year_free']) ? 'second_year' : 'first_year';
         if ($plan === null && $current) $plan = (int)$current['first_year_free'] === 1 ? 'second_year' : 'first_year';
         if (!in_array($plan, self::PLANS, true)) Response::error('Choose the AMC: from the 2nd year, from the 1st year, or no AMC', 422);
-        if ($plan === 'none') return ['plan' => 'none'];
+        $reason = array_key_exists('reason', $in) ? mb_substr(trim((string)$in['reason']), 0, 300) : null;
+        if ($plan === 'none') return ['plan' => 'none', 'reason' => $reason];
 
         $amount = isset($in['amount']) && $in['amount'] !== '' ? (float)$in['amount'] : (float)($current['amount'] ?? 0);
         if ($amount <= 0) Response::error('Enter the AMC price per year', 422);
@@ -71,7 +78,36 @@ final class OpsAmc
             'payment_date' => self::date($in['payment_date'] ?? null) ?? ($current['paid_on'] ?? null) ?? date('Y-m-d'),
             'payment_mode' => in_array($in['payment_mode'] ?? '', self::MODES, true) ? $in['payment_mode'] : (($current['payment_mode'] ?? '') ?: 'bank_transfer'),
             'notes'        => array_key_exists('notes', $in) ? trim((string)$in['notes']) : ($current['notes'] ?? ''),
-        ];
+            'reason'       => $reason,
+        ] + self::storage($in, $current);
+    }
+
+    /**
+     * The storage an AMC includes: blank GB means none is stated; with GB, the
+     * size of an extra block and its price a year are needed too.
+     */
+    private static function storage(array $in, ?array $current): array
+    {
+        $keys = ['storage_gb', 'storage_step_gb', 'storage_step_price'];
+        if (!array_intersect($keys, array_keys($in))) {
+            return array_combine($keys, array_map(fn ($k) => isset($current[$k]) ? (float)$current[$k] : null, $keys));
+        }
+        $num = fn ($k) => isset($in[$k]) && trim((string)$in[$k]) !== '' ? (float)$in[$k] : null;
+        $gb = $num('storage_gb');
+        if ($gb === null || $gb <= 0) return array_fill_keys($keys, null);
+        $step  = $num('storage_step_gb');
+        $price = $num('storage_step_price');
+        if ($step === null || $step <= 0 || $price === null || $price < 0) {
+            Response::error('Enter how many GB each extra block adds, and its price a year', 422);
+        }
+        return ['storage_gb' => $gb, 'storage_step_gb' => $step, 'storage_step_price' => $price];
+    }
+
+    /** The reason for a project's AMC answer; null leaves it as it is. */
+    public static function setReason(int $tenantId, int $projectId, ?string $reason): void
+    {
+        if ($reason === null) return;
+        Database::execute('UPDATE ops_projects SET amc_reason = ? WHERE id = ? AND tenant_id = ?', [$reason, $projectId, $tenantId]);
     }
 
     /** A new AMC for $project (id, client_id, name). Returns its id. */
@@ -82,6 +118,9 @@ final class OpsAmc
             'client_id'       => (int)$project['client_id'],
             'project_id'      => (int)$project['id'],
             'amount'          => $amc['amount'],
+            'storage_gb'         => $amc['storage_gb'],
+            'storage_step_gb'    => $amc['storage_step_gb'],
+            'storage_step_price' => $amc['storage_step_price'],
             'first_year_free' => $amc['free'] ? 1 : 0,
             'term_paid'       => ($amc['free'] || $amc['paid']) ? 1 : 0,
             'contract_start'  => $amc['start_date'],
@@ -96,6 +135,7 @@ final class OpsAmc
                 $amc['payment_date'], $amc['start_date'], $amc['renewal_date'], '', $by);
             Database::update('ops_amc_records', ['payment_id' => $payId], ['id' => $id]);
         }
+        self::setReason($tenantId, (int)$project['id'], $amc['reason']);
         self::log($tenantId, (int)$project['client_id'], 'amc_added', 'AMC added for ' . $project['name'] . ' — ' . self::describe($amc), $by);
         return $id;
     }
@@ -111,7 +151,10 @@ final class OpsAmc
     {
         $id      = (int)$current['id'];
         $renewed = self::renewed($current);
-        $updates = ['amount' => $amc['amount'], 'notes' => $amc['notes'], 'renewal_date' => $amc['renewal_date']];
+        $updates = ['amount' => $amc['amount'], 'notes' => $amc['notes'], 'renewal_date' => $amc['renewal_date'],
+                    'storage_gb' => $amc['storage_gb'], 'storage_step_gb' => $amc['storage_step_gb'],
+                    'storage_step_price' => $amc['storage_step_price']];
+        self::setReason($tenantId, (int)$current['project_id'], $amc['reason']);
 
         if ($renewed) {
             $updates['start_date'] = $amc['start_date'];
@@ -179,6 +222,7 @@ final class OpsAmc
         $current = Database::fetch(self::SELECT . ' WHERE a.project_id = ? AND a.tenant_id = ? ORDER BY a.id LIMIT 1', [(int)$project['id'], $tenantId]);
         if ($amc['plan'] === 'none') {
             if ($current) self::remove($tenantId, $current, $by);
+            self::setReason($tenantId, (int)$project['id'], $amc['reason']);
             return;
         }
         if ($current) self::update($tenantId, $current, $amc, $by);
@@ -238,6 +282,10 @@ final class OpsAmc
             'project_name'    => $row['project_name'] ?? null,
             'project_code'    => $row['project_code'] ?? null,
             'amount'          => (float)$row['amount'],
+            'storage_gb'         => isset($row['storage_gb']) ? (float)$row['storage_gb'] : null,
+            'storage_step_gb'    => isset($row['storage_step_gb']) ? (float)$row['storage_step_gb'] : null,
+            'storage_step_price' => isset($row['storage_step_price']) ? (float)$row['storage_step_price'] : null,
+            'reason'          => $row['amc_reason'] ?? '',
             'plan'            => $free ? 'second_year' : 'first_year',
             'first_year_free' => $free,
             'term_paid'       => $paid,

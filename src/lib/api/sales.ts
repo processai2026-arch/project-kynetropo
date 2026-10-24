@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api/client";
+import type { OpsAmcPlanBody } from "@/types/ops";
 import type {
   ChallengeCounts,
   CommentEntityType,
@@ -251,6 +252,8 @@ export interface ConvertLeadBody {
   project_quoted?: number;
   project_deadline?: string;
   project_priority?: "low" | "medium" | "high" | "critical";
+  /** The project's AMC, asked with it. */
+  amc?: OpsAmcPlanBody;
 }
 
 export const salesLeadsApi = {
@@ -277,6 +280,9 @@ export const salesLeadsApi = {
       method: "POST",
       body: JSON.stringify({ notes }),
     })).data,
+  /** The YES chapters leads have come through, for the source dropdown. */
+  chapters: async (): Promise<string[]> =>
+    (await apiFetch<Envelope<string[]>>("/admin/sales/leads/chapters")).data ?? [],
   convert: async (id: number, body: ConvertLeadBody = {}) =>
     (await apiFetch<Envelope<{
       lead_id: number;

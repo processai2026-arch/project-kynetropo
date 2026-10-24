@@ -17,12 +17,11 @@ import {
 } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { useTeamMembers, namesakeHint } from "@/hooks/useTeamMembers";
-import { SourceSelect } from "@/components/sales/SalesBits";
 import { opsClientsApi } from "@/lib/api/ops";
 import type { OpsClient } from "@/types/ops";
 import type { SalesLead } from "@/types/sales";
 import { cn } from "@/lib/utils";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { isPhoneTab } from "@/components/phone/PhoneKit";
 
 /**
@@ -283,6 +282,7 @@ function LeadPicker({
 export function SalesQuickAdd({ onCreated }: { onCreated?: () => void }) {
   const { can } = useSalesAccess();
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const [action, setAction] = useState<Action>(null);
   const [saving, setSaving] = useState(false);
   const [lead, setLead] = useState<SalesLead | null>(null);
@@ -290,7 +290,6 @@ export function SalesQuickAdd({ onCreated }: { onCreated?: () => void }) {
   // a lead, so the two states are kept apart rather than one being coerced.
   const [subject, setSubject] = useState<Subject | null>(null);
 
-  const [leadForm, setLeadForm] = useState({ name: "", company: "", phone: "", source: "", temperature: "warm" });
   const [callForm, setCallForm] = useState({
     call_date: today(), call_time: "", duration_minutes: "", outcome: "interested",
     notes: "", temperature_after: "", next_followup_date: "",
@@ -365,78 +364,14 @@ export function SalesQuickAdd({ onCreated }: { onCreated?: () => void }) {
                 key={i.key}
                 variant="outline"
                 className="h-14 justify-start text-base"
-                onClick={() => setAction(i.key)}
+                // A new lead is a page of its own, every field as on the computer.
+                onClick={() => (i.key === "lead" ? (close(), navigate("/sales/leads/new")) : setAction(i.key))}
               >
                 <i.icon className="mr-3 h-5 w-5 text-primary" />
                 {i.label}
               </Button>
             ))}
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── New Lead ──────────────────────────────────────────────────────── */}
-      <Dialog open={action === "lead"} onOpenChange={(o) => !o && close()}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>New Lead</DialogTitle>
-          </DialogHeader>
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void guard(async () => {
-                await salesLeadsApi.create({
-                  name: leadForm.name.trim(),
-                  company: leadForm.company.trim(),
-                  phone: leadForm.phone.trim(),
-                  source: leadForm.source.trim(),
-                  temperature: leadForm.temperature as SalesLead["temperature"],
-                });
-                setLeadForm({ name: "", company: "", phone: "", source: "", temperature: "warm" });
-                done("Lead created");
-              }, "Could not create the lead");
-            }}
-          >
-            <div className="space-y-1.5">
-              <Label htmlFor="q-lead-name">Name *</Label>
-              <Input id="q-lead-name" value={leadForm.name} required
-                onChange={(e) => setLeadForm((f) => ({ ...f, name: e.target.value }))} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="q-lead-company">Company</Label>
-              <Input id="q-lead-company" value={leadForm.company}
-                onChange={(e) => setLeadForm((f) => ({ ...f, company: e.target.value }))} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="q-lead-phone">Phone</Label>
-              <Input id="q-lead-phone" type="tel" inputMode="tel" value={leadForm.phone}
-                onChange={(e) => setLeadForm((f) => ({ ...f, phone: e.target.value }))} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="q-lead-source">Source</Label>
-              <SourceSelect
-                id="q-lead-source"
-                value={leadForm.source}
-                onChange={(v) => setLeadForm((f) => ({ ...f, source: v }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Temperature</Label>
-              <Select value={leadForm.temperature} onValueChange={(v) => setLeadForm((f) => ({ ...f, temperature: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="hot">Hot</SelectItem>
-                  <SelectItem value="warm">Warm</SelectItem>
-                  <SelectItem value="cold">Cold</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={close}>Cancel</Button>
-              <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Create"}</Button>
-            </div>
-          </form>
         </DialogContent>
       </Dialog>
 

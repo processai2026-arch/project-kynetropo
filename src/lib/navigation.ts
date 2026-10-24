@@ -149,6 +149,9 @@ export function routeTitle(pathname: string): string {
   }
   if (EXTRA_ROUTE_TITLES[path]) return EXTRA_ROUTE_TITLES[path];
 
+  if (path === "/sales/leads/new") return "New lead";
+  const leadPage = path.match(/^\/sales\/leads\/([^/]+)\/(edit|convert)$/);
+  if (leadPage) return `${leadPage[2] === "edit" ? "Edit" : "Convert"} lead ${decodeURIComponent(leadPage[1])}`;
   const lead = path.match(/^\/sales\/leads\/(.+)$/);
   if (lead) return `Lead ${decodeURIComponent(lead[1])}`;
   const challenge = path.match(/^\/sales\/challenges\/(.+)$/);

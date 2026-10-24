@@ -5,6 +5,8 @@ import type { RouteDef } from "./types";
 const SalesDashboard = lazy(() => import("@/pages/sales/SalesDashboard"));
 const SalesLeads = lazy(() => import("@/pages/sales/SalesLeads"));
 const SalesLeadDetail = lazy(() => import("@/pages/sales/SalesLeadDetail"));
+const SalesLeadForm = lazy(() => import("@/pages/sales/SalesLeadForm"));
+const SalesLeadConvert = lazy(() => import("@/pages/sales/SalesLeadConvert"));
 const SalesClients = lazy(() => import("@/pages/sales/SalesClients"));
 const SalesFollowUps = lazy(() => import("@/pages/sales/SalesFollowUps"));
 const SalesMeetings = lazy(() => import("@/pages/sales/SalesMeetings"));
@@ -21,7 +23,11 @@ const SalesMentions = lazy(() => import("@/pages/sales/SalesMentions"));
 export const routes: RouteDef[] = [
   { path: "/sales", element: SalesDashboard, salesScope: true },
   { path: "/sales/leads", element: SalesLeads, salesScope: true },
+  // Add, edit and convert open as pages, not popups (Eco Sudar / Diamond Fencing).
+  { path: "/sales/leads/new", element: SalesLeadForm, salesScope: true },
   { path: "/sales/leads/:id", element: SalesLeadDetail, salesScope: true },
+  { path: "/sales/leads/:id/edit", element: SalesLeadForm, salesScope: true },
+  { path: "/sales/leads/:id/convert", element: SalesLeadConvert, salesScope: true },
   // Converted leads. A row opens /sales/leads/:id — same record.
   { path: "/sales/clients", element: SalesClients, salesScope: true },
   { path: "/sales/followups", element: SalesFollowUps, salesScope: true },

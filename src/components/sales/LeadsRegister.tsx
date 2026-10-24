@@ -11,8 +11,6 @@ import { ListShell, type Column } from "@/components/ListShell";
 import { NameCell, IconCell } from "@/components/ListCells";
 import { NativeSelect } from "@/components/Field";
 import { useConfirm } from "@/components/ConfirmDialog";
-import { LeadFormDialog } from "@/components/sales/LeadFormDialog";
-import { ConvertLeadDialog } from "@/components/sales/ConvertLeadDialog";
 import { LeadStatusBadge, TemperatureBadge, formatDate, humanise, sourceLabel } from "@/components/sales/SalesBits";
 import { useClientList } from "@/hooks/useClientList";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
@@ -117,9 +115,6 @@ export function LeadsRegister() {
   const people = useTeamMembers(true);
   // A link with ?owner= wins for that visit; otherwise the last choice stands.
   const [owner, setOwner] = useState(() => searchParams.get("owner") ?? storedOwner());
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingLead, setEditingLead] = useState<SalesLead | null>(null);
-  const [converting, setConverting] = useState<SalesLead | null>(null);
 
   const list = useClientList<SalesLead>(() => loadAllLeads(owner), {
     searchText: (l) => [l.lead_code, l.name, l.company, l.contact_person, l.phone, l.email, l.source, l.source_chapter],
@@ -172,22 +167,16 @@ export function LeadsRegister() {
     setSearchParams(next, { replace: true });
   }, [list.search, list.filters.temperature, list.filters.status, owner, setSearchParams]);
 
-  // The dashboard's "Add New Lead" links here with ?new=1 — read on the first render, before the sync above rewrites the URL.
+  // Old links to ?new=1 open the new-lead page — read on the first render, before the sync above rewrites the URL.
   const [openOnArrival] = useState(() => searchParams.get("new") === "1");
-  const handledArrival = useRef(false);
-  useEffect(() => {
-    if (handledArrival.current || !openOnArrival || !can("sales.leads.create")) return;
-    handledArrival.current = true;
-    setEditingLead(null);
-    setFormOpen(true);
-  }, [openOnArrival, can]);
+  useEffect(() => { if (openOnArrival) navigate("/sales/leads/new", { replace: true }); }, [openOnArrival, navigate]);
 
   const canEdit = can("sales.leads.edit");
   const canConvert = can("sales.leads.convert");
 
   const changeStage = async (lead: SalesLead, status: LeadStatus) => {
     if (status === lead.status) return;
-    if (status === "converted") { setConverting(lead); return; }
+    if (status === "converted") { navigate(`/sales/leads/${lead.id}/convert`); return; }
     try {
       if (status === "onboarding") await salesLeadsApi.startOnboarding(lead.id);
       else await salesLeadsApi.update(lead.id, { status });
@@ -242,7 +231,7 @@ export function LeadsRegister() {
         title="Leads"
         subtitle={total !== undefined ? `${total} lead${total === 1 ? "" : "s"}${list.isFiltered ? " matching" : ""}` : undefined}
         action={can("sales.leads.create") ? (
-          <Button onClick={() => { setEditingLead(null); setFormOpen(true); }}><Plus className="h-4 w-4" /> Add lead</Button>
+          <Button onClick={() => navigate("/sales/leads/new")}><Plus className="h-4 w-4" /> Add lead</Button>
         ) : undefined}
       />
       <ListShell
@@ -264,9 +253,9 @@ export function LeadsRegister() {
         rowActions={(l) => (
           <>
             <DropdownMenuItem onSelect={() => navigate(`/sales/leads/${l.id}`)}><Eye className="h-4 w-4" /> View lead</DropdownMenuItem>
-            {canEdit && <DropdownMenuItem onSelect={() => { setEditingLead(l); setFormOpen(true); }}><Pencil className="h-4 w-4" /> Edit lead</DropdownMenuItem>}
+            {canEdit && <DropdownMenuItem onSelect={() => navigate(`/sales/leads/${l.id}/edit`)}><Pencil className="h-4 w-4" /> Edit lead</DropdownMenuItem>}
             {canConvert && l.status !== "converted" && (
-              <DropdownMenuItem onSelect={() => setConverting(l)}><CheckCircle2 className="h-4 w-4" /> Convert to client…</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => navigate(`/sales/leads/${l.id}/convert`)}><CheckCircle2 className="h-4 w-4" /> Convert to client…</DropdownMenuItem>
             )}
             {/* A converted lead has a client pointing at its history, so the server refuses to delete it. */}
             {can("sales.leads.assign") && l.status !== "converted" && (
@@ -279,18 +268,6 @@ export function LeadsRegister() {
         )}
       />
 
-      <LeadFormDialog
-        open={formOpen}
-        lead={editingLead}
-        onClose={() => { setFormOpen(false); setEditingLead(null); }}
-        onSaved={() => reload()}
-      />
-      <ConvertLeadDialog
-        lead={converting}
-        open={converting !== null}
-        onOpenChange={(v) => { if (!v) setConverting(null); }}
-        onConverted={() => { setConverting(null); reload(); }}
-      />
     </RecordListPage>
   );
 }

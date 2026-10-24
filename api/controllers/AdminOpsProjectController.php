@@ -164,6 +164,8 @@ class AdminOpsProjectController
 
         if ($amc && $amc['plan'] !== 'none') {
             OpsAmc::create($tenantId, ['id' => $id, 'client_id' => $clientId, 'name' => $name], $amc, (string)($body['owner'] ?? ''));
+        } elseif ($amc) {
+            OpsAmc::setReason($tenantId, $id, $amc['reason']);
         }
 
         $row = Database::fetch(
@@ -377,6 +379,8 @@ class AdminOpsProjectController
             'deadline'                 => $row['deadline'],
             'health'                   => $row['health'],
             'priority'                 => $row['priority'],
+            // Why the project has the AMC it has (no AMC, from the 1st or the 2nd year).
+            'amc_reason'               => $row['amc_reason'] ?? '',
             'quoted'                   => (float)$row['quoted'],
             'received'                 => (float)$row['received'],
             'balance'                  => (float)$row['balance'],

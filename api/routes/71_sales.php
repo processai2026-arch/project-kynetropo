@@ -40,6 +40,7 @@ $router->get('/admin/sales/notifications',               [AdminSalesDashboardCon
 // Leads (static segments registered before {id})
 $router->get('/admin/sales/leads',                       [AdminSalesLeadController::class, 'index'],             'admin');
 $router->post('/admin/sales/leads',                      [AdminSalesLeadController::class, 'store'],             'admin');
+$router->get('/admin/sales/leads/chapters',              [AdminSalesLeadController::class, 'chapters'],          'admin');
 $router->get('/admin/sales/leads/{id}',                  [AdminSalesLeadController::class, 'show'],              'admin');
 $router->put('/admin/sales/leads/{id}',                  [AdminSalesLeadController::class, 'update'],            'admin');
 $router->put('/admin/sales/leads/{id}/temperature',      [AdminSalesLeadController::class, 'changeTemperature'], 'admin');

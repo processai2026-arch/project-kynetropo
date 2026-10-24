@@ -65,11 +65,13 @@ export default function ProjectForm() {
         next_collection_trigger: p.next_collection_trigger ?? "",
         collection_target_date: p.collection_target_date ?? "",
       });
+      // The reason lives on the project ("no AMC" has no AMC record to carry it).
+      setAmc((a) => ({ ...a, reason: a.reason || p.amc_reason || "" }));
     }).catch((e) => toast.error(errorMessage(e))).finally(() => setLoading(false));
     opsAmcApi.list({ project_id: String(editing) }).then((r) => {
       const current = (r.data ?? [])[0] ?? null;
       setAmcOriginal(current);
-      setAmc(current ? amcDraft(current) : { ...amcDraft(null), plan: "none" });
+      setAmc((a) => current ? amcDraft(current) : { ...amcDraft(null), plan: "none", reason: a.reason });
     }).catch(() => undefined);
   }, [editing]);
 

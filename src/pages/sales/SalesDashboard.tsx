@@ -278,7 +278,7 @@ export default function SalesDashboard() {
           <SectionCard title="Quick Actions">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               {[
-                { label: "Add New Lead", to: "/sales/leads?new=1", icon: UserPlus, permission: "sales.leads.create" },
+                { label: "Add New Lead", to: "/sales/leads/new", icon: UserPlus, permission: "sales.leads.create" },
                 { label: "Log a Call", to: "/sales/calls", icon: Phone, permission: "sales.calls.view" },
                 { label: "Follow-Ups", to: "/sales/followups", icon: CalendarClock, permission: "sales.followups.view" },
                 { label: "Schedule a Meeting", to: "/sales/meetings", icon: CalendarPlus, permission: "sales.meetings.view" },

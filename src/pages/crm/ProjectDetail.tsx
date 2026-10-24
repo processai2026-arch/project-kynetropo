@@ -177,10 +177,22 @@ export default function ProjectDetail() {
                     <th className="text-left">Next due</th><th className="text-left">Status</th><th />
                   </tr></thead>
                   <tbody>
-                    {amcList.length === 0 && <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">No AMC for this project</td></tr>}
+                    {amcList.length === 0 && (
+                      <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">
+                        No AMC for this project{p.amc_reason ? <> — <span className="text-foreground">{p.amc_reason}</span></> : null}
+                      </td></tr>
+                    )}
                     {amcList.map((a) => (
                       <tr key={a.id}>
-                        <td className="whitespace-nowrap">{amcPlanLabel(a)}</td>
+                        <td>
+                          <span className="whitespace-nowrap">{amcPlanLabel(a)}</span>
+                          {a.reason && <span className="block text-xs text-muted-foreground">{a.reason}</span>}
+                          {a.storage_gb ? (
+                            <span className="block whitespace-nowrap text-xs text-muted-foreground">
+                              {a.storage_gb} GB included · +{rupees(a.storage_step_price ?? 0)} per {a.storage_step_gb} GB more
+                            </span>
+                          ) : null}
+                        </td>
                         <td className="text-right font-medium tabular-nums">{rupees(a.amount)}</td>
                         <td className="whitespace-nowrap"><AmcYearBadge amc={a} /> <span className="text-xs text-muted-foreground">from {formatDate(a.start_date)}</span></td>
                         <td className="whitespace-nowrap">{formatDate(a.renewal_date)}</td>

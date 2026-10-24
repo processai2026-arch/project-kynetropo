@@ -39,6 +39,25 @@ class AdminSalesLeadController
         Response::paginated($result['rows'], $result['pagination']);
     }
 
+    /** GET /admin/sales/leads/chapters — the YES chapters leads have come through, for the source dropdown. */
+    public function chapters(Request $request): void
+    {
+        SalesPermissions::enforce($request->user, 'sales.leads.view');
+        $rows = Database::fetchAll(
+            "SELECT DISTINCT TRIM(source_chapter) AS chapter FROM sales_leads
+              WHERE tenant_id = ? AND source = 'yes' AND TRIM(source_chapter) <> ''
+              ORDER BY chapter",
+            [Database::tenantId()]
+        );
+        // Spelt differently by different people ("bangalore", "Bangalore"): one entry each.
+        $seen = [];
+        foreach ($rows as $r) {
+            $key = mb_strtolower($r['chapter']);
+            if (!isset($seen[$key])) $seen[$key] = $r['chapter'];
+        }
+        Response::success(array_values($seen));
+    }
+
     public function show(Request $request): void
     {
         SalesPermissions::enforce($request->user, 'sales.leads.view');
@@ -328,6 +347,10 @@ class AdminSalesLeadController
                 'switch_reason', (string)($raw['switch_reason'] ?? ''))),
         ];
 
+        // The project's AMC, asked with it: checked before anything is saved.
+        $projectName = trim((string)$request->input('project_name', ''));
+        $amc = $projectName !== '' && is_array($request->input('amc')) ? OpsAmc::normalise($request->input('amc')) : null;
+
         // Reuse an existing ops client when one already matches on phone/email,
         // rather than creating a duplicate customer in the project system. The
         // caller can point at a specific one instead, or insist on a new record.
@@ -368,7 +391,6 @@ class AdminSalesLeadController
         // Optionally open the first project for this customer in the same step.
         // That mapping is the whole relationship between the two records.
         $projectId   = null;
-        $projectName = trim((string)$request->input('project_name', ''));
         if ($projectName !== '') {
             $priority = (string)$request->input('project_priority', 'medium');
             if (!in_array($priority, ['low', 'medium', 'high', 'critical'], true)) {
@@ -387,6 +409,12 @@ class AdminSalesLeadController
                 'priority'  => $priority,
                 'quoted'    => (float)$request->input('project_quoted', 0),
             ]);
+            if ($amc && $amc['plan'] !== 'none') {
+                OpsAmc::create($tenantId, ['id' => $projectId, 'client_id' => $clientId, 'name' => $projectName], $amc,
+                    (string)($request->user['name'] ?? ''));
+            } elseif ($amc) {
+                OpsAmc::setReason($tenantId, $projectId, $amc['reason']);
+            }
         }
 
         SalesLead::markConverted($id, $clientId, $projectId, $existing === null);

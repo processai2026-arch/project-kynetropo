@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { salesLeadsApi } from "@/lib/api/sales";
 import type { ChallengeStatus, LeadStatus, LeadTemperature } from "@/types/sales";
 
 /** Lead sources the backend already recognises. */
@@ -20,6 +21,51 @@ export function sourceLabel(source: string | null | undefined, chapter?: string 
 }
 
 const CUSTOM = "__custom__";
+const NEW_CHAPTER = "__new_chapter__";
+
+/** The YES chapters already used, fetched once per visit and shared by every form. */
+let chapterList: Promise<string[]> | null = null;
+function useChapters(enabled: boolean): string[] {
+  const [chapters, setChapters] = useState<string[]>([]);
+  useEffect(() => {
+    if (!enabled) return;
+    chapterList ??= salesLeadsApi.chapters().catch(() => { chapterList = null; return []; });
+    let alive = true;
+    void chapterList.then((c) => { if (alive) setChapters(c); });
+    return () => { alive = false; };
+  }, [enabled]);
+  return chapters;
+}
+
+/**
+ * Which YES chapter: the chapters already used, then "New chapter…" to type
+ * one that is not there yet. A chapter typed once is in the list next time.
+ */
+function ChapterSelect({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
+  const chapters = useChapters(true);
+  const known = chapters.some((c) => c.toLowerCase() === value.trim().toLowerCase());
+  const [typing, setTyping] = useState(false);
+  const showInput = typing || (!!value && chapters.length > 0 && !known);
+  const picked = known ? chapters.find((c) => c.toLowerCase() === value.trim().toLowerCase()) ?? value : showInput ? NEW_CHAPTER : "";
+  return (
+    <div className="space-y-2">
+      <Select value={picked} onValueChange={(v) => {
+        if (v === NEW_CHAPTER) { setTyping(true); onChange(""); }
+        else { setTyping(false); onChange(v); }
+      }}>
+        <SelectTrigger id={id}><SelectValue placeholder="Select the chapter" /></SelectTrigger>
+        <SelectContent>
+          {chapters.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+          <SelectItem value={NEW_CHAPTER}>New chapter…</SelectItem>
+        </SelectContent>
+      </Select>
+      {showInput && (
+        <Input autoFocus aria-label="New chapter name" placeholder="Chapter name, e.g. Kanchipuram" value={value} maxLength={120}
+          onChange={(e) => onChange(e.target.value)} />
+      )}
+    </div>
+  );
+}
 
 /**
  * Lead source picker: the standard list, plus "Other — type your own" for
@@ -89,14 +135,7 @@ export function SourceSelect({
       {value === "yes" && onChapter && (
         <div className="space-y-1">
           <label htmlFor={`${id}-chapter`} className="text-xs font-medium text-foreground">Which YES chapter? *</label>
-          <Input
-            id={`${id}-chapter`}
-            autoFocus
-            placeholder="e.g. Kanchipuram"
-            value={chapter}
-            maxLength={120}
-            onChange={(e) => onChapter(e.target.value)}
-          />
+          <ChapterSelect id={`${id}-chapter`} value={chapter} onChange={onChapter} />
         </div>
       )}
     </div>

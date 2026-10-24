@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -10,7 +10,6 @@ import { SalesLayout } from "@/components/sales/SalesLayout";
 import { humanise } from "@/components/sales/SalesBits";
 import { Avatar, Chips, Empty, HeroAvatar, HeroBar, List, Loading, PhoneSelect, Row, SearchBox, shortDate, usePhoneApp } from "@/components/phone/PhoneKit";
 import { TempPill } from "./phone/SalesPhoneHome";
-import { LeadFormDialog } from "@/components/sales/LeadFormDialog";
 import { LeadsRegister } from "@/components/sales/LeadsRegister";
 import type { SalesLead } from "@/types/sales";
 
@@ -58,9 +57,6 @@ function PhoneLeads() {
   const [owner, setOwner] = useState(() => searchParams.get("owner") ?? storedOwner());
 
   const people = useTeamMembers(true);
-  const [formOpen, setFormOpen] = useState(false);
-  // null = adding; a lead = editing that one. The dialog is the same either way.
-  const [editingLead, setEditingLead] = useState<SalesLead | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -105,43 +101,10 @@ function PhoneLeads() {
     setSearchParams(next, { replace: true });
   }, [search, temperature, status, owner, setSearchParams]);
 
-  /*
-   * The dashboard's "Add New Lead" links here with ?new=1.
-   *
-   * Read on the first render rather than in an effect: the filter-sync effect
-   * above rewrites the URL as soon as it runs, and would have dropped the
-   * parameter before anything had a chance to act on it — which is why that
-   * button has been landing on the list and doing nothing.
-   */
+  // Old links to ?new=1 open the new-lead page.
+  const navigate = useNavigate();
   const [openOnArrival] = useState(() => searchParams.get("new") === "1");
-  const handledArrival = useRef(false);
-  useEffect(() => {
-    if (handledArrival.current || !openOnArrival) return;
-    // Permissions arrive a moment after mount; keep waiting until they do.
-    if (!can("sales.leads.create")) return;
-    handledArrival.current = true;
-    setEditingLead(null);
-    setFormOpen(true);
-  }, [openOnArrival, can]);
-
-  const leadForm = (      <LeadFormDialog
-      open={formOpen}
-      lead={editingLead}
-      onClose={() => {
-        setFormOpen(false);
-        setEditingLead(null);
-      }}
-      onSaved={(saved) => {
-        // Patch the row in place on an edit so the list does not jump; a new
-        // lead has to come from the server to land in the right filter.
-        if (editingLead) {
-          setItems((prev) => prev.map((l) => (l.id === saved.id ? { ...l, ...saved } : l)));
-        } else {
-          void load();
-        }
-      }}
-    />
-  );
+  useEffect(() => { if (openOnArrival) navigate("/sales/leads/new", { replace: true }); }, [openOnArrival, navigate]);
 
   // The phone app (Diamond Fencing's phone design): search in the header, temperature chips,
   // then the leads as chat-style rows. Editing and deleting are on the lead itself.
@@ -180,7 +143,6 @@ function PhoneLeads() {
             ))}
           </List>
         )}
-        {leadForm}
       </div>
     </SalesLayout>
   );

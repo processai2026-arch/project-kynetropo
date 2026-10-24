@@ -71,7 +71,10 @@ class AdminOpsAmcController
         $current = OpsAmc::find($id, $tenantId) ?? Response::error('AMC record not found', 404);
         $amc     = OpsAmc::normalise($body, $current);
         if ($amc['plan'] === 'none') {
-            $this->inTransaction(fn() => OpsAmc::remove($tenantId, $current, (string)($body['recorded_by'] ?? '')));
+            $this->inTransaction(function () use ($tenantId, $current, $amc, $body) {
+                OpsAmc::remove($tenantId, $current, (string)($body['recorded_by'] ?? ''));
+                OpsAmc::setReason($tenantId, (int)$current['project_id'], $amc['reason']);
+            });
             Response::success(['message' => 'Deleted']);
         }
 

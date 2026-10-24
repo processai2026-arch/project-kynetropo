@@ -93,13 +93,32 @@ export interface AmcDraft {
   payment_date: string;
   payment_mode: string;
   notes: string;
+  /** Why: no AMC (offline setup…), or from the 1st / 2nd year. */
+  reason: string;
+  /** Storage the base price includes, the size of an extra block, and its price a year. */
+  storage_gb: string;
+  storage_step_gb: string;
+  storage_step_price: string;
 }
+
+/** Reasons for no AMC, offered as choices; anything else is typed. */
+export const NO_AMC_REASONS = ["Offline setup", "Installation cost paid offline"] as const;
+
+/** The AMC a year when the customer uses `usedGb`: the base, plus each extra block started. */
+export function amcForStorage(base: number, includedGb: number, stepGb: number, stepPrice: number, usedGb: number): number {
+  if (!(includedGb > 0) || !(stepGb > 0) || usedGb <= includedGb) return base;
+  return base + Math.ceil((usedGb - includedGb) / stepGb) * stepPrice;
+}
+
+const gb = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)} GB`;
+const num = (v: number | null | undefined) => (v == null ? "" : String(v));
 
 /** A draft from a saved AMC, or a blank one (plan unanswered) for a new AMC. */
 export function amcDraft(amc: OpsAmcRecord | null | undefined, start = todayIso()): AmcDraft {
   if (!amc) {
     return { plan: null, amount: "", start_date: start, renewal_date: yearAfter(start), renewalTouched: false,
-             paid: null, payment_date: todayIso(), payment_mode: "bank_transfer", notes: "" };
+             paid: null, payment_date: todayIso(), payment_mode: "bank_transfer", notes: "",
+             reason: "", storage_gb: "", storage_step_gb: "", storage_step_price: "" };
   }
   return {
     plan: amc.plan,
@@ -111,13 +130,24 @@ export function amcDraft(amc: OpsAmcRecord | null | undefined, start = todayIso(
     payment_date: amc.paid_on ?? todayIso(),
     payment_mode: amc.payment_mode || "bank_transfer",
     notes: amc.notes ?? "",
+    reason: amc.reason ?? "",
+    storage_gb: num(amc.storage_gb),
+    storage_step_gb: num(amc.storage_step_gb),
+    storage_step_price: num(amc.storage_step_price),
   };
 }
 
-/** What is still missing or wrong, in words; null when the answer can be saved. */
-export function amcDraftProblem(d: AmcDraft): string | null {
+/**
+ * What is still missing or wrong, in words; null when the answer can be saved.
+ * The reason is asked whenever the answer is given or changed.
+ */
+export function amcDraftProblem(d: AmcDraft, { requireReason = true }: { requireReason?: boolean } = {}): string | null {
   if (!d.plan) return "Choose the AMC: from the 2nd year, from the 1st year, or no AMC";
+  if (requireReason && !d.reason.trim()) return d.plan === "none" ? "Choose why there is no AMC" : "Say why the AMC is from the " + (d.plan === "first_year" ? "1st" : "2nd") + " year";
   if (d.plan === "none") return null;
+  if (Number(d.storage_gb) > 0 && !(Number(d.storage_step_gb) > 0 && d.storage_step_price.trim() !== "")) {
+    return "Enter how many GB each extra block adds, and its price a year";
+  }
   if (!(Number(d.amount) > 0)) return "Enter the AMC price per year";
   if (!d.start_date || !d.renewal_date) return "Enter the AMC start and renewal dates";
   if (d.renewal_date <= d.start_date) return "The AMC renewal date must be after its start date";
@@ -127,8 +157,13 @@ export function amcDraftProblem(d: AmcDraft): string | null {
 }
 
 export function amcDraftBody(d: AmcDraft): OpsAmcPlanBody {
-  if (!d.plan || d.plan === "none") return { plan: "none" };
+  if (!d.plan || d.plan === "none") return { plan: "none", reason: d.reason.trim() };
+  const storage = Number(d.storage_gb) > 0;
   return {
+    reason: d.reason.trim(),
+    storage_gb: storage ? Number(d.storage_gb) : null,
+    storage_step_gb: storage ? Number(d.storage_step_gb) : null,
+    storage_step_price: storage ? Number(d.storage_step_price) : null,
     plan: d.plan,
     amount: Number(d.amount),
     start_date: d.start_date,
@@ -158,6 +193,12 @@ export function AmcPlanFields({ draft, onChange, original, allowNone = true, sho
 }) {
   const set = (patch: Partial<AmcDraft>) => onChange({ ...draft, ...patch });
   const setStart = (v: string) => set({ start_date: v, renewal_date: draft.renewalTouched ? draft.renewal_date : yearAfter(v) });
+  // "Other" picked for no AMC, before anything is typed.
+  const [otherPicked, setOtherPicked] = useState(false);
+  // The calculator's "if they use … GB": a what-if, not saved.
+  const [usedGb, setUsedGb] = useState("");
+  const presetReason = (NO_AMC_REASONS as readonly string[]).includes(draft.reason);
+  const noAmcChoice = presetReason ? draft.reason : draft.reason || otherPicked ? "Other" : null;
   const locked = !!original?.renewed;
   const amount = Number(draft.amount);
   const price = amount > 0 ? rupees(amount) : "The AMC";
@@ -190,8 +231,28 @@ export function AmcPlanFields({ draft, onChange, original, allowNone = true, sho
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <Field label="AMC" required className="sm:col-span-2" hint={locked ? "Fixed once the contract has renewed" : undefined}>
         <Choice<OpsAmcPlan> label="AMC" value={draft.plan} disabled={locked}
-          onChange={(plan) => set({ plan, paid: plan === "first_year" ? draft.paid : null })} options={plans} />
+          onChange={(plan) => { setOtherPicked(false); set({ plan, paid: plan === "first_year" ? draft.paid : null, reason: plan === draft.plan ? draft.reason : "" }); }} options={plans} />
       </Field>
+
+      {draft.plan === "none" && (
+        <Field label="Why no AMC?" required className="sm:col-span-2">
+          <div className="space-y-2">
+            <Choice<string> label="Why no AMC?" value={noAmcChoice}
+              onChange={(v) => { setOtherPicked(v === "Other"); set({ reason: v === "Other" ? "" : v }); }}
+              options={[...NO_AMC_REASONS.map((r) => ({ value: r as string, label: r })), { value: "Other", label: "Other" }]} />
+            {noAmcChoice === "Other" && (
+              <Input id={`${idPrefix}-reason`} autoFocus aria-label="Why no AMC" placeholder="The reason" value={draft.reason} maxLength={300}
+                onChange={(e) => set({ reason: e.target.value })} />
+            )}
+          </div>
+        </Field>
+      )}
+      {draft.plan && draft.plan !== "none" && (
+        <Field label={`Why from the ${draft.plan === "first_year" ? "1st" : "2nd"} year?`} htmlFor={`${idPrefix}-reason`} required className="sm:col-span-2">
+          <Input id={`${idPrefix}-reason`} maxLength={300} value={draft.reason} onChange={(e) => set({ reason: e.target.value })}
+            placeholder={draft.plan === "first_year" ? "e.g. Hosted on our server from go-live" : "e.g. First year's support included in the project price"} />
+        </Field>
+      )}
 
       {draft.plan && draft.plan !== "none" && <>
         <Field label={draft.plan === "second_year" ? "AMC price per year, from the 2nd year (₹)" : "AMC price per year (₹)"} htmlFor={`${idPrefix}-amount`} required>
@@ -226,6 +287,8 @@ export function AmcPlanFields({ draft, onChange, original, allowNone = true, sho
           </Field>
         </>}
 
+        <AmcStorageFields draft={draft} set={set} usedGb={usedGb} setUsedGb={setUsedGb} idPrefix={idPrefix} />
+
         {showNotes && (
           <Field label="Notes" htmlFor={`${idPrefix}-notes`} className="sm:col-span-2">
             <Textarea id={`${idPrefix}-notes`} rows={2} value={draft.notes} onChange={(e) => set({ notes: e.target.value })} />
@@ -236,6 +299,65 @@ export function AmcPlanFields({ draft, onChange, original, allowNone = true, sho
       {notes.length > 0 && (
         <div className="sm:col-span-2 space-y-1 rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
           {notes.map((n, i) => <p key={i}>{n}</p>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The storage the AMC includes, and what more costs: e.g. 20 GB in the base
+ * price, then every 10 GB more adds ₹500 a year. The steps are worked out as
+ * they are typed, with a "what if they use …" check.
+ */
+function AmcStorageFields({ draft, set, usedGb, setUsedGb, idPrefix }: {
+  draft: AmcDraft;
+  set: (patch: Partial<AmcDraft>) => void;
+  usedGb: string;
+  setUsedGb: (v: string) => void;
+  idPrefix: string;
+}) {
+  const base = Number(draft.amount);
+  const included = Number(draft.storage_gb);
+  const step = Number(draft.storage_step_gb);
+  const stepPrice = Number(draft.storage_step_price);
+  const ready = base > 0 && included > 0 && step > 0 && draft.storage_step_price.trim() !== "" && stepPrice >= 0;
+  const digits = (v: string) => v.replace(/[^\d.]/g, "");
+  const used = Number(usedGb);
+
+  return (
+    <div className="sm:col-span-2 space-y-3 rounded-md border p-3">
+      <div>
+        <p className="text-sm font-medium text-card-foreground">Storage in the AMC</p>
+        <p className="text-xs text-muted-foreground">Optional. How much the base price covers, and what each extra block adds a year.</p>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Field label="Included in the base (GB)" htmlFor={`${idPrefix}-gb`}>
+          <Input id={`${idPrefix}-gb`} inputMode="decimal" placeholder="e.g. 20" value={draft.storage_gb} onChange={(e) => set({ storage_gb: digits(e.target.value) })} />
+        </Field>
+        <Field label="Each extra block (GB)" htmlFor={`${idPrefix}-step`}>
+          <Input id={`${idPrefix}-step`} inputMode="decimal" placeholder="e.g. 10" value={draft.storage_step_gb} onChange={(e) => set({ storage_step_gb: digits(e.target.value) })} />
+        </Field>
+        <Field label="Price per extra block (₹ a year)" htmlFor={`${idPrefix}-step-price`}>
+          <Input id={`${idPrefix}-step-price`} inputMode="decimal" placeholder="e.g. 500" value={draft.storage_step_price} onChange={(e) => set({ storage_step_price: digits(e.target.value) })} />
+        </Field>
+      </div>
+      {ready && (
+        <div className="space-y-2 rounded-md bg-muted/50 px-3 py-2 text-sm">
+          <ul className="space-y-0.5 text-muted-foreground">
+            {[0, 1, 2].map((n) => (
+              <li key={n}>
+                {n === 0 ? <>Up to <b className="text-foreground">{gb(included)}</b></> : <>{gb(included + (n - 1) * step)} – <b className="text-foreground">{gb(included + n * step)}</b></>}
+                {": "}<b className="text-foreground">{rupees(base + n * stepPrice)}</b> a year
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap items-center gap-2 border-t pt-2">
+            <label htmlFor={`${idPrefix}-used`} className="text-muted-foreground">If they use</label>
+            <Input id={`${idPrefix}-used`} inputMode="decimal" className="h-8 w-24" placeholder="GB" value={usedGb} onChange={(e) => setUsedGb(digits(e.target.value))} />
+            <span className="text-muted-foreground">GB, the AMC from that year is</span>
+            <b className="text-foreground">{rupees(used > 0 ? amcForStorage(base, included, step, stepPrice, used) : base)}</b>
+          </div>
         </div>
       )}
     </div>

@@ -91,6 +91,8 @@ export interface OpsProject {
   deadline: string | null;
   health: "green" | "yellow" | "red";
   priority: "low" | "medium" | "high" | "critical";
+  /** Why the project has the AMC it has (no AMC, from the 1st or the 2nd year). */
+  amc_reason?: string;
   quoted: number;
   received: number;
   balance: number;
@@ -257,6 +259,13 @@ export interface OpsAmcRecord {
   project_code: string | null;
   /** The yearly AMC amount. */
   amount: number;
+  /** Storage the base price includes, in GB; null when none is stated. */
+  storage_gb: number | null;
+  /** Each extra block of storage (GB), and what it adds to the AMC a year. */
+  storage_step_gb: number | null;
+  storage_step_price: number | null;
+  /** Why the project has this AMC (kept on the project). */
+  reason: string;
   /** second_year: AMC from the 2nd year (first year free); first_year: charged from the start. */
   plan: "second_year" | "first_year";
   /** Nothing was charged for the first year; the amount is first due at renewal. */
@@ -297,6 +306,11 @@ export interface OpsAmcPlanBody {
   payment_date?: string;
   payment_mode?: string;
   notes?: string;
+  /** Why: no AMC, or from the 1st / 2nd year. Left out, it stays as it is. */
+  reason?: string;
+  storage_gb?: number | null;
+  storage_step_gb?: number | null;
+  storage_step_price?: number | null;
 }
 
 /** POST /admin/ops/amc */
