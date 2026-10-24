@@ -107,14 +107,14 @@ function PhoneLeads() {
     void load(1);
   }, [load]);
 
-  // The next page loads when the end of the list comes within a screen of view.
+  // The next page loads as the end of the list comes into view.
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = end.current;
     if (!el || !hasMore || loading || loadingMore) return;
     const seen = new IntersectionObserver((entries) => {
       if (entries.some((x) => x.isIntersecting)) void load(page + 1);
-    }, { rootMargin: "600px 0px" });
+    }, { rootMargin: "150px 0px" });
     seen.observe(el);
     return () => seen.disconnect();
   }, [hasMore, loading, loadingMore, page, load]);
@@ -147,7 +147,7 @@ function PhoneLeads() {
   return (
     <SalesLayout>
       <div className="space-y-3">
-        <HeroBar eyebrow={loading ? "Loading…" : `${total} lead${total === 1 ? "" : "s"}`} title="Leads"
+        <HeroBar eyebrow={loading ? "Loading…" : hasMore ? `${items.length} of ${total} leads` : `${total} lead${total === 1 ? "" : "s"}`} title="Leads"
           right={<HeroAvatar name={me?.name} to="/sales/more" />}>
           <SearchBox onHero value={search} onChange={setSearch} placeholder="Search name, company, phone" />
         </HeroBar>

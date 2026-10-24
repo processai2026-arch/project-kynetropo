@@ -125,7 +125,7 @@ export function getSalesMock(url: string, method: string, query: URLSearchParams
   if (url === "/admin/sales/leads") {
     const status = query.get("status");
     // Enough rows to page through: the five above plus filler.
-    const all = status === "converted" ? [] : [...LEADS, ...Array.from({ length: 55 }, (_, i) =>
+    const all = status === "converted" ? [] : [...LEADS, ...Array.from({ length: 36 }, (_, i) =>
       lead(6 + i, `Sample Traders ${6 + i}`, `Contact ${6 + i}`, `98400${String(10000 + i)}`, "new", (["hot", "warm", "cold"] as const)[i % 3], null))];
     if (query.get("sort") === "code") all.sort((a, b) => b.id - a.id);
     const p = Math.max(1, Number(query.get("page") || 1));

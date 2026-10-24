@@ -41,6 +41,8 @@ export function registerServiceWorker(): void {
       });
   });
 
+  watchForNewBuild();
+
   // A newly activated worker takes control — reload once so the fresh build is
   // actually running. The guard stops this from looping.
   let reloaded = false;
@@ -48,5 +50,37 @@ export function registerServiceWorker(): void {
     if (reloaded) return;
     reloaded = true;
     window.location.reload();
+  });
+}
+
+/**
+ * Picks up a deploy in an app that was left open.
+ *
+ * sw.js itself does not change between deploys, so the worker never reports an
+ * update: an installed app kept in the background would run the old build until
+ * it was closed for good. Instead, whenever the app comes back to the screen (at
+ * most once a minute), index.html is fetched fresh and its entry script compared
+ * with the one running; a different one means a new build, and the page reloads.
+ * Never on a form, where a reload would throw away what was typed.
+ */
+function watchForNewBuild(): void {
+  const entry = /\/assets\/index-[\w-]+\.js/;
+  const running = Array.from(document.scripts).map((s) => s.src.match(entry)?.[0]).find(Boolean);
+  if (!running) return;
+
+  let lastCheck = Date.now();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible" || Date.now() - lastCheck < 60_000) return;
+    lastCheck = Date.now();
+    if (/\/(new|edit|convert)$/.test(window.location.pathname)) return;
+    fetch("/index.html", { cache: "no-store" })
+      .then((res) => (res.ok ? res.text() : ""))
+      .then((html) => {
+        const latest = html.match(entry)?.[0];
+        if (latest && latest !== running) window.location.reload();
+      })
+      .catch(() => {
+        /* Offline or a hiccup: try again next time the app comes back. */
+      });
   });
 }
