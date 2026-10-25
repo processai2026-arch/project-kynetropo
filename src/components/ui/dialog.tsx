@@ -13,12 +13,18 @@ import { isPhoneApp } from "@/lib/uiSkin";
  */
 const PageMode = React.createContext<{ setHasHeader: (v: boolean) => void } | null>(null);
 
-/** Opening one pushes a history entry, so the phone's Back closes it instead of leaving the screen. */
-function useBackCloses(enabled: boolean, close: () => void) {
+/**
+ * Opening one pushes a history entry, so the phone's Back closes it instead of leaving the screen.
+ *
+ * Rendered INSIDE the dialog's content, which exists only while the dialog is open. The
+ * DialogContent wrapper itself renders on every page that has a dialog, open or not, so a
+ * hook there pushed an entry per closed dialog on arrival and the screen's own Back arrow
+ * then only stepped through those.
+ */
+function BackCloses({ close }: { close: () => void }) {
   const closeRef = React.useRef(close);
   closeRef.current = close;
   React.useEffect(() => {
-    if (!enabled) return;
     const key = `dlg-${Math.random().toString(36).slice(2)}`;
     window.history.pushState({ ...(window.history.state ?? {}), kynDialog: key }, "");
     const onPop = () => closeRef.current();
@@ -29,7 +35,8 @@ function useBackCloses(enabled: boolean, close: () => void) {
       // alone when a navigation has already moved on from it.
       if ((window.history.state as { kynDialog?: string } | null)?.kynDialog === key) window.history.back();
     };
-  }, [enabled]);
+  }, []);
+  return null;
 }
 
 const Dialog = DialogPrimitive.Root;
@@ -62,7 +69,6 @@ const DialogContent = React.forwardRef<
   const page = typeof window !== "undefined" && isPhoneApp(window.location.pathname);
   const [hasHeader, setHasHeader] = React.useState(false);
   const closeRef = React.useRef<HTMLButtonElement>(null);
-  useBackCloses(page, () => closeRef.current?.click());
   const ctx = React.useMemo(() => ({ setHasHeader }), []);
 
   if (page) {
@@ -77,6 +83,7 @@ const DialogContent = React.forwardRef<
           )}
           {...props}
         >
+          <BackCloses close={() => closeRef.current?.click()} />
           <PageMode.Provider value={ctx}>{children}</PageMode.Provider>
           <DialogPrimitive.Close ref={closeRef} className={cn(
             "fixed right-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-30 grid h-10 w-10 place-items-center rounded-full bg-muted",

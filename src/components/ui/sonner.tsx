@@ -32,8 +32,12 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       position={narrow ? "top-center" : "bottom-right"}
-      // Clear the status bar when the app is installed to a home screen.
-      offset={narrow ? "calc(0.75rem + env(safe-area-inset-top))" : undefined}
+      // Below the phone app's top bar (3.5rem), clear of the status bar when installed to a
+      // home screen: over the bar a toast sat on the Back arrow, and a tap meant for Back
+      // landed on the toast instead.
+      // (Under 600px wide Sonner reads mobileOffset instead, so both are set.)
+      offset={narrow ? "calc(4.25rem + env(safe-area-inset-top))" : undefined}
+      mobileOffset={narrow ? { top: "calc(4.25rem + env(safe-area-inset-top))", left: 16, right: 16 } : undefined}
       className="toaster group"
       toastOptions={{
         classNames: {
