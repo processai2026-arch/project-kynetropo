@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Building2, CalendarClock, CalendarPlus, CalendarX, CheckCircle2, ChevronRight, ExternalLink,
-  Mail, MessageCircle, MessageSquareQuote, MonitorCog, Pencil, Phone, Thermometer, Trash2, Undo2, UserCheck, Users, XCircle,
+  Mail, Megaphone, MessageCircle, MessageSquareQuote, MonitorCog, Pencil, Phone, Thermometer, Trash2, Undo2, UserCheck, Users, XCircle,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -379,6 +379,7 @@ export default function SalesLeadDetail() {
     lead.email ? { icon: Mail, label: "Email", value: lead.email, href: `mailto:${lead.email}` } : null,
     lead.company ? { icon: Building2, label: "Company", value: lead.company } : null,
     lead.contact_person ? { icon: UserCheck, label: "Contact", value: lead.contact_person } : null,
+    { icon: Megaphone, label: "Source", value: lead.source ? sourceLabel(lead.source, lead.source_chapter) : "Not recorded" },
   ];
   const facts = factsData.filter((f): f is ProfileFact => f !== null);
 
@@ -578,6 +579,10 @@ export default function SalesLeadDetail() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-lg font-semibold leading-tight">{lead.company || lead.name}</p>
                 {lead.company && contact ? <p className="truncate text-sm text-muted-foreground">{contact}</p> : null}
+                <p className="mt-0.5 flex items-center gap-1 text-sm text-primary">
+                  <Megaphone className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{lead.source ? sourceLabel(lead.source, lead.source_chapter) : "Source not recorded"}</span>
+                </p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   <Pill tone={STATUS_TONE[lead.status] ?? "muted"}>{statusLabel(lead.status)}</Pill>
                   {can("sales.leads.edit")

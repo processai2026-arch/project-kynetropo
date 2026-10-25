@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Loader2, Users } from "lucide-react";
+import { Loader2, Megaphone, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { salesLeadsApi } from "@/lib/api/sales";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { SalesLayout } from "@/components/sales/SalesLayout";
-import { humanise } from "@/components/sales/SalesBits";
+import { humanise, sourceLabel } from "@/components/sales/SalesBits";
 import { Avatar, Chips, Empty, HeroAvatar, HeroBar, List, Loading, PhoneSelect, Row, SearchBox, shortDate, usePhoneApp } from "@/components/phone/PhoneKit";
 import { TempPill } from "./phone/SalesPhoneHome";
 import { LeadsRegister } from "@/components/sales/LeadsRegister";
@@ -175,11 +175,16 @@ function PhoneLeads() {
                 <Row key={lead.id} to={`/sales/leads/${lead.id}`} avatar={<Avatar name={lead.company || lead.name} />}
                   title={lead.company || lead.name}
                   meta={lead.lead_code ?? undefined}
-                  sub={[
-                    lead.contact_person || lead.name,
-                    humanise(lead.status),
-                    lead.next_followup_at ? `Follow-up ${shortDate(lead.next_followup_at)}` : null,
-                  ].filter(Boolean).join(" · ")}
+                  sub={<>
+                    <span className="block truncate">
+                      {[lead.contact_person || lead.name, humanise(lead.status), lead.next_followup_at ? `Follow-up ${shortDate(lead.next_followup_at)}` : null].filter(Boolean).join(" · ")}
+                    </span>
+                    {/* Where they came from, on a line of its own so it is never the part cut off. */}
+                    <span className="mt-0.5 flex items-center gap-1 truncate text-xs text-primary">
+                      <Megaphone className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{lead.source ? sourceLabel(lead.source, lead.source_chapter) : "Source not recorded"}</span>
+                    </span>
+                  </>}
                   end={<TempPill value={lead.temperature} />} />
               ))}
             </List>
