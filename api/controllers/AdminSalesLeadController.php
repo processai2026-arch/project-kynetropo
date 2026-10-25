@@ -75,6 +75,16 @@ class AdminSalesLeadController
         $lead['followups']  = SalesFollowup::forLead($id);
         $lead['meetings']   = SalesMeeting::forLead($id);
         $lead['timeline']   = SalesActivity::forLead($id);
+        $lead['quotations'] = SalesQuotation::forLead($id);
+        // A customer now: where it is on the client line, for the phone app's pipeline.
+        $lead['client_stage'] = null;
+        if (!empty($raw['converted_client_id'])) {
+            $client = Database::fetch(
+                'SELECT stage FROM ops_clients WHERE id = ? AND tenant_id = ? LIMIT 1',
+                [(int)$raw['converted_client_id'], Database::tenantId()]
+            );
+            $lead['client_stage'] = $client['stage'] ?? null;
+        }
         // One grouped query instead of one per call/follow-up/meeting row.
         $lead['comment_counts'] = SalesComment::countsForLead($id);
         $lead['comments']       = SalesComment::forEntity('lead', $id);

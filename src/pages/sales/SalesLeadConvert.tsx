@@ -15,6 +15,7 @@ import { SalesLayout } from "@/components/sales/SalesLayout";
 import { salesLeadsApi, type ConvertLeadBody } from "@/lib/api/sales";
 import { AmcPlanFields, amcDraft, amcDraftBody, amcDraftProblem, yearAfter, type AmcDraft } from "@/pages/finance/components/AmcDialogs";
 import type { SalesLead } from "@/types/sales";
+import { CLIENT_STAGES as CLIENT_STAGE_NAMES } from "@/pages/crm/components/crm";
 
 /**
  * Convert a lead into a customer (/sales/leads/:id/convert) — a page, not a
@@ -24,10 +25,7 @@ import type { SalesLead } from "@/types/sales";
  * price, and the storage the price includes.
  */
 
-const CLIENT_STAGES = [
-  "First Meetup", "Onboarding", "Requirements", "Scope Freeze",
-  "Advance Paid", "Development", "QA", "Delivery", "Full Payment", "Closed",
-].map((s) => ({ value: s, label: s }));
+const CLIENT_STAGES = CLIENT_STAGE_NAMES.map((s) => ({ value: s, label: s }));
 const HEALTH = [{ value: "green", label: "Green" }, { value: "yellow", label: "Yellow" }, { value: "red", label: "Red" }];
 const PRIORITIES = ["low", "medium", "high", "critical"].map((p) => ({ value: p, label: p[0].toUpperCase() + p.slice(1) }));
 

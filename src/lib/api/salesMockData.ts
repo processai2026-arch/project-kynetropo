@@ -138,7 +138,11 @@ export function getSalesMock(url: string, method: string, query: URLSearchParams
   const leadMatch = url.match(/^\/admin\/sales\/leads\/(\d+)$/);
   if (leadMatch) {
     const l = LEADS.find((x) => x.id === Number(leadMatch[1])) ?? LEADS[0];
-    return ok({ ...l, calls: [], followups: FOLLOWUPS.today.filter((f) => f.lead_id === l.id), meetings: [], timeline: [], comments: [], comment_counts: {} });
+    const quotations = l.id === 1 ? [
+      { id: 2, lead_id: 1, version: 2, amount: 42000, sent_on: d(-1), notes: "Dropped the stock module; price down", status: "sent", answered_on: null, answer_note: "", created_by_name: "Naresh", created_at: NOW },
+      { id: 1, lead_id: 1, version: 1, amount: 55000, sent_on: d(-6), notes: "Billing, stock and reports", status: "rejected", answered_on: d(-3), answer_note: "Price too high for this year", created_by_name: "Naresh", created_at: NOW },
+    ] : [];
+    return ok({ ...l, calls: [], followups: FOLLOWUPS.today.filter((f) => f.lead_id === l.id), meetings: [], timeline: [], comments: [], comment_counts: {}, quotations, client_stage: null });
   }
   if (url === "/admin/sales/followups") {
     const bucket = (query.get("bucket") || "today") as keyof typeof FOLLOWUPS | "completed";

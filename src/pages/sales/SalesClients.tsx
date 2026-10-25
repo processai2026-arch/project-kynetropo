@@ -176,6 +176,9 @@ export default function SalesClients() {
   // The phone app (Diamond Fencing's phone design): round search, stages as chips, the totals,
   // then the clients as chat rows — tap one to open its sales record.
   if (phone) {
+    // Newest customer first by its number (CL-0011, CL-0010…), the code on every row.
+    const codeNo = (c: OpsClient) => Number(String(c.client_code ?? "").replace(/\D/g, "")) || 0;
+    const ordered = [...list.allRows].sort((a, b) => codeNo(b) - codeNo(a) || b.id - a.id);
     const PAY_TONE: Record<string, Tone> = { paid: "success", partial: "warning", pending: "muted", overdue: "danger" };
     return (
       <SalesLayout>
@@ -198,11 +201,14 @@ export default function SalesClients() {
                 </div>
               </Block>
               <List title={`${list.allRows.length} client${list.allRows.length === 1 ? "" : "s"}`}>
-                {list.allRows.map((c) => (
+                {ordered.map((c) => (
                   <Row key={c.id} to={c.sales_lead_id ? `/sales/leads/${c.sales_lead_id}` : undefined}
                     avatar={<Avatar name={c.name} />} title={c.name}
-                    meta={c.balance_due ? <span className={cn(c.balance_due > 0 && "text-red-600")}>{inr(c.balance_due)} due</span> : undefined}
-                    sub={[c.company || c.project_name, c.stage].filter(Boolean).join(" · ")}
+                    meta={c.client_code || undefined}
+                    sub={<>
+                      {[c.company || c.project_name, c.stage].filter(Boolean).join(" · ")}
+                      {c.balance_due ? <span className={cn(c.balance_due > 0 && "text-red-600")}> · {inr(c.balance_due)} due</span> : null}
+                    </>}
                     end={c.payment_status ? <Pill tone={PAY_TONE[c.payment_status] ?? "muted"}>{c.payment_status}</Pill> : null} />
                 ))}
               </List>

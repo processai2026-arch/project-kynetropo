@@ -351,11 +351,31 @@ class AdminSalesFollowupController
             Response::error('Follow-up not found', 404);
         }
         $this->assertAccess($request, $row);
+        if ((string)$row['status'] !== 'pending') {
+            Response::error('This follow-up is already ' . ((string)$row['status'] === 'completed' ? 'completed' : 'closed'), 422);
+        }
 
-        SalesFollowup::cancel($id);
+        // Closing without a reason would look exactly like a follow-up nobody did.
+        $reason = trim((string)$request->input('reason', ''));
+        if ($reason === '') {
+            Response::error('Say why the follow-up is being closed', 422);
+        }
+
+        $userId = isset($request->user['user_id']) ? (int)$request->user['user_id'] : null;
+        SalesFollowup::cancel($id, $userId, $reason);
+
+        SalesActivity::log(
+            (int)$row['lead_id'],
+            'followup_closed',
+            'Follow-up of ' . date('j M', strtotime((string)$row['due_date'])) . ' closed',
+            $request->user,
+            $reason,
+            'followup',
+            $id
+        );
         SalesLead::refreshSchedule((int)$row['lead_id']);
 
-        Response::success(null, 'Follow-up cancelled');
+        Response::success(null, 'Follow-up closed');
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

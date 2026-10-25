@@ -100,6 +100,28 @@ export interface SalesLeadDetail extends SalesLead {
   comments: SalesComment[];
   /** [entity_type][entity_id] -> comment count, so rows can show a badge. */
   comment_counts: Partial<Record<CommentEntityType, Record<number, number>>>;
+  /** The quotations sent, newest round first. */
+  quotations?: SalesQuotation[];
+  /** Once a customer: its stage on the client line (First Meetup … Closed). */
+  client_stage?: string | null;
+}
+
+/** One round of the quotation loop: sent, then rejected or accepted. */
+export interface SalesQuotation {
+  id: number;
+  lead_id: number;
+  version: number;
+  amount: number | null;
+  sent_on: string;
+  /** What was in it, or what changed from the last one. */
+  notes: string;
+  /** "sent" while waiting for an answer. */
+  status: "sent" | "rejected" | "accepted";
+  answered_on: string | null;
+  /** Why it was rejected, or anything said on accepting. */
+  answer_note: string;
+  created_by_name: string | null;
+  created_at: string;
 }
 
 export type CommentEntityType = "lead" | "call" | "followup" | "meeting" | "challenge" | "task";

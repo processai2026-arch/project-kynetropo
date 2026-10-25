@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { CalendarClock, CheckCircle2, ChevronRight, Pencil, Phone } from "lucide-react";
+import { CalendarClock, CheckCircle2, ChevronRight, Pencil, Phone, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -18,17 +18,19 @@ import {
 import { CommentButton, CommentThreadDialog } from "@/components/sales/CommentThread";
 import { FollowupDetailDialog } from "@/components/sales/FollowupDetailDialog";
 import { FollowupCompleteDialog, OutcomeBadge } from "@/components/sales/FollowupCompleteDialog";
+import { FollowupCloseDialog } from "@/components/sales/FollowupCloseDialog";
 import { TemperatureBadge, formatDate, formatTime, humanise, subjectLabel, subjectPath } from "@/components/sales/SalesBits";
 import type { FollowupBucket, SalesFollowup } from "@/types/sales";
 import { cn } from "@/lib/utils";
-import { Avatar, Chips, Empty, HeroAvatar, HeroBar, List, Loading, Row, usePhoneApp } from "@/components/phone/PhoneKit";
+import { Avatar, Chips, Empty, HeroAvatar, HeroBar, List, Loading, Pill, Row, usePhoneApp } from "@/components/phone/PhoneKit";
 import { TempPill, dueAt } from "./phone/SalesPhoneHome";
 
 const BUCKETS: { key: FollowupBucket; label: string }[] = [
   { key: "today", label: "Today" },
   { key: "overdue", label: "Overdue" },
   { key: "upcoming", label: "Upcoming" },
-  { key: "completed", label: "Completed" },
+  // Completed and closed ones both: the finished follow-ups.
+  { key: "completed", label: "Done" },
 ];
 
 /**
@@ -62,6 +64,8 @@ export default function SalesFollowUps() {
   const [error, setError] = useState<string | null>(null);
 
   const [completing, setCompleting] = useState<SalesFollowup | null>(null);
+  /** The follow-up being closed as no longer needed. */
+  const [closing, setClosing] = useState<SalesFollowup | null>(null);
   /** The follow-up whose call is being logged, without leaving this page. */
   const [callingOn, setCallingOn] = useState<SalesFollowup | null>(null);
   const [editing, setEditing] = useState<SalesFollowup | null>(null);
@@ -116,6 +120,7 @@ export default function SalesFollowUps() {
         followup={viewing}
         onEdit={phone && can("sales.followups.create") && viewing && canEditFollowup(viewing, me ?? null)
           ? (f) => { setViewing(null); setEditing(f); } : undefined}
+        onCloseFollowup={can("sales.followups.complete") ? (f) => { setViewing(null); setClosing(f); } : undefined}
         onClose={() => {
           setViewing(null);
           // A comment may have been added from inside it.
@@ -166,6 +171,12 @@ export default function SalesFollowUps() {
         onClose={() => setCompleting(null)}
         onCompleted={() => void load()}
       />
+
+      <FollowupCloseDialog
+        followup={closing}
+        onClose={() => setClosing(null)}
+        onClosed={() => void load()}
+      />
     </>
   );
 
@@ -193,8 +204,12 @@ export default function SalesFollowUps() {
                     <div className="min-w-0 flex-1">
                       <Row onClick={() => setViewing(f)} avatar={<Avatar name={name} />} title={name}
                         meta={<span className={cn(bucket === "overdue" && "font-medium text-destructive")}>{dueAt(f)}</span>}
-                        sub={f.status === "completed" ? (f.outcome_notes || humanise(f.outcome) || "Completed") : (f.purpose || f.lead_contact_person || "")}
-                        end={f.status === "completed" ? <OutcomeBadge value={f.outcome} /> : <TempPill value={f.lead_temperature} />} />
+                        sub={f.status === "completed" ? (f.outcome_notes || humanise(f.outcome) || "Completed")
+                          : f.status === "cancelled" ? (f.outcome_notes || "Closed")
+                          : (f.purpose || f.lead_contact_person || "")}
+                        end={f.status === "completed" ? <OutcomeBadge value={f.outcome} />
+                          : f.status === "cancelled" ? <Pill icon={XCircle}>Closed</Pill>
+                          : <TempPill value={f.lead_temperature} />} />
                     </div>
                     {pending && (
                       <div className="mr-3 flex shrink-0 gap-2">
@@ -350,7 +365,19 @@ export default function SalesFollowUps() {
                 </div>
               )}
 
-              {f.status === "completed" ? (
+              {f.status === "cancelled" ? (
+                <div className="mt-3 space-y-1">
+                  <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <XCircle className="h-3.5 w-3.5" />
+                    Closed {formatDate(f.completed_at)}
+                  </p>
+                  {f.outcome_notes && (
+                    <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                      {f.outcome_notes}
+                    </p>
+                  )}
+                </div>
+              ) : f.status === "completed" ? (
                 <div className="mt-3 space-y-1">
                   <div className="flex flex-wrap items-center gap-2 text-xs text-emerald-700">
                     <span className="inline-flex items-center gap-1.5">
@@ -398,11 +425,22 @@ export default function SalesFollowUps() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="col-span-2 h-9 text-muted-foreground"
+                      className="h-9 text-muted-foreground"
                       onClick={() => setEditing(f)}
                     >
                       <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                      Edit date, time or purpose
+                      Edit
+                    </Button>
+                  )}
+                  {can("sales.followups.complete") && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-9 text-muted-foreground hover:text-destructive"
+                      onClick={() => setClosing(f)}
+                    >
+                      <XCircle className="mr-1.5 h-3.5 w-3.5" />
+                      Close
                     </Button>
                   )}
                 </div>

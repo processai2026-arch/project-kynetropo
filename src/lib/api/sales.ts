@@ -22,6 +22,7 @@ import type {
   SalesMe,
   SalesMeeting,
   SalesMention,
+  SalesQuotation,
   SalesTask,
   SalesTaskDetail,
   TaskBucket,
@@ -359,6 +360,21 @@ export interface FollowupListResult {
   counts: Record<FollowupBucket, number>;
 }
 
+// ─── Quotations ───────────────────────────────────────────────────────────────
+
+/** The quotation loop on a lead. Every call answers with all its rounds, newest first. */
+export const salesQuotationsApi = {
+  /** Sends one — the first, or again after a rejection. */
+  send: async (leadId: number, body: { amount?: number | null; sent_on?: string; notes?: string }) =>
+    (await apiFetch<Envelope<SalesQuotation[]>>(`/admin/sales/leads/${leadId}/quotations`, { method: "POST", body: JSON.stringify(body) })).data,
+  /** Rejected (the note says why, required) or accepted. */
+  answer: async (id: number, body: { answer: "rejected" | "accepted"; note?: string; answered_on?: string }) =>
+    (await apiFetch<Envelope<SalesQuotation[]>>(`/admin/sales/quotations/${id}/answer`, { method: "POST", body: JSON.stringify(body) })).data,
+  /** Takes back the latest round, entered by mistake. */
+  remove: async (id: number) =>
+    (await apiFetch<Envelope<SalesQuotation[]>>(`/admin/sales/quotations/${id}`, { method: "DELETE" })).data,
+};
+
 export const salesFollowupsApi = {
   list: async (bucket: FollowupBucket | "" = "", extra: { lead_id?: number } = {}): Promise<FollowupListResult> =>
     (await apiFetch<Envelope<FollowupListResult>>(
@@ -407,7 +423,9 @@ export const salesFollowupsApi = {
       method: "POST",
       body: JSON.stringify(body),
     })).data,
-  cancel: (id: number) => apiFetch<Envelope<null>>(`/admin/sales/followups/${id}/cancel`, { method: "POST" }),
+  /** Closes a follow-up that is no longer needed; the reason is required and kept in its history. */
+  cancel: (id: number, reason: string) =>
+    apiFetch<Envelope<null>>(`/admin/sales/followups/${id}/cancel`, { method: "POST", body: JSON.stringify({ reason }) }),
 };
 
 // ─── Meetings ─────────────────────────────────────────────────────────────────

@@ -25,6 +25,7 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ScrollableX } from "@/components/ui/scrollable-x";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
+import { QuotationCard, quotationSummary } from "@/components/sales/QuotationRounds";
 import { useLoad } from "@/hooks/useLoad";
 import { opsClientsApi, opsFinanceApi, opsProjectsApi } from "@/lib/api/ops";
 import { salesFollowupsApi } from "@/lib/api/sales";
@@ -126,11 +127,16 @@ export default function ClientDetail() {
           title="Client stage"
           steps={CLIENT_STAGES}
           current={c.stage}
+          notes={{ "Quotation Sent": quotationSummary(c.quotations) }}
           onMove={async (stage, note) => {
             await opsClientsApi.advanceStage(c.id, stage, userName || "", note);
             await refresh();
           }}
         />
+      )}
+
+      {c?.sales_lead && (
+        <QuotationCard leadId={c.sales_lead.id} rounds={c.quotations} canEdit={can("sales.leads.edit")} onChanged={() => void refresh()} />
       )}
 
       <DetailWorkspace

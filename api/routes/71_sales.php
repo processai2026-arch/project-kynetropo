@@ -67,6 +67,11 @@ $router->put('/admin/sales/followups/{id}',              [AdminSalesFollowupCont
 $router->post('/admin/sales/followups/{id}/complete',    [AdminSalesFollowupController::class, 'complete'],      'admin');
 $router->post('/admin/sales/followups/{id}/cancel',      [AdminSalesFollowupController::class, 'cancel'],        'admin');
 
+// Quotations — sent, rejected, sent again, accepted
+$router->post('/admin/sales/leads/{id}/quotations',      [AdminSalesQuotationController::class, 'store'],        'admin');
+$router->post('/admin/sales/quotations/{id}/answer',     [AdminSalesQuotationController::class, 'answer'],       'admin');
+$router->delete('/admin/sales/quotations/{id}',          [AdminSalesQuotationController::class, 'destroy'],      'admin');
+
 // Meetings
 $router->get('/admin/sales/meetings',                    [AdminSalesMeetingController::class, 'index'],          'admin');
 $router->post('/admin/sales/meetings',                   [AdminSalesMeetingController::class, 'store'],          'admin');

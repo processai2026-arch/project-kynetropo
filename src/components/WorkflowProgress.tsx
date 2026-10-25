@@ -21,6 +21,7 @@ export function WorkflowProgress({
   onMove,
   disabled,
   subtitle,
+  notes,
 }: {
   title?: string;
   steps: readonly string[];
@@ -29,6 +30,8 @@ export function WorkflowProgress({
   onMove: (stage: string, note: string) => Promise<unknown>;
   disabled?: boolean;
   subtitle?: string;
+  /** A small line under a step (e.g. "v2 sent again" under Quotation Sent). */
+  notes?: Record<string, string | null | undefined>;
 }) {
   const [target, setTarget] = useState<string | null>(null);
   const at = steps.indexOf(current);
@@ -60,6 +63,7 @@ export function WorkflowProgress({
                   {now ? <span className="h-2.5 w-2.5 rounded-full bg-primary-foreground" /> : done ? <Check className="h-4 w-4" /> : ""}
                 </span>
                 <span className={cn("max-w-[6rem] text-center text-xs", now ? "font-semibold text-foreground" : "text-muted-foreground")}>{step}</span>
+                {notes?.[step] ? <span className="max-w-[6rem] text-center text-[11px] font-medium text-primary">{notes[step]}</span> : null}
               </button>
             </li>
           );

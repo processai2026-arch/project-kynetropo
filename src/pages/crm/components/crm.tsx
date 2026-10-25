@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 /** A client's journey, in order (AdminOpsClientController::STAGES). */
 export const CLIENT_STAGES = [
-  "First Meetup", "Onboarding", "Requirements", "Scope Freeze",
+  "First Meetup", "Quotation Sent", "Quotation Accepted", "Onboarding", "Requirements", "Scope Freeze",
   "Advance Paid", "Development", "QA", "Delivery", "Full Payment", "Closed",
 ] as const;
 

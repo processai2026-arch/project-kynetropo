@@ -125,11 +125,20 @@ class SalesFollowup
         );
     }
 
-    public static function cancel(int $id): void
+    /**
+     * Closes a follow-up that is no longer needed, without an answer.
+     *
+     * Stored as 'cancelled', with who closed it, when, and why in the same
+     * columns a completion uses — so the history shows it beside the completed
+     * ones instead of it simply vanishing from the queue.
+     */
+    public static function cancel(int $id, ?int $userId = null, string $reason = ''): void
     {
         Database::execute(
-            "UPDATE sales_followups SET status = 'cancelled' WHERE id = ? AND tenant_id = ? AND status = 'pending'",
-            [$id, Database::tenantId()]
+            "UPDATE sales_followups
+                SET status = 'cancelled', completed_by = ?, completed_at = NOW(), outcome_notes = ?
+              WHERE id = ? AND tenant_id = ? AND status = 'pending'",
+            [$userId, $reason !== '' ? mb_substr($reason, 0, 1000) : null, $id, Database::tenantId()]
         );
     }
 
@@ -180,7 +189,8 @@ class SalesFollowup
                 $params[] = $today;
                 break;
             case 'completed':
-                $where[] = "f.status = 'completed'";
+                // Done and closed alike: both are finished, and the history shows which.
+                $where[] = "f.status IN ('completed', 'cancelled')";
                 break;
         }
 
@@ -256,7 +266,7 @@ class SalesFollowup
                SUM(f.status = 'pending' AND f.due_date = ?)  AS today_count,
                SUM(f.status = 'pending' AND f.due_date < ?)  AS overdue_count,
                SUM(f.status = 'pending' AND f.due_date > ?)  AS upcoming_count,
-               SUM(f.status = 'completed')                   AS completed_count
+               SUM(f.status IN ('completed', 'cancelled'))   AS completed_count
              FROM sales_followups f
              LEFT JOIN sales_leads l ON l.id = f.lead_id AND l.tenant_id = f.tenant_id
              WHERE f.tenant_id = ?" . $extra,

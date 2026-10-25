@@ -1,3 +1,4 @@
+import type { SalesQuotation } from "./sales";
 // ─── Kynetropo Ops — TypeScript Types ────────────────────────────────────────
 
 export interface OpsClient {
@@ -52,6 +53,8 @@ export interface OpsClientDetail extends OpsClient {
    */
   sales_lead: OpsClientSalesLead | null;
   followups: OpsClientFollowup[];
+  /** The quotations sent to its lead, newest round first. */
+  quotations?: SalesQuotation[];
 }
 
 export interface OpsClientSalesLead {

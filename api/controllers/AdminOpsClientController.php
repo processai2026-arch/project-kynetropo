@@ -12,8 +12,9 @@ declare(strict_types=1);
  */
 class AdminOpsClientController
 {
-    private const STAGES = [
-        'First Meetup','Onboarding','Requirements','Scope Freeze',
+    /** Public: the quotation rounds move a client along this same line. */
+    public const STAGES = [
+        'First Meetup','Quotation Sent','Quotation Accepted','Onboarding','Requirements','Scope Freeze',
         'Advance Paid','Development','QA','Delivery','Full Payment','Closed',
     ];
 
@@ -205,6 +206,7 @@ class AdminOpsClientController
         $data['checklist']     = $checklist;
         $data['sales_lead']    = $salesLead;
         $data['followups']     = $followups;
+        $data['quotations']    = $salesLead ? SalesQuotation::forLead((int)$salesLead['id']) : [];
 
         Response::success($data);
     }

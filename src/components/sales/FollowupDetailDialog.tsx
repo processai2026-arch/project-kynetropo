@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { CalendarClock, CheckCircle2, Phone, User } from "lucide-react";
+import { CalendarClock, CheckCircle2, Phone, User, XCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { CommentThread } from "@/components/sales/CommentThread";
@@ -27,11 +27,14 @@ export function FollowupDetailDialog({
   followup,
   onClose,
   onEdit,
+  onCloseFollowup,
 }: {
   followup: SalesFollowup | null;
   onClose: () => void;
   /** Offers "Edit date, time or purpose" here — the phone app's rows have no room for it. */
   onEdit?: (f: SalesFollowup) => void;
+  /** Offers "Close follow-up" for one still open. */
+  onCloseFollowup?: (f: SalesFollowup) => void;
 }) {
   const { can } = useSalesAccess();
   const f = followup;
@@ -45,7 +48,7 @@ export function FollowupDetailDialog({
               <DialogTitle className="text-left">
                 <span className="block truncate">{subjectLabel(f)}</span>
                 <span className="block text-sm font-normal text-muted-foreground">
-                  {f.status === "completed" ? "Completed follow-up" : "Follow-up"}
+                  {f.status === "completed" ? "Completed follow-up" : f.status === "cancelled" ? "Closed follow-up" : "Follow-up"}
                 </span>
               </DialogTitle>
             </DialogHeader>
@@ -59,10 +62,20 @@ export function FollowupDetailDialog({
                 </span>
                 {f.lead_temperature && <TemperatureBadge value={f.lead_temperature} />}
               </div>
-              {onEdit && f.status === "pending" && (
-                <button type="button" className="text-sm font-medium text-primary underline" onClick={() => onEdit(f)}>
-                  Edit date, time or purpose
-                </button>
+              {f.status === "pending" && (onEdit || onCloseFollowup) && (
+                <div className="flex flex-wrap gap-x-5 gap-y-2">
+                  {onEdit && (
+                    <button type="button" className="text-sm font-medium text-primary underline" onClick={() => onEdit(f)}>
+                      Edit date, time or purpose
+                    </button>
+                  )}
+                  {onCloseFollowup && (
+                    <button type="button" className="inline-flex items-center gap-1 text-sm font-medium text-destructive underline" onClick={() => onCloseFollowup(f)}>
+                      <XCircle className="h-4 w-4" />
+                      Close follow-up
+                    </button>
+                  )}
+                </div>
               )}
 
               <div>
@@ -139,6 +152,18 @@ export function FollowupDetailDialog({
                   </div>
                   <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">
                     {f.outcome_notes || "No outcome notes were written."}
+                  </p>
+                </div>
+              )}
+
+              {f.status === "cancelled" && (
+                <div className="rounded-xl bg-muted/50 p-3">
+                  <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+                    <XCircle className="h-4 w-4" />
+                    Closed {formatDateTime(f.completed_at)}
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                    {f.outcome_notes || "No reason was written."}
                   </p>
                 </div>
               )}
