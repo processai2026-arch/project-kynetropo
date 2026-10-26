@@ -153,6 +153,7 @@ export function getSalesMock(url: string, method: string, query: URLSearchParams
   if (url === "/admin/sales/tasks") return ok({ items: TASKS, pagination: page(TASKS.length), counts: TASK_COUNTS, can_manage: true, me: 1 });
   if (url === "/admin/sales/challenges") return ok({ items: CHALLENGES, pagination: page(1), counts: CHALLENGE_COUNTS, server_time: NOW, can_manage: true });
   if (url === "/admin/sales/mentions") return ok({ items: MENTIONS, unread: 1 });
+  if (url === "/admin/sales/comments") return ok({ items: [] });
   if (url === "/admin/sales/calls") return { success: true, data: [], pagination: page(0) };
   if (url === "/admin/sales/calls/meta") return ok({ outcomes: [], temperatures: ["hot", "warm", "cold"] });
   if (url === "/admin/sales/activity") return ok([]);

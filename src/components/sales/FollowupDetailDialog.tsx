@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
-import { CalendarClock, CheckCircle2, Phone, User, XCircle } from "lucide-react";
+import { CalendarClock, CheckCircle2, ChevronRight, MessageCircle, Pencil, Phone, User, Users, XCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSalesAccess } from "@/hooks/useSalesAccess";
 import { CommentThread } from "@/components/sales/CommentThread";
 import { FollowupEditNote } from "@/components/sales/FollowupEditDialog";
-import { OutcomeBadge } from "@/components/sales/FollowupCompleteDialog";
+import { FollowupCompleteForm, OutcomeBadge } from "@/components/sales/FollowupCompleteDialog";
+import { Avatar, Block, List, Pill, Row, usePhoneApp, type Tone } from "@/components/phone/PhoneKit";
+import { cn } from "@/lib/utils";
 import {
   TemperatureBadge,
   formatDate,
@@ -28,6 +30,7 @@ export function FollowupDetailDialog({
   onClose,
   onEdit,
   onCloseFollowup,
+  onCompleted,
 }: {
   followup: SalesFollowup | null;
   onClose: () => void;
@@ -35,8 +38,11 @@ export function FollowupDetailDialog({
   onEdit?: (f: SalesFollowup) => void;
   /** Offers "Close follow-up" for one still open. */
   onCloseFollowup?: (f: SalesFollowup) => void;
+  /** Completed from the phone app's page, where the form sits in the page itself. */
+  onCompleted?: () => void;
 }) {
   const { can } = useSalesAccess();
+  const phone = usePhoneApp();
   const f = followup;
 
   return (
@@ -53,6 +59,7 @@ export function FollowupDetailDialog({
               </DialogTitle>
             </DialogHeader>
 
+            {phone ? <PhoneFollowup f={f} onClose={onClose} onEdit={onEdit} onCloseFollowup={onCloseFollowup} onCompleted={onCompleted} /> : (
             <div className="max-h-[65vh] space-y-4 overflow-y-auto pr-1">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
                 <span className="inline-flex items-center gap-1.5 text-card-foreground">
@@ -183,9 +190,136 @@ export function FollowupDetailDialog({
                 </div>
               )}
             </div>
+            )}
           </>
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+const TEMP_TONE: Record<string, Tone> = { hot: "danger", warm: "warning", cold: "sky" };
+
+/** Today by the phone's clock, as YYYY-MM-DD. */
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * The follow-up as a phone screen: when and what for at the top with buttons to
+ * call or WhatsApp, how it went and the next follow-up in the page itself, then
+ * the details, the other actions as rows, and the discussion.
+ */
+function PhoneFollowup({ f, onClose, onEdit, onCloseFollowup, onCompleted }: {
+  f: SalesFollowup;
+  onClose: () => void;
+  onEdit?: (f: SalesFollowup) => void;
+  onCloseFollowup?: (f: SalesFollowup) => void;
+  onCompleted?: () => void;
+}) {
+  const { can } = useSalesAccess();
+  const pending = f.status === "pending";
+  const today = todayIso();
+  const when = !pending ? (f.status === "completed" ? "Completed" : "Closed")
+    : f.due_date < today ? "Overdue" : f.due_date === today ? "Today" : "Upcoming";
+  const digits = (f.lead_phone ?? "").replace(/\D/g, "");
+  const whatsapp = digits ? `https://wa.me/${digits.length === 10 ? `91${digits}` : digits}` : null;
+  const details = [
+    { label: "Owner", value: f.assigned_to_name || "Unassigned" },
+    { label: "Contact", value: f.lead_contact_person },
+    { label: "Phone", value: f.lead_phone ? <a href={`tel:${f.lead_phone}`} className="text-primary">{f.lead_phone}</a> : null },
+    { label: "Last outcome", value: f.lead_last_outcome ? humanise(f.lead_last_outcome) : null },
+    { label: "Came from", value: f.call_id ? "A logged call" : f.meeting_id ? "A meeting" : null },
+  ].filter((d) => d.value);
+
+  return (
+    <div className="space-y-4">
+      <section className="rounded-2xl border bg-card p-4">
+        <div className="flex items-center gap-3">
+          <Avatar icon={CalendarClock} tone={when === "Overdue" ? "danger" : pending ? "violet" : "muted"} />
+          <div className="min-w-0 flex-1">
+            <p className="text-base font-semibold leading-tight">
+              {formatDate(f.due_date)}{f.due_time ? ` · ${formatTime(f.due_time)}` : ""}
+            </p>
+            <p className={cn("text-sm", when === "Overdue" ? "font-medium text-destructive" : "text-muted-foreground")}>{when}</p>
+          </div>
+          {f.lead_temperature ? <Pill tone={TEMP_TONE[f.lead_temperature] ?? "muted"}>{humanise(f.lead_temperature)}</Pill> : null}
+        </div>
+        <p className="mt-3 whitespace-pre-wrap break-words text-base">{f.purpose || <span className="text-muted-foreground">No purpose written</span>}</p>
+        <FollowupEditNote followup={f} className="mt-2" />
+        {(f.lead_phone || whatsapp) && (
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            {f.lead_phone && (
+              <a href={`tel:${f.lead_phone}`} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-primary/10 font-medium text-primary active:bg-primary/20">
+                <Phone className="h-4 w-4" />Call
+              </a>
+            )}
+            {whatsapp && (
+              <a href={whatsapp} target="_blank" rel="noreferrer" className="flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500/10 font-medium text-emerald-700 active:bg-emerald-500/20 dark:text-emerald-300">
+                <MessageCircle className="h-4 w-4" />WhatsApp
+              </a>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* How it went, and the next follow-up — right here rather than on another screen. */}
+      {pending && can("sales.followups.complete") && (
+        <Block title="How did it go?" icon={CheckCircle2}>
+          <div className="p-4 pt-2 [&>form>div:first-child>label]:hidden">
+            <FollowupCompleteForm followup={f} large onCompleted={() => { onCompleted?.(); onClose(); }} />
+          </div>
+        </Block>
+      )}
+
+      {f.status === "completed" && (
+        <section className="rounded-2xl border bg-card p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400"><CheckCircle2 className="h-4 w-4" />Completed {formatDateTime(f.completed_at)}</p>
+            <OutcomeBadge value={f.outcome} />
+          </div>
+          <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">{f.outcome_notes || "No outcome notes were written."}</p>
+        </section>
+      )}
+      {f.status === "cancelled" && (
+        <section className="rounded-2xl border bg-card p-4">
+          <p className="flex items-center gap-1.5 font-medium text-muted-foreground"><XCircle className="h-4 w-4" />Closed {formatDateTime(f.completed_at)}</p>
+          <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">{f.outcome_notes || "No reason was written."}</p>
+        </section>
+      )}
+
+      {details.length > 0 && (
+        <Block title="Details">
+          <dl className="divide-y">
+            {details.map((d) => (
+              <div key={d.label} className="flex gap-3 px-4 py-3 text-sm">
+                <dt className="w-28 shrink-0 text-muted-foreground">{d.label}</dt>
+                <dd className="min-w-0 flex-1 break-words">{d.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </Block>
+      )}
+
+      <List>
+        <Row to={subjectPath(f)} onClick={undefined} avatar={<Avatar icon={Users} tone="primary" />} title="Open the lead" sub={subjectLabel(f)} end={<ChevronRight className="h-5 w-5 text-muted-foreground" />} />
+        {pending && onEdit && (
+          <Row onClick={() => onEdit(f)} avatar={<Avatar icon={Pencil} tone="muted" />} title="Move it" sub="Change the date, time or purpose" end={<ChevronRight className="h-5 w-5 text-muted-foreground" />} />
+        )}
+        {pending && onCloseFollowup && (
+          <Row onClick={() => onCloseFollowup(f)} avatar={<Avatar icon={XCircle} tone="danger" />} title="Close follow-up" sub="No longer needed — say why" end={<ChevronRight className="h-5 w-5 text-muted-foreground" />} />
+        )}
+      </List>
+
+      {can("sales.comments.view") && (
+        <Block title="Discussion">
+          <div className="p-4 pt-2">
+            <CommentThread entityType="followup" entityId={f.id} />
+          </div>
+        </Block>
+      )}
+      <div className="h-2" aria-hidden />
+    </div>
   );
 }

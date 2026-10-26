@@ -181,7 +181,7 @@ export const salesCommentsApi = {
     (await apiFetch<Envelope<{ items: SalesComment[] }>>(
       `/admin/sales/comments${qs({ entity_type, entity_id })}`,
       { skipCache: true },
-    )).data.items,
+    )).data?.items ?? [],
   /**
    * `mentions` carries the user ids the @ picker matched. The server re-checks
    * every one of them — a mention is a notification, so it is never taken on

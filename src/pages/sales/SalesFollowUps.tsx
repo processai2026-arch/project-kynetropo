@@ -121,6 +121,7 @@ export default function SalesFollowUps() {
         onEdit={phone && can("sales.followups.create") && viewing && canEditFollowup(viewing, me ?? null)
           ? (f) => { setViewing(null); setEditing(f); } : undefined}
         onCloseFollowup={can("sales.followups.complete") ? (f) => { setViewing(null); setClosing(f); } : undefined}
+        onCompleted={() => void load()}
         onClose={() => {
           setViewing(null);
           // A comment may have been added from inside it.
