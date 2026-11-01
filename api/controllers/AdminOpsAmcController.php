@@ -7,6 +7,7 @@ declare(strict_types=1);
  * POST   /admin/ops/amc               — create
  * PUT    /admin/ops/amc/{id}          — edit anything: plan, price, dates, first year paid or not
  * POST   /admin/ops/amc/{id}/collect  — record this year's AMC payment
+ * PUT    /admin/ops/amc/{id}/usage    — users now per category, storage used: the price follows
  * DELETE /admin/ops/amc/{id}
  */
 class AdminOpsAmcController
@@ -103,6 +104,26 @@ class AdminOpsAmcController
             OpsAmc::date($body['payment_date'] ?? null) ?? date('Y-m-d'), (string)($body['reference'] ?? ''), (string)($body['recorded_by'] ?? '')));
 
         Response::success(OpsAmc::format(OpsAmc::find($id, $tenantId)), 'Collected');
+    }
+
+    /**
+     * PUT /admin/ops/amc/{id}/usage — { users: {"ERP": 7, …}, storage_used_gb }
+     *
+     * The users or storage in use changed. The yearly price is worked out again,
+     * so Finance, the dashboard's AMC due and the renewals show the new amount;
+     * payments already recorded are left as they were.
+     */
+    public function usage(Request $request): void
+    {
+        $id       = (int) $request->param('id');
+        $tenantId = Database::tenantId();
+        $body     = $request->body();
+        $current  = OpsAmc::find($id, $tenantId) ?? Response::error('AMC record not found', 404);
+        $usage    = ['users' => is_array($body['users'] ?? null) ? $body['users'] : []];
+        if (array_key_exists('storage_used_gb', $body)) $usage['storage_used_gb'] = $body['storage_used_gb'];
+
+        $this->inTransaction(fn() => OpsAmc::updateUsage($tenantId, $current, $usage, (string)($body['recorded_by'] ?? '')));
+        Response::success(OpsAmc::format(OpsAmc::find($id, $tenantId)), 'Usage updated');
     }
 
     /** DELETE /admin/ops/amc/{id} — a first-year payment it recorded goes with it. */

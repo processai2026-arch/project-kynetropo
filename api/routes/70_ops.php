@@ -51,6 +51,7 @@ $router->get('/admin/ops/amc',                               [AdminOpsAmcControl
 $router->post('/admin/ops/amc',                              [AdminOpsAmcController::class, 'store'],                'admin');
 $router->put('/admin/ops/amc/{id}',                          [AdminOpsAmcController::class, 'update'],               'admin');
 $router->post('/admin/ops/amc/{id}/collect',                 [AdminOpsAmcController::class, 'collect'],              'admin');
+$router->put('/admin/ops/amc/{id}/usage',                    [AdminOpsAmcController::class, 'usage'],                'admin');
 $router->delete('/admin/ops/amc/{id}',                       [AdminOpsAmcController::class, 'destroy'],              'admin');
 
 // ─── Kynetropo Ops — Pitches ─────────────────────────────────────────────────

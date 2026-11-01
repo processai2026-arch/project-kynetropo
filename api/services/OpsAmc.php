@@ -19,6 +19,12 @@ declare(strict_types=1);
  * row), and an AMC can include storage: the GB the base price covers, and the
  * price of each extra block a year (20 GB in ₹4,000; every 10 GB more, ₹500).
  *
+ * It can also be priced by users, per category: ERP with 5 users in the base and
+ * ₹500 for each user more; Web APK with 10 in the base and ₹500 for each 5 more.
+ * The users there are now, and the storage used now, are kept on the AMC, and
+ * `amount` — the yearly price Finance, the dashboard and the renewals read — is
+ * the base price plus what they add. base_amount keeps the base.
+ *
  * The first-year answers stay editable until the contract renews. Paying,
  * unpaying or repricing a first year changes its AMC payment in Finance to
  * match, so Finance always shows what the AMC says. AMC payments never touch
@@ -57,8 +63,9 @@ final class OpsAmc
         $reason = array_key_exists('reason', $in) ? mb_substr(trim((string)$in['reason']), 0, 300) : null;
         if ($plan === 'none') return ['plan' => 'none', 'reason' => $reason];
 
-        $amount = isset($in['amount']) && $in['amount'] !== '' ? (float)$in['amount'] : (float)($current['amount'] ?? 0);
-        if ($amount <= 0) Response::error('Enter the AMC price per year', 422);
+        // `amount` from a form is the BASE price; the yearly price is worked out below.
+        $base = isset($in['amount']) && $in['amount'] !== '' ? (float)$in['amount'] : self::baseOf($current);
+        if ($base <= 0) Response::error('Enter the AMC base price per year', 422);
 
         $start   = self::date($in['start_date'] ?? null) ?? ($current['start_date'] ?? date('Y-m-d'));
         $renewal = self::date($in['renewal_date'] ?? null) ?? ($current && !self::date($in['start_date'] ?? null) ? $current['renewal_date'] : self::yearAfter($start));
@@ -68,18 +75,152 @@ final class OpsAmc
             ? !empty($in['first_year_paid'])
             : ($current ? (int)$current['first_year_free'] === 0 && (int)$current['term_paid'] === 1 : false));
 
+        $storage = self::storage($in, $current);
+        $users   = self::userPlans($in, $current);
+        $used    = self::storageUsed($in, $current);
+        $priced  = ['base_amount' => $base, 'user_plans' => $users, 'storage_used_gb' => $used] + $storage;
+
         return [
             'plan'         => $plan,
             'free'         => $plan === 'second_year',
             'paid'         => $paid,
-            'amount'       => $amount,
+            'amount'       => self::price($priced),
+            'base_amount'  => $base,
+            'user_plans'   => $users,
+            'storage_used_gb' => $used,
             'start_date'   => $start,
             'renewal_date' => $renewal,
             'payment_date' => self::date($in['payment_date'] ?? null) ?? ($current['paid_on'] ?? null) ?? date('Y-m-d'),
             'payment_mode' => in_array($in['payment_mode'] ?? '', self::MODES, true) ? $in['payment_mode'] : (($current['payment_mode'] ?? '') ?: 'bank_transfer'),
             'notes'        => array_key_exists('notes', $in) ? trim((string)$in['notes']) : ($current['notes'] ?? ''),
             'reason'       => $reason,
-        ] + self::storage($in, $current);
+        ] + $storage;
+    }
+
+    /** A saved AMC's base price: older rows have none, and their amount was the base. */
+    public static function baseOf(?array $row): float
+    {
+        if (!$row) return 0.0;
+        return isset($row['base_amount']) && $row['base_amount'] !== null ? (float)$row['base_amount'] : (float)$row['amount'];
+    }
+
+    /**
+     * The yearly price: the base, plus each extra block of users started in
+     * every category, plus each extra block of storage started.
+     * $amc: base_amount, user_plans, storage_gb, storage_step_gb, storage_step_price, storage_used_gb.
+     */
+    public static function price(array $amc): float
+    {
+        $total = (float)$amc['base_amount'];
+        foreach ($amc['user_plans'] ?? [] as $u) {
+            $total += self::blocks((float)$u['users'], (float)$u['included'], (float)$u['step']) * (float)$u['price'];
+        }
+        if (!empty($amc['storage_gb']) && !empty($amc['storage_step_gb']) && $amc['storage_used_gb'] !== null) {
+            $total += self::blocks((float)$amc['storage_used_gb'], (float)$amc['storage_gb'], (float)$amc['storage_step_gb'])
+                * (float)$amc['storage_step_price'];
+        }
+        return round($total, 2);
+    }
+
+    /** Extra blocks started: 7 users with 5 included, 1 a block -> 2; with 5 a block -> 1. */
+    private static function blocks(float $now, float $included, float $step): int
+    {
+        if ($step <= 0 || $now <= $included) return 0;
+        return (int)ceil(($now - $included) / $step - 1e-9);
+    }
+
+    /**
+     * The user plans: per category, users in the base, users per extra block,
+     * the block's price a year, and the users now. Left out, they stay as saved.
+     */
+    private static function userPlans(array $in, ?array $current): array
+    {
+        if (!array_key_exists('user_plans', $in)) return self::decodePlans($current['user_plans'] ?? null);
+        $plans = [];
+        $seen  = [];
+        foreach ((array)($in['user_plans'] ?? []) as $u) {
+            if (!is_array($u)) continue;
+            $category = mb_substr(trim((string)($u['category'] ?? '')), 0, 60);
+            if ($category === '') Response::error('Name each user category — ERP, Web APK…', 422);
+            $key = mb_strtolower($category);
+            if (isset($seen[$key])) Response::error("$category is listed twice", 422);
+            $seen[$key] = true;
+            $included = (int)($u['included'] ?? -1);
+            $step     = (int)($u['step'] ?? 0);
+            $price    = $u['price'] ?? null;
+            $users    = $u['users'] ?? null;
+            if ($included < 0) Response::error("Enter how many $category users the base price covers", 422);
+            if ($step < 1) Response::error("Enter how many $category users make one extra block (1 for each user)", 422);
+            if (!is_numeric($price) || (float)$price < 0) Response::error("Enter the price a year for each extra block of $category users", 422);
+            $users = $users === null || $users === '' ? $included : (int)$users;
+            if ($users < 0) Response::error("$category users now cannot be negative", 422);
+            $plans[] = ['category' => $category, 'included' => $included, 'step' => $step, 'price' => round((float)$price, 2), 'users' => $users];
+        }
+        return $plans;
+    }
+
+    /** The storage in use now; left out, it stays as saved. */
+    private static function storageUsed(array $in, ?array $current): ?float
+    {
+        if (!array_key_exists('storage_used_gb', $in)) {
+            return isset($current['storage_used_gb']) && $current['storage_used_gb'] !== null ? (float)$current['storage_used_gb'] : null;
+        }
+        $v = $in['storage_used_gb'];
+        if ($v === null || trim((string)$v) === '') return null;
+        if (!is_numeric($v) || (float)$v < 0) Response::error('Storage used must be a number of GB', 422);
+        return round((float)$v, 2);
+    }
+
+    public static function decodePlans(mixed $json): array
+    {
+        if (is_array($json)) return $json;
+        if (!is_string($json) || $json === '') return [];
+        $plans = json_decode($json, true);
+        return is_array($plans) ? $plans : [];
+    }
+
+    /**
+     * Users or storage in use changed: the yearly price follows, and with it
+     * what Finance and the dashboard expect at the next payment. A payment
+     * already recorded is history and stays as it was.
+     * $usage: users (category => count), storage_used_gb.
+     */
+    public static function updateUsage(int $tenantId, array $current, array $usage, string $by): void
+    {
+        $plans   = self::decodePlans($current['user_plans'] ?? null);
+        $changes = [];
+        foreach ($plans as &$p) {
+            if (!array_key_exists($p['category'], $usage['users'] ?? [])) continue;
+            $n = $usage['users'][$p['category']];
+            if (!is_numeric($n) || (int)$n < 0) Response::error("{$p['category']} users must be a number", 422);
+            if ((int)$n !== (int)$p['users']) $changes[] = "{$p['category']} users " . (int)$p['users'] . ' → ' . (int)$n;
+            $p['users'] = (int)$n;
+        }
+        unset($p);
+        $used = self::storageUsed($usage, $current);
+        $oldUsed = isset($current['storage_used_gb']) && $current['storage_used_gb'] !== null ? (float)$current['storage_used_gb'] : null;
+        if ($used !== $oldUsed) $changes[] = 'storage ' . ($oldUsed === null ? '—' : self::gb($oldUsed)) . ' → ' . ($used === null ? '—' : self::gb($used));
+        if (!$changes) return;
+
+        $priced = [
+            'base_amount' => self::baseOf($current), 'user_plans' => $plans, 'storage_used_gb' => $used,
+            'storage_gb' => $current['storage_gb'], 'storage_step_gb' => $current['storage_step_gb'], 'storage_step_price' => $current['storage_step_price'],
+        ];
+        $amount = self::price($priced);
+        Database::update('ops_amc_records', [
+            'user_plans'      => json_encode($plans, JSON_UNESCAPED_UNICODE),
+            'storage_used_gb' => $used,
+            'amount'          => $amount,
+        ], ['id' => (int)$current['id'], 'tenant_id' => $tenantId]);
+
+        $was = (float)$current['amount'];
+        self::log($tenantId, (int)$current['client_id'], 'amc_usage', 'AMC usage updated — ' . implode(', ', $changes)
+            . (abs($amount - $was) > 0.004 ? '; price ₹' . number_format($was) . ' → ₹' . number_format($amount) . ' a year' : '; price unchanged'), $by);
+    }
+
+    private static function gb(float $n): string
+    {
+        return (floor($n) == $n ? (string)(int)$n : (string)$n) . ' GB';
     }
 
     /**
@@ -118,6 +259,9 @@ final class OpsAmc
             'client_id'       => (int)$project['client_id'],
             'project_id'      => (int)$project['id'],
             'amount'          => $amc['amount'],
+            'base_amount'     => $amc['base_amount'],
+            'user_plans'      => json_encode($amc['user_plans'], JSON_UNESCAPED_UNICODE),
+            'storage_used_gb' => $amc['storage_used_gb'],
             'storage_gb'         => $amc['storage_gb'],
             'storage_step_gb'    => $amc['storage_step_gb'],
             'storage_step_price' => $amc['storage_step_price'],
@@ -152,8 +296,14 @@ final class OpsAmc
         $id      = (int)$current['id'];
         $renewed = self::renewed($current);
         $updates = ['amount' => $amc['amount'], 'notes' => $amc['notes'], 'renewal_date' => $amc['renewal_date'],
+                    'base_amount' => $amc['base_amount'], 'user_plans' => json_encode($amc['user_plans'], JSON_UNESCAPED_UNICODE),
+                    'storage_used_gb' => $amc['storage_used_gb'],
                     'storage_gb' => $amc['storage_gb'], 'storage_step_gb' => $amc['storage_step_gb'],
                     'storage_step_price' => $amc['storage_step_price']];
+        // More users or storage since the year was paid is next year's price, not
+        // a correction of what was received: the recorded payment keeps its amount.
+        $usageChanged = self::usageKey(self::decodePlans($current['user_plans'] ?? null), $current['storage_used_gb'] ?? null)
+                     !== self::usageKey($amc['user_plans'], $amc['storage_used_gb']);
         self::setReason($tenantId, (int)$current['project_id'], $amc['reason']);
 
         if ($renewed) {
@@ -176,7 +326,8 @@ final class OpsAmc
         $payment = $payId ? Database::fetch('SELECT * FROM ops_payments WHERE id = ? AND tenant_id = ? LIMIT 1', [$payId, $tenantId]) : null;
         if ($amc['paid']) {
             if ($payment) {
-                $change = ['amount' => $amc['amount'], 'payment_date' => $amc['payment_date'], 'mode' => $amc['payment_mode']];
+                $change = ['payment_date' => $amc['payment_date'], 'mode' => $amc['payment_mode']];
+                if (!$usageChanged) $change['amount'] = $amc['amount'];
                 // A reference typed in Finance stays; the generated one follows the dates.
                 if ((string)$payment['reference'] === 'AMC ' . $current['start_date'] . ' to ' . $current['renewal_date']) {
                     $change['reference'] = 'AMC ' . $amc['start_date'] . ' to ' . $amc['renewal_date'];
@@ -197,6 +348,15 @@ final class OpsAmc
         Database::update('ops_amc_records', $updates, ['id' => $id, 'tenant_id' => $tenantId]);
         self::log($tenantId, (int)$current['client_id'], 'amc_updated', 'AMC updated — ' . self::describe($amc)
             . ($payment && !$amc['paid'] ? ' (first-year payment of ₹' . number_format((float)$payment['amount']) . ' removed from Finance)' : ''), $by);
+    }
+
+    /** Users per category and storage used, as one comparable string. */
+    private static function usageKey(array $plans, mixed $used): string
+    {
+        $users = [];
+        foreach ($plans as $p) $users[mb_strtolower((string)$p['category'])] = (int)$p['users'];
+        ksort($users);
+        return json_encode($users) . '|' . ($used === null || $used === '' ? '' : (string)round((float)$used, 2));
     }
 
     /**
@@ -282,6 +442,9 @@ final class OpsAmc
             'project_name'    => $row['project_name'] ?? null,
             'project_code'    => $row['project_code'] ?? null,
             'amount'          => (float)$row['amount'],
+            'base_amount'     => self::baseOf($row),
+            'user_plans'      => self::decodePlans($row['user_plans'] ?? null),
+            'storage_used_gb' => isset($row['storage_used_gb']) ? (float)$row['storage_used_gb'] : null,
             'storage_gb'         => isset($row['storage_gb']) ? (float)$row['storage_gb'] : null,
             'storage_step_gb'    => isset($row['storage_step_gb']) ? (float)$row['storage_step_gb'] : null,
             'storage_step_price' => isset($row['storage_step_price']) ? (float)$row['storage_step_price'] : null,

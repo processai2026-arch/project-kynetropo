@@ -260,8 +260,14 @@ export interface OpsAmcRecord {
   project_id: number;
   project_name: string | null;
   project_code: string | null;
-  /** The yearly AMC amount. */
+  /** The yearly AMC price: the base plus what the extra users and storage add. What Finance reads. */
   amount: number;
+  /** The base price a year, before users and storage. */
+  base_amount: number;
+  /** Per category (ERP, Web APK…): users in the base, users per extra block, its price, users now. */
+  user_plans: AmcUserPlan[];
+  /** Storage in use now (GB), against storage_gb. */
+  storage_used_gb: number | null;
   /** Storage the base price includes, in GB; null when none is stated. */
   storage_gb: number | null;
   /** Each extra block of storage (GB), and what it adds to the AMC a year. */
@@ -298,6 +304,19 @@ export interface OpsAmcRecord {
 export type OpsAmcPlan = "second_year" | "first_year" | "none";
 
 /** The AMC answer, as the AMC endpoints and the project form send it. */
+/** One category of users on an AMC: ERP with 5 in the base and ₹500 for each user more. */
+export interface AmcUserPlan {
+  category: string;
+  /** Users the base price covers. */
+  included: number;
+  /** Extra users that make one block: 1 for each user, 5 for every five. */
+  step: number;
+  /** A block's price a year. */
+  price: number;
+  /** Users there are now. */
+  users: number;
+}
+
 export interface OpsAmcPlanBody {
   plan: OpsAmcPlan;
   /** Price per year. */
@@ -314,6 +333,8 @@ export interface OpsAmcPlanBody {
   storage_gb?: number | null;
   storage_step_gb?: number | null;
   storage_step_price?: number | null;
+  user_plans?: AmcUserPlan[];
+  storage_used_gb?: number | null;
 }
 
 /** POST /admin/ops/amc */

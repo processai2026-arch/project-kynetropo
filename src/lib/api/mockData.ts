@@ -48,7 +48,7 @@ const EXPENSES = [
 
 const AMC = [
   { id: 1, client_id: 3, client_name: "VTT Gold", client_company: "", project_id: 3, project_name: "VTT Gold Portal", project_code: null, amount: 18000, plan: "first_year", first_year_free: false, term_paid: true, in_free_year: false, renewed: false, contract_start: "2025-04-01", payment_id: null, paid_on: null, start_date: "2025-04-01", renewal_date: "2026-04-01", due_date: "2026-04-01", status: "overdue", payment_mode: "bank_transfer", notes: "Annual maintenance contract", days_until_due: -126 },
-  { id: 2, client_id: 1, client_name: "Cable TV CRM", client_company: "", project_id: 1, project_name: "Cable TV CRM Phase 2", project_code: null, amount: 24000, plan: "second_year", first_year_free: true, term_paid: true, in_free_year: true, renewed: false, contract_start: "2026-05-01", payment_id: null, paid_on: null, start_date: "2026-05-01", renewal_date: "2027-05-01", due_date: "2027-05-01", status: "active", payment_mode: null, notes: null, days_until_due: 269 },
+  { id: 2, client_id: 1, client_name: "Cable TV CRM", client_company: "", project_id: 1, project_name: "Cable TV CRM Phase 2", project_code: null, amount: 25500, base_amount: 24000, user_plans: [{ category: "ERP", included: 5, step: 1, price: 500, users: 7 }, { category: "Web APK", included: 10, step: 5, price: 500, users: 12 }], storage_gb: 20, storage_step_gb: 10, storage_step_price: 500, storage_used_gb: 18, plan: "second_year", first_year_free: true, term_paid: true, in_free_year: true, renewed: false, contract_start: "2026-05-01", payment_id: null, paid_on: null, start_date: "2026-05-01", renewal_date: "2027-05-01", due_date: "2027-05-01", status: "active", payment_mode: null, notes: null, days_until_due: 269 },
 ];
 
 const PITCHES = [

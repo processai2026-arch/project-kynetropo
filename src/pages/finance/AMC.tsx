@@ -11,12 +11,12 @@ import { Panel } from "@/components/Panel";
 import { opsAmcApi, opsClientsApi, opsProjectsApi } from "@/lib/api/ops";
 import { formatDate } from "@/lib/format";
 import type { OpsAmcRecord, OpsClient, OpsProject } from "@/types/ops";
-import { Plus, Pencil, CheckCircle, Trash2 } from "lucide-react";
+import { Plus, Pencil, CheckCircle, Trash2, Users } from "lucide-react";
 import { ActionDialog } from "@/components/ActionDialog";
 import { toast } from "sonner";
 import { ScrollableX } from "@/components/ui/scrollable-x";
 import { usePagedRows } from "@/hooks/usePagedRows";
-import { AmcCollectDialog, AmcFormDialog, AmcStatusBadge, AmcYearBadge, amcPlanLabel, dueText } from "./components/AmcDialogs";
+import { AmcCollectDialog, AmcFormDialog, AmcPriceParts, AmcStatusBadge, AmcUsageDialog, AmcYearBadge, amcPlanLabel, dueText } from "./components/AmcDialogs";
 
 const COLUMNS = ["Client", "Project", "Per year", "This year", "Renewal", "Next due", "Status", ""];
 
@@ -30,6 +30,8 @@ export default function AMC() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing]   = useState<OpsAmcRecord | null>(null);
   const [collecting, setCollecting] = useState<OpsAmcRecord | null>(null);
+  /** Users or storage changed: the yearly price follows. */
+  const [usageOf, setUsageOf] = useState<OpsAmcRecord | null>(null);
   const [removing, setRemoving]     = useState<OpsAmcRecord | null>(null);
 
   const load = useCallback(async () => {
@@ -115,6 +117,7 @@ export default function AMC() {
                     <td className="py-3 px-4 whitespace-nowrap">
                       <div className="font-medium text-card-foreground">₹{Number(a.amount).toLocaleString("en-IN")}</div>
                       <div className="text-xs text-muted-foreground">{amcPlanLabel(a)}</div>
+                      <AmcPriceParts amc={a} />
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap">
                       <AmcYearBadge amc={a} />
@@ -133,6 +136,11 @@ export default function AMC() {
                           title={a.term_paid ? "Collect renewal" : "Collect this year's AMC"} aria-label={`Collect AMC for ${a.project_name}`}>
                           <CheckCircle className="h-4 w-4 text-emerald-600" />
                         </Button>
+                        {((a.user_plans?.length ?? 0) > 0 || a.storage_gb) ? (
+                          <Button variant="ghost" size="icon" onClick={() => setUsageOf(a)} title="Update users and storage" aria-label={`Update users and storage for ${a.project_name}`}>
+                            <Users className="h-4 w-4 text-primary" />
+                          </Button>
+                        ) : null}
                         <Button variant="ghost" size="icon" onClick={() => setRemoving(a)} title="Delete" aria-label={`Delete AMC for ${a.project_name}`}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -154,6 +162,12 @@ export default function AMC() {
         clients={clients}
         projects={projects}
         onSaved={load}
+      />
+      <AmcUsageDialog
+        open={usageOf !== null}
+        onOpenChange={(v) => { if (!v) setUsageOf(null); }}
+        amc={usageOf}
+        onSaved={() => void load()}
       />
       <AmcCollectDialog
         open={collecting !== null}

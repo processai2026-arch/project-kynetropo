@@ -30,7 +30,7 @@ import { initialsOf } from "@/lib/initials";
 import type { OpsAmcRecord, OpsPayment } from "@/types/ops";
 import { HealthBadge, PROJECT_STAGES, PriorityBadge, rupees } from "./components/crm";
 import { PAYMENT_MODES, PAYMENT_TYPES, PaymentDialog } from "./components/PaymentDialog";
-import { AmcCollectDialog, AmcFormDialog, AmcStatusBadge, AmcYearBadge, amcPlanLabel, dueText } from "@/pages/finance/components/AmcDialogs";
+import { AmcCollectDialog, AmcFormDialog, AmcPriceParts, AmcStatusBadge, AmcUsageDialog, AmcYearBadge, amcPlanLabel, dueText } from "@/pages/finance/components/AmcDialogs";
 
 const label = (options: { value: string; label: string }[], v: string) => options.find((o) => o.value === v)?.label ?? humanise(v);
 
@@ -50,6 +50,7 @@ export default function ProjectDetail() {
   const [amcFormOpen, setAmcFormOpen] = useState(false);
   const [editingAmc, setEditingAmc] = useState<OpsAmcRecord | null>(null);
   const [collectingAmc, setCollectingAmc] = useState<OpsAmcRecord | null>(null);
+  const [usageAmc, setUsageAmc] = useState<OpsAmcRecord | null>(null);
 
   if (error) return <p className="text-destructive">{error}</p>;
 
@@ -192,6 +193,12 @@ export default function ProjectDetail() {
                               {a.storage_gb} GB included · +{rupees(a.storage_step_price ?? 0)} per {a.storage_step_gb} GB more
                             </span>
                           ) : null}
+                          {(a.user_plans ?? []).map((u) => (
+                            <span key={u.category} className="block whitespace-nowrap text-xs text-muted-foreground">
+                              {u.category}: {u.included} users included · +{rupees(u.price)} per {u.step === 1 ? "user" : `${u.step} users`} more
+                            </span>
+                          ))}
+                          <AmcPriceParts amc={a} className="mt-0.5 font-medium" />
                         </td>
                         <td className="text-right font-medium tabular-nums">{rupees(a.amount)}</td>
                         <td className="whitespace-nowrap"><AmcYearBadge amc={a} /> <span className="text-xs text-muted-foreground">from {formatDate(a.start_date)}</span></td>
@@ -201,6 +208,9 @@ export default function ProjectDetail() {
                         <td className="w-10">
                           <RowActionsMenu ariaLabel={`Actions for AMC of ${rupees(a.amount)}`}>
                             <DropdownMenuItem onSelect={() => setCollectingAmc(a)}><Wallet className="h-4 w-4" /> {a.term_paid ? "Collect renewal" : "Collect this year's AMC"}</DropdownMenuItem>
+                            {((a.user_plans?.length ?? 0) > 0 || a.storage_gb) ? (
+                              <DropdownMenuItem onSelect={() => setUsageAmc(a)}><Users className="h-4 w-4" /> Update users and storage</DropdownMenuItem>
+                            ) : null}
                             <DropdownMenuItem onSelect={() => openAmc(a)}><Pencil className="h-4 w-4" /> Edit AMC</DropdownMenuItem>
                           </RowActionsMenu>
                         </td>
@@ -292,6 +302,7 @@ export default function ProjectDetail() {
           successMessage="Payment deleted"
         />
         <AmcFormDialog open={amcFormOpen} onOpenChange={setAmcFormOpen} amc={editingAmc} project={p} onSaved={amcSaved} />
+        <AmcUsageDialog open={usageAmc !== null} onOpenChange={(v) => { if (!v) setUsageAmc(null); }} amc={usageAmc} onSaved={amcSaved} />
         <AmcCollectDialog open={collectingAmc !== null} onOpenChange={(v) => { if (!v) setCollectingAmc(null); }} amc={collectingAmc} onSaved={amcSaved} />
         <StatusDialog open={statusOpen} onOpenChange={setStatusOpen} project={p} userName={userName ?? ""} onSaved={reload} />
         <ActionDialog

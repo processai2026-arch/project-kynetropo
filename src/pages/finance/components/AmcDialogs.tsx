@@ -9,7 +9,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { opsAmcApi } from "@/lib/api/ops";
 import { formatDate, parseDate, toIsoDate, todayIso } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { OpsAmcPlan, OpsAmcPlanBody, OpsAmcRecord } from "@/types/ops";
+import type { AmcUserPlan, OpsAmcPlan, OpsAmcPlanBody, OpsAmcRecord } from "@/types/ops";
+import { Plus, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { rupees } from "@/pages/crm/components/crm";
 import { PAYMENT_MODES } from "@/pages/crm/components/PaymentDialog";
 
@@ -99,10 +101,47 @@ export interface AmcDraft {
   storage_gb: string;
   storage_step_gb: string;
   storage_step_price: string;
+  /** Storage in use now (GB). */
+  storage_used_gb: string;
+  /** Users by category: in the base, per extra block, the block's price, and now. */
+  users: UserDraft[];
 }
+
+export interface UserDraft { category: string; included: string; step: string; price: string; users: string }
+
+/** Categories offered with one tap; any other can be typed. */
+export const USER_CATEGORIES = ["ERP", "Web APK", "Mobile app", "Website"] as const;
 
 /** Reasons for no AMC, offered as choices; anything else is typed. */
 export const NO_AMC_REASONS = ["Offline setup", "Installation cost paid offline"] as const;
+
+/** Extra blocks started: 7 users with 5 included at 1 a block -> 2; at 5 a block -> 1. */
+function blocks(now: number, included: number, step: number): number {
+  if (!(step > 0) || !(now > included)) return 0;
+  return Math.ceil((now - included) / step - 1e-9);
+}
+
+/** What one category of users adds a year, now. */
+export function userExtra(u: Pick<AmcUserPlan, "included" | "step" | "price" | "users">): number {
+  return blocks(u.users, u.included, u.step) * u.price;
+}
+
+/** The parts of an AMC's yearly price: base, users by category, storage. */
+export function amcBreakdown(a: {
+  base: number; users: AmcUserPlan[];
+  storage_gb: number | null; storage_step_gb: number | null; storage_step_price: number | null; storage_used_gb: number | null;
+}) {
+  const users = a.users.map((u) => ({ ...u, extra: userExtra(u) }));
+  const storage = a.storage_gb && a.storage_step_gb && a.storage_used_gb != null
+    ? blocks(a.storage_used_gb, a.storage_gb, a.storage_step_gb) * (a.storage_step_price ?? 0) : 0;
+  const total = a.base + users.reduce((s, u) => s + u.extra, 0) + storage;
+  return { users, storage, total };
+}
+
+const recordBreakdown = (amc: OpsAmcRecord) => amcBreakdown({
+  base: amc.base_amount ?? amc.amount, users: amc.user_plans ?? [],
+  storage_gb: amc.storage_gb, storage_step_gb: amc.storage_step_gb, storage_step_price: amc.storage_step_price, storage_used_gb: amc.storage_used_gb,
+});
 
 /** The AMC a year when the customer uses `usedGb`: the base, plus each extra block started. */
 export function amcForStorage(base: number, includedGb: number, stepGb: number, stepPrice: number, usedGb: number): number {
@@ -118,11 +157,12 @@ export function amcDraft(amc: OpsAmcRecord | null | undefined, start = todayIso(
   if (!amc) {
     return { plan: null, amount: "", start_date: start, renewal_date: yearAfter(start), renewalTouched: false,
              paid: null, payment_date: todayIso(), payment_mode: "bank_transfer", notes: "",
-             reason: "", storage_gb: "", storage_step_gb: "", storage_step_price: "" };
+             reason: "", storage_gb: "", storage_step_gb: "", storage_step_price: "", storage_used_gb: "", users: [] };
   }
   return {
     plan: amc.plan,
-    amount: String(amc.amount),
+    // The form asks the base; the yearly price is worked out from it.
+    amount: String(amc.base_amount ?? amc.amount),
     start_date: amc.start_date,
     renewal_date: amc.renewal_date,
     renewalTouched: amc.renewal_date !== yearAfter(amc.start_date),
@@ -134,7 +174,26 @@ export function amcDraft(amc: OpsAmcRecord | null | undefined, start = todayIso(
     storage_gb: num(amc.storage_gb),
     storage_step_gb: num(amc.storage_step_gb),
     storage_step_price: num(amc.storage_step_price),
+    storage_used_gb: num(amc.storage_used_gb),
+    users: (amc.user_plans ?? []).map((u) => ({ category: u.category, included: String(u.included), step: String(u.step), price: String(u.price), users: String(u.users) })),
   };
+}
+
+/** The draft's user rows as numbers, for working out the price. */
+const draftUsers = (d: AmcDraft): AmcUserPlan[] => d.users.map((u) => ({
+  category: u.category.trim(), included: Number(u.included) || 0, step: Number(u.step) || 1,
+  price: Number(u.price) || 0, users: u.users.trim() === "" ? Number(u.included) || 0 : Number(u.users) || 0,
+}));
+
+/** The draft's yearly price: base, users and storage in use. */
+export function draftBreakdown(d: AmcDraft) {
+  const storage = Number(d.storage_gb) > 0;
+  return amcBreakdown({
+    base: Number(d.amount) || 0, users: draftUsers(d),
+    storage_gb: storage ? Number(d.storage_gb) : null, storage_step_gb: storage ? Number(d.storage_step_gb) : null,
+    storage_step_price: storage ? Number(d.storage_step_price) : null,
+    storage_used_gb: storage && d.storage_used_gb.trim() !== "" ? Number(d.storage_used_gb) : null,
+  });
 }
 
 /**
@@ -148,7 +207,17 @@ export function amcDraftProblem(d: AmcDraft, { requireReason = true }: { require
   if (Number(d.storage_gb) > 0 && !(Number(d.storage_step_gb) > 0 && d.storage_step_price.trim() !== "")) {
     return "Enter how many GB each extra block adds, and its price a year";
   }
-  if (!(Number(d.amount) > 0)) return "Enter the AMC price per year";
+  const seen = new Set<string>();
+  for (const u of d.users) {
+    const name = u.category.trim();
+    if (!name) return "Name each user category — ERP, Web APK…";
+    if (seen.has(name.toLowerCase())) return `${name} is listed twice`;
+    seen.add(name.toLowerCase());
+    if (u.included.trim() === "" || Number(u.included) < 0) return `Enter how many ${name} users the base price covers`;
+    if (!(Number(u.step) >= 1)) return `Enter how many ${name} users make one extra block (1 for each user)`;
+    if (u.price.trim() === "" || Number(u.price) < 0) return `Enter the price a year for each extra block of ${name} users`;
+  }
+  if (!(Number(d.amount) > 0)) return "Enter the AMC base price per year";
   if (!d.start_date || !d.renewal_date) return "Enter the AMC start and renewal dates";
   if (d.renewal_date <= d.start_date) return "The AMC renewal date must be after its start date";
   if (d.plan === "first_year" && !d.paid) return "Say whether the first year's AMC is paid";
@@ -164,6 +233,8 @@ export function amcDraftBody(d: AmcDraft): OpsAmcPlanBody {
     storage_gb: storage ? Number(d.storage_gb) : null,
     storage_step_gb: storage ? Number(d.storage_step_gb) : null,
     storage_step_price: storage ? Number(d.storage_step_price) : null,
+    storage_used_gb: storage && d.storage_used_gb.trim() !== "" ? Number(d.storage_used_gb) : null,
+    user_plans: draftUsers(d),
     plan: d.plan,
     amount: Number(d.amount),
     start_date: d.start_date,
@@ -200,8 +271,10 @@ export function AmcPlanFields({ draft, onChange, original, allowNone = true, sho
   const presetReason = (NO_AMC_REASONS as readonly string[]).includes(draft.reason);
   const noAmcChoice = presetReason ? draft.reason : draft.reason || otherPicked ? "Other" : null;
   const locked = !!original?.renewed;
-  const amount = Number(draft.amount);
-  const price = amount > 0 ? rupees(amount) : "The AMC";
+  const breakdown = draftBreakdown(draft);
+  // The yearly price — base plus users and storage in use — is what Finance sees.
+  const amount = breakdown.total;
+  const price = Number(draft.amount) > 0 ? rupees(amount) : "The AMC";
   const datesOk = !!draft.start_date && !!draft.renewal_date && draft.renewal_date > draft.start_date;
 
   const plans: { value: OpsAmcPlan; label: string; hint: string }[] = [
@@ -222,7 +295,14 @@ export function AmcPlanFields({ draft, onChange, original, allowNone = true, sho
     if (draft.plan === "first_year" && draft.paid === "no") notes.push(<>{price} is due from <b>{formatDate(draft.start_date)}</b>; it shows on the dashboard until collected.</>);
     if (hadPayment && !willPay) notes.push(<>The first-year payment of {rupees(original!.amount)} will be taken out of Finance.</>);
     if (!hadPayment && willPay && original) notes.push(<>Saving records {price} in Finance.</>);
-    if (hadPayment && willPay && amount !== original!.amount) notes.push(<>The AMC payment in Finance changes to {price}.</>);
+    // Matches the server: more users or storage is next year's price, so the payment received keeps its amount.
+    const usageNow = JSON.stringify([draftUsers(draft).map((u) => [u.category.toLowerCase(), u.users]).sort(), draft.storage_used_gb.trim() === "" ? null : Number(draft.storage_used_gb)]);
+    const usageWas = original ? JSON.stringify([(original.user_plans ?? []).map((u) => [u.category.toLowerCase(), u.users]).sort(), original.storage_used_gb]) : usageNow;
+    if (hadPayment && willPay && amount !== original!.amount) {
+      notes.push(usageNow === usageWas
+        ? <>The AMC payment in Finance changes to {price}.</>
+        : <>Users or storage changed: {price} applies from the next payment. The {rupees(original!.amount)} already received stays.</>);
+    }
   } else if (locked && datesOk) {
     notes.push(<>Renewed since it began on {formatDate(original!.contract_start)}. Price and dates can change; payments are in Finance.</>);
   }
@@ -255,7 +335,8 @@ export function AmcPlanFields({ draft, onChange, original, allowNone = true, sho
       )}
 
       {draft.plan && draft.plan !== "none" && <>
-        <Field label={draft.plan === "second_year" ? "AMC price per year, from the 2nd year (₹)" : "AMC price per year (₹)"} htmlFor={`${idPrefix}-amount`} required>
+        <Field label={draft.plan === "second_year" ? "Base price per year, from the 2nd year (₹)" : "Base price per year (₹)"} htmlFor={`${idPrefix}-amount`} required
+          hint="Before extra users and storage">
           <Input id={`${idPrefix}-amount`} inputMode="decimal" value={draft.amount} onChange={(e) => set({ amount: e.target.value.replace(/[^\d.]/g, "") })} />
         </Field>
 
@@ -287,7 +368,21 @@ export function AmcPlanFields({ draft, onChange, original, allowNone = true, sho
           </Field>
         </>}
 
+        <AmcUserFields draft={draft} set={set} idPrefix={idPrefix} />
+
         <AmcStorageFields draft={draft} set={set} usedGb={usedGb} setUsedGb={setUsedGb} idPrefix={idPrefix} />
+
+        {(breakdown.users.length > 0 || breakdown.storage > 0) && Number(draft.amount) > 0 && (
+          <div className="sm:col-span-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+            <p className="font-medium text-card-foreground">AMC a year now: {rupees(breakdown.total)}</p>
+            <p className="text-muted-foreground">
+              Base {rupees(Number(draft.amount))}
+              {breakdown.users.filter((u) => u.extra > 0).map((u) => <span key={u.category}> + {u.category} {rupees(u.extra)}</span>)}
+              {breakdown.storage > 0 && <> + storage {rupees(breakdown.storage)}</>}
+              . This is the amount Finance expects; it changes when users or storage change.
+            </p>
+          </div>
+        )}
 
         {showNotes && (
           <Field label="Notes" htmlFor={`${idPrefix}-notes`} className="sm:col-span-2">
@@ -331,15 +426,18 @@ function AmcStorageFields({ draft, set, usedGb, setUsedGb, idPrefix }: {
         <p className="text-sm font-medium text-card-foreground">Storage in the AMC</p>
         <p className="text-xs text-muted-foreground">Optional. How much the base price covers, and what each extra block adds a year.</p>
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Field label="Included in the base (GB)" htmlFor={`${idPrefix}-gb`}>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <Field label="GB in base" htmlFor={`${idPrefix}-gb`}>
           <Input id={`${idPrefix}-gb`} inputMode="decimal" placeholder="e.g. 20" value={draft.storage_gb} onChange={(e) => set({ storage_gb: digits(e.target.value) })} />
         </Field>
-        <Field label="Each extra block (GB)" htmlFor={`${idPrefix}-step`}>
+        <Field label="GB per block" htmlFor={`${idPrefix}-step`}>
           <Input id={`${idPrefix}-step`} inputMode="decimal" placeholder="e.g. 10" value={draft.storage_step_gb} onChange={(e) => set({ storage_step_gb: digits(e.target.value) })} />
         </Field>
-        <Field label="Price per extra block (₹ a year)" htmlFor={`${idPrefix}-step-price`}>
+        <Field label="₹ per block / year" htmlFor={`${idPrefix}-step-price`}>
           <Input id={`${idPrefix}-step-price`} inputMode="decimal" placeholder="e.g. 500" value={draft.storage_step_price} onChange={(e) => set({ storage_step_price: digits(e.target.value) })} />
+        </Field>
+        <Field label="GB used now" htmlFor={`${idPrefix}-used-now`}>
+          <Input id={`${idPrefix}-used-now`} inputMode="decimal" placeholder="e.g. 25" value={draft.storage_used_gb} onChange={(e) => set({ storage_used_gb: digits(e.target.value) })} />
         </Field>
       </div>
       {ready && (
@@ -361,6 +459,171 @@ function AmcStorageFields({ draft, set, usedGb, setUsedGb, idPrefix }: {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Users in the AMC, per category: how many the base price covers, how many make
+ * one extra block (1 — each user; 5 — every five), the block's price a year, and
+ * how many there are now. ERP: 5 in the base, ₹500 for each one more. Web APK:
+ * 10 in the base, ₹500 for every 5 more.
+ */
+function AmcUserFields({ draft, set, idPrefix }: { draft: AmcDraft; set: (patch: Partial<AmcDraft>) => void; idPrefix: string }) {
+  const digits = (v: string) => v.replace(/[^\d]/g, "");
+  const money = (v: string) => v.replace(/[^\d.]/g, "");
+  const rows = draft.users;
+  const setRow = (i: number, patch: Partial<UserDraft>) => set({ users: rows.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
+  const add = (category = "") => set({ users: [...rows, { category, included: "", step: "1", price: "", users: "" }] });
+  const taken = new Set(rows.map((r) => r.category.trim().toLowerCase()));
+  const plans = draftUsers(draft);
+
+  return (
+    <div className="sm:col-span-2 space-y-3 rounded-md border p-3">
+      <div>
+        <p className="text-sm font-medium text-card-foreground">Users in the AMC</p>
+        <p className="text-xs text-muted-foreground">Optional. Per category: users the base price covers, and what more users add a year. Users per block: 1 charges each extra user; 5 charges every 5 more.</p>
+      </div>
+      {rows.map((r, i) => {
+        const p = plans[i];
+        const extra = userExtra(p);
+        const step = Number(r.step) || 1;
+        return (
+          <div key={i} className="space-y-2 rounded-md bg-muted/30 p-3">
+            <div className="flex items-end gap-2">
+              <Field label="Category" htmlFor={`${idPrefix}-u${i}-cat`} className="flex-1">
+                <Input id={`${idPrefix}-u${i}-cat`} placeholder="ERP, Web APK…" maxLength={60} value={r.category} onChange={(e) => setRow(i, { category: e.target.value })} />
+              </Field>
+              <Button type="button" variant="ghost" size="icon" aria-label={`Remove ${r.category || "this category"}`} onClick={() => set({ users: rows.filter((_, j) => j !== i) })}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Field label="Users in base" htmlFor={`${idPrefix}-u${i}-inc`}>
+                <Input id={`${idPrefix}-u${i}-inc`} inputMode="numeric" placeholder="e.g. 5" value={r.included} onChange={(e) => setRow(i, { included: digits(e.target.value) })} />
+              </Field>
+              <Field label="Users per block" htmlFor={`${idPrefix}-u${i}-step`}>
+                <Input id={`${idPrefix}-u${i}-step`} inputMode="numeric" placeholder="1" value={r.step} onChange={(e) => setRow(i, { step: digits(e.target.value) })} />
+              </Field>
+              <Field label="₹ per block / year" htmlFor={`${idPrefix}-u${i}-price`}>
+                <Input id={`${idPrefix}-u${i}-price`} inputMode="decimal" placeholder="e.g. 500" value={r.price} onChange={(e) => setRow(i, { price: money(e.target.value) })} />
+              </Field>
+              <Field label="Users now" htmlFor={`${idPrefix}-u${i}-now`}>
+                <Input id={`${idPrefix}-u${i}-now`} inputMode="numeric" placeholder={r.included || "0"} value={r.users} onChange={(e) => setRow(i, { users: digits(e.target.value) })} />
+              </Field>
+            </div>
+            {r.included !== "" && r.price !== "" && (
+              <p className="text-xs text-muted-foreground">
+                {r.category || "These"}: {p.included} user{p.included === 1 ? "" : "s"} in the base, then {rupees(p.price)} a year for {step === 1 ? "each user" : `every ${step} users`} more.
+                {" "}{p.users > p.included
+                  ? <b className="text-foreground">{p.users} now → +{rupees(extra)} a year.</b>
+                  : <>{p.users} now — inside the base.</>}
+              </p>
+            )}
+          </div>
+        );
+      })}
+      <div className="flex flex-wrap gap-2">
+        {USER_CATEGORIES.filter((c) => !taken.has(c.toLowerCase())).map((c) => (
+          <Button key={c} type="button" variant="outline" size="sm" onClick={() => add(c)}><Plus className="h-3.5 w-3.5" /> {c}</Button>
+        ))}
+        <Button type="button" variant="outline" size="sm" onClick={() => add()}><Plus className="h-3.5 w-3.5" /> Other</Button>
+      </div>
+    </div>
+  );
+}
+
+/** How an AMC's yearly price is made up, in one or two short lines, for lists. */
+export function AmcPriceParts({ amc, className }: { amc: OpsAmcRecord; className?: string }) {
+  const b = recordBreakdown(amc);
+  const users = b.users.filter((u) => u.users > 0 || u.extra > 0);
+  if (users.length === 0 && !amc.storage_gb) return null;
+  return (
+    <span className={cn("block text-xs text-muted-foreground", className)}>
+      Base {rupees(amc.base_amount ?? amc.amount)}
+      {users.map((u) => (
+        <span key={u.category}> · {u.category} {u.users}/{u.included}{u.extra > 0 ? ` +${rupees(u.extra)}` : ""}</span>
+      ))}
+      {amc.storage_gb ? <> · {amc.storage_used_gb ?? "?"}/{amc.storage_gb} GB{b.storage > 0 ? ` +${rupees(b.storage)}` : ""}</> : null}
+    </span>
+  );
+}
+
+/**
+ * Users or storage changed: say how many there are now, and the yearly price
+ * follows — in Finance, the dashboard's AMC due and the renewals. Payments
+ * already recorded stay as they were.
+ */
+export function AmcUsageDialog({ open, onOpenChange, amc, onSaved }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  amc: OpsAmcRecord | null;
+  onSaved: () => void;
+}) {
+  const { userName } = useAuth();
+  const [users, setUsers] = useState<Record<string, string>>({});
+  const [used, setUsed] = useState("");
+  useEffect(() => {
+    if (!open || !amc) return;
+    setUsers(Object.fromEntries((amc.user_plans ?? []).map((u) => [u.category, String(u.users)])));
+    setUsed(amc.storage_used_gb == null ? "" : String(amc.storage_used_gb));
+  }, [open, amc]);
+  if (!amc) return null;
+
+  const plans = (amc.user_plans ?? []).map((u) => ({ ...u, users: users[u.category] === undefined || users[u.category] === "" ? u.users : Number(users[u.category]) }));
+  const next = amcBreakdown({
+    base: amc.base_amount ?? amc.amount, users: plans, storage_gb: amc.storage_gb, storage_step_gb: amc.storage_step_gb,
+    storage_step_price: amc.storage_step_price, storage_used_gb: used.trim() === "" ? null : Number(used),
+  });
+  const nothing = plans.length === 0 && !amc.storage_gb;
+
+  return (
+    <ActionDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      wide
+      title="Update users and storage"
+      description={<>{amc.client_name} · {amc.project_name}</>}
+      confirmLabel="Save"
+      disabled={nothing}
+      successMessage="AMC updated — Finance shows the new amount"
+      onConfirm={async () => {
+        await opsAmcApi.usage(amc.id, {
+          users: Object.fromEntries(plans.map((u) => [u.category, u.users])),
+          ...(amc.storage_gb ? { storage_used_gb: used.trim() === "" ? null : Number(used) } : {}),
+          recorded_by: userName ?? "",
+        });
+        onSaved();
+      }}
+    >
+      {nothing ? (
+        <p className="text-sm text-muted-foreground">This AMC has no users or storage in its price. Edit the AMC to add them.</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {plans.map((u) => (
+            <Field key={u.category} label={`${u.category} users now`} htmlFor={`amc-use-${u.category}`}
+              hint={`${u.included} in the base; ${rupees(u.price)} for ${u.step === 1 ? "each user" : `every ${u.step}`} more`}>
+              <Input id={`amc-use-${u.category}`} inputMode="numeric" value={users[u.category] ?? ""}
+                onChange={(e) => setUsers((s) => ({ ...s, [u.category]: e.target.value.replace(/[^\d]/g, "") }))} />
+            </Field>
+          ))}
+          {amc.storage_gb ? (
+            <Field label="Storage used now (GB)" htmlFor="amc-use-gb"
+              hint={`${amc.storage_gb} GB in the base; ${rupees(amc.storage_step_price ?? 0)} for every ${amc.storage_step_gb} GB more`}>
+              <Input id="amc-use-gb" inputMode="decimal" value={used} onChange={(e) => setUsed(e.target.value.replace(/[^\d.]/g, ""))} />
+            </Field>
+          ) : null}
+          <div className="sm:col-span-2 rounded-md bg-muted/50 px-3 py-2 text-sm">
+            <p>
+              AMC a year: <span className="text-muted-foreground">{rupees(amc.amount)}</span>
+              {Math.abs(next.total - amc.amount) > 0.004 ? <> → <b className="text-foreground">{rupees(next.total)}</b></> : " (no change)"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              The next AMC payment in Finance and on the dashboard becomes this amount. Payments already received are not changed.
+            </p>
+          </div>
+        </div>
+      )}
+    </ActionDialog>
   );
 }
 
@@ -485,6 +748,7 @@ export function AmcCollectDialog({ open, onOpenChange, amc, onSaved }: {
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <p className="sm:col-span-2 rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+          <AmcPriceParts amc={amc} className="mb-1" />
           For <b>{formatDate(from)}</b> to <b>{formatDate(to)}</b>. The next payment is then due on {formatDate(to)}.
           It shows in Finance as AMC and does not change the project's balance.
         </p>

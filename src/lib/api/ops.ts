@@ -85,6 +85,9 @@ export const opsAmcApi = {
   collect: (id: number, body: OpsAmcCollectBody) =>
     apiFetch<{ data: OpsAmcRecord }>(`/admin/ops/amc/${id}/collect`, { method: "POST", body: JSON.stringify(body) }),
   remove: (id: number) => apiFetch<void>(`/admin/ops/amc/${id}`, { method: "DELETE" }),
+  /** Users now per category and storage used: the yearly price, and Finance, follow. */
+  usage: (id: number, body: { users: Record<string, number>; storage_used_gb?: number | null; recorded_by?: string }) =>
+    apiFetch<{ data: OpsAmcRecord }>(`/admin/ops/amc/${id}/usage`, { method: "PUT", body: JSON.stringify(body) }),
 };
 
 // ─── Pitches ──────────────────────────────────────────────────────────────────
