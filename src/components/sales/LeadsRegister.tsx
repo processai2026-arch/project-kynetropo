@@ -125,7 +125,7 @@ export function LeadsRegister() {
     sorts: {
       code: (l) => Number((l.lead_code ?? "").replace(/\D/g, "")) || l.id,
       name: (l) => (l.company || l.name).toLowerCase(),
-      source: (l) => sourceLabel(l.source, l.source_chapter).toLowerCase(),
+      source: (l) => sourceLabel(l.source, l.source_chapter, l.source_pitch_name).toLowerCase(),
       temperature: (l) => TEMP_RANK[l.temperature],
       stage: (l) => STATUSES.indexOf(l.status),
       owner: (l) => l.assigned_to_name?.toLowerCase(),
@@ -215,7 +215,7 @@ export function LeadsRegister() {
     { key: "code", label: "Lead ID", sortKey: "code", render: (l) => <span className="whitespace-nowrap font-mono text-sm">{l.lead_code || "—"}</span> },
     { key: "name", label: "Lead", sortKey: "name", render: (l) => <NameCell id={l.id} name={l.company || l.name} sub={l.contact_person || (l.company ? l.name : undefined)} /> },
     { key: "phone", label: "Contact", render: (l) => <IconCell icon={Phone} primary={l.phone || "—"} secondary={l.email || undefined} /> },
-    { key: "source", label: "Source", sortKey: "source", render: (l) => <span className="text-xs">{sourceLabel(l.source, l.source_chapter) || "—"}</span> },
+    { key: "source", label: "Source", sortKey: "source", render: (l) => <span className="text-xs">{sourceLabel(l.source, l.source_chapter, l.source_pitch_name) || "—"}</span> },
     { key: "temperature", label: "Temperature", sortKey: "temperature", render: (l) => <TemperatureBadge value={l.temperature} /> },
     { key: "stage", label: "Stage", sortKey: "stage", render: (l) => <StageCell lead={l} canEdit={canEdit} canConvert={canConvert} onChange={changeStage} /> },
     { key: "owner", label: "Owner", sortKey: "owner", render: (l) => l.assigned_to_name || "—" },

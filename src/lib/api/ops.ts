@@ -96,7 +96,9 @@ export const opsPitchesApi = {
   get:    (id: number) => apiFetch<{ data: OpsPitch }>(`/admin/ops/pitches/${id}`),
   create: (body: Partial<OpsPitch>) => apiFetch<{ data: OpsPitch }>("/admin/ops/pitches", { method: "POST", body: JSON.stringify(body) }),
   update: (id: number, body: Partial<OpsPitch>) => apiFetch<{ data: OpsPitch }>(`/admin/ops/pitches/${id}`, { method: "PUT", body: JSON.stringify(body) }),
-  remove: (id: number) => apiFetch<void>(`/admin/ops/pitches/${id}`, { method: "DELETE" }),
+  /** removeExpense: its spend leaves Expenses too. */
+  remove: (id: number, removeExpense = false) =>
+    apiFetch<void>(`/admin/ops/pitches/${id}${removeExpense ? "?remove_expense=1" : ""}`, { method: "DELETE" }),
 };
 
 // ─── Hiring ───────────────────────────────────────────────────────────────────

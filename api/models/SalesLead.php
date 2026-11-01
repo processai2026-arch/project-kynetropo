@@ -24,7 +24,7 @@ class SalesLead
     ];
 
     private const COLUMNS = [
-        'name', 'company', 'contact_person', 'phone', 'email', 'source', 'source_chapter',
+        'name', 'company', 'contact_person', 'phone', 'email', 'source', 'source_chapter', 'source_pitch_id',
         'assigned_to', 'status', 'temperature', 'notes', 'acquired_on',
         'current_software', 'switch_reason',
     ];
@@ -114,9 +114,10 @@ class SalesLead
         );
 
         $rows = Database::fetchAll(
-            "SELECT l.*, u.name AS assigned_to_name
+            "SELECT l.*, u.name AS assigned_to_name, pi.name AS source_pitch_name
                FROM sales_leads l
                LEFT JOIN users u ON u.user_id = l.assigned_to
+               LEFT JOIN ops_pitches pi ON pi.id = l.source_pitch_id AND pi.tenant_id = l.tenant_id
               WHERE $whereClause
               ORDER BY $orderBy
               LIMIT ? OFFSET ?",
@@ -145,9 +146,10 @@ class SalesLead
     public static function find(int $id): ?array
     {
         $row = Database::fetch(
-            'SELECT l.*, u.name AS assigned_to_name
+            'SELECT l.*, u.name AS assigned_to_name, pi.name AS source_pitch_name
                FROM sales_leads l
                LEFT JOIN users u ON u.user_id = l.assigned_to
+               LEFT JOIN ops_pitches pi ON pi.id = l.source_pitch_id AND pi.tenant_id = l.tenant_id
               WHERE l.id = ? AND l.tenant_id = ? LIMIT 1',
             [$id, Database::tenantId()]
         );
@@ -170,6 +172,7 @@ class SalesLead
             'email'          => (string)($data['email'] ?? ''),
             'source'         => (string)($data['source'] ?? ''),
             'source_chapter' => (string)($data['source_chapter'] ?? ''),
+            'source_pitch_id' => !empty($data['source_pitch_id']) ? (int)$data['source_pitch_id'] : null,
             'assigned_to'    => !empty($data['assigned_to']) ? (int)$data['assigned_to'] : null,
             'status'         => $data['status'] ?? 'new',
             'temperature'    => $data['temperature'] ?? 'warm',
@@ -201,6 +204,7 @@ class SalesLead
             'email'            => (string)($client['email'] ?? ''),
             'source'           => $source,
             'source_chapter'   => $chapter,
+            'source_pitch_id'  => !empty($client['source_pitch_id']) ? (int)$client['source_pitch_id'] : null,
             'assigned_to'      => self::userNamed((string)($client['owner'] ?? '')),
             'status'           => 'converted',
             'temperature'      => 'hot',
@@ -219,6 +223,19 @@ class SalesLead
             'Recorded as a converted lead for customer ' . ($client['client_code'] ?? $name)
         );
         return $id;
+    }
+
+    /** A pitch event of this tenant, or null: what a lead or customer may name as its event. */
+    public static function pitchId(mixed $id): ?int
+    {
+        $id = (int)$id;
+        if ($id <= 0) {
+            return null;
+        }
+        return Database::fetch(
+            'SELECT id FROM ops_pitches WHERE id = ? AND tenant_id = ? LIMIT 1',
+            [$id, Database::tenantId()]
+        ) ? $id : null;
     }
 
     /** A free-text source as a lead's: "YES Meet Kanchipuram" is YES, chapter Kanchipuram. */
@@ -274,7 +291,7 @@ class SalesLead
                 continue;
             }
             $value = $data[$col];
-            if ($col === 'assigned_to') {
+            if ($col === 'assigned_to' || $col === 'source_pitch_id') {
                 $value = !empty($value) ? (int)$value : null;
             }
             $fields[] = "`$col` = ?";
@@ -446,6 +463,9 @@ class SalesLead
             'source'               => $row['source'],
             // Which YES chapter the lead came through; blank for any other source.
             'source_chapter'       => $row['source_chapter'] ?? '',
+            // The pitch event (Growth → Pitches) the lead came from, if any.
+            'source_pitch_id'      => !empty($row['source_pitch_id']) ? (int)$row['source_pitch_id'] : null,
+            'source_pitch_name'    => $row['source_pitch_name'] ?? null,
             'assigned_to'          => $row['assigned_to'] !== null ? (int)$row['assigned_to'] : null,
             'assigned_to_name'     => $row['assigned_to_name'] ?? null,
             'status'               => $row['status'],

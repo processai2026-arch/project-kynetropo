@@ -67,6 +67,9 @@ export interface SalesLead {
   source: string;
   /** Which YES chapter a lead came through; blank for any other source. */
   source_chapter?: string;
+  /** The pitch event (Growth → Pitches) the lead came from, if any. */
+  source_pitch_id?: number | null;
+  source_pitch_name?: string | null;
   assigned_to: number | null;
   assigned_to_name: string | null;
   status: LeadStatus;
@@ -570,4 +573,13 @@ export interface Pagination {
   limit: number;
   total: number;
   total_pages: number;
+}
+
+/** A pitch event a lead can name as its source. */
+export interface PitchEvent {
+  id: number;
+  name: string;
+  date: string;
+  city: string | null;
+  type: string;
 }

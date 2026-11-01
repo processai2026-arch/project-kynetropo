@@ -46,6 +46,7 @@ const EMPTY = {
   email: "",
   source: "",
   source_chapter: "",
+  source_pitch_id: "",
   temperature: "warm" as LeadTemperature,
   status: "new" as LeadStatus,
   notes: "",
@@ -91,6 +92,7 @@ export default function SalesLeadForm() {
         email: l.email ?? "",
         source: l.source ?? "",
         source_chapter: l.source_chapter ?? "",
+        source_pitch_id: l.source_pitch_id ? String(l.source_pitch_id) : "",
         temperature: l.temperature ?? "warm",
         status: l.status ?? "new",
         notes: l.notes ?? "",
@@ -129,6 +131,7 @@ export default function SalesLeadForm() {
         email: form.email.trim(),
         source: form.source,
         source_chapter: form.source === "yes" ? form.source_chapter.trim() : "",
+        source_pitch_id: form.source_pitch_id ? Number(form.source_pitch_id) : 0,
         temperature: form.temperature,
         notes: form.notes,
         acquired_on: form.acquired_on,
@@ -173,7 +176,9 @@ export default function SalesLeadForm() {
     <div className="grid grid-cols-1 gap-4">
       <Field label="Source" htmlFor="lead-source" error={errors.source}>
         <SourceSelect id="lead-source" value={form.source} onChange={(v) => set("source", v)}
-          chapter={form.source_chapter} onChapter={(v) => set("source_chapter", v)} />
+          chapter={form.source_chapter} onChapter={(v) => set("source_chapter", v)}
+          pitchId={form.source_pitch_id ? Number(form.source_pitch_id) : null}
+          onPitch={(p) => set("source_pitch_id", p ? String(p.id) : "")} />
       </Field>
       <Field label="Client came in on" htmlFor="lead-acquired" hint="The day you actually got them — not the day you are typing this">
         <Input id="lead-acquired" type="date" max={today()} value={form.acquired_on} onChange={(e) => set("acquired_on", e.target.value)} />

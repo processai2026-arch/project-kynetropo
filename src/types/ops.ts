@@ -369,7 +369,42 @@ export interface OpsPitch {
   conversion_pct: number;
   revenue: number;
   roi: number | null;
-  leads?: OpsClient[];
+  /** Leads that got a quotation, and what their latest quotations add up to. */
+  quoted_count?: number;
+  quoted_value?: number;
+  lost?: number;
+  /** Paid so far on the won customers' projects. */
+  received?: number;
+  /** Quotations still waiting for an answer. */
+  pipeline?: number;
+  cost_per_lead?: number | null;
+  leads?: OpsPitchLead[];
+}
+
+/** One lead (or customer) a pitch event brought, with its quote and worth. */
+export interface OpsPitchLead {
+  lead_id: number | null;
+  lead_code: string | null;
+  client_id: number | null;
+  client_code: string | null;
+  name: string;
+  company: string;
+  lead_status: string | null;
+  stage: string | null;
+  assigned_to_name: string | null;
+  quotes: number;
+  quote_amount: number | null;
+  quote_status: "sent" | "rejected" | "accepted" | null;
+  quote_version: number | null;
+  projects: number;
+  project_quoted: number;
+  received: number;
+  won: boolean;
+  lost: boolean;
+  revenue: number;
+  revenue_from: "project" | "quotation" | null;
+  pipeline: number;
+  created_at: string;
 }
 
 export interface OpsEmployee {

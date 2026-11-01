@@ -182,7 +182,7 @@ function PhoneLeads() {
                     {/* Where they came from, on a line of its own so it is never the part cut off. */}
                     <span className="mt-0.5 flex items-center gap-1 truncate text-xs text-primary">
                       <Megaphone className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{lead.source ? sourceLabel(lead.source, lead.source_chapter) : "Source not recorded"}</span>
+                      <span className="truncate">{lead.source || lead.source_pitch_name ? sourceLabel(lead.source, lead.source_chapter, lead.source_pitch_name) : "Source not recorded"}</span>
                     </span>
                   </>}
                   end={<TempPill value={lead.temperature} />} />

@@ -40,6 +40,17 @@ class AdminSalesLeadController
         Response::paginated($result['rows'], $result['pagination']);
     }
 
+    /** GET /admin/sales/leads/pitches — the pitch events a lead can come from, newest first, for the source dropdown. */
+    public function pitches(Request $request): void
+    {
+        SalesPermissions::enforce($request->user, 'sales.leads.view');
+        $rows = Database::fetchAll(
+            'SELECT id, name, date, city, type FROM ops_pitches WHERE tenant_id = ? ORDER BY date DESC, id DESC',
+            [Database::tenantId()]
+        );
+        Response::success(array_map(fn($r) => ['id' => (int)$r['id']] + $r, $rows));
+    }
+
     /** GET /admin/sales/leads/chapters — the YES chapters leads have come through, for the source dropdown. */
     public function chapters(Request $request): void
     {
@@ -128,6 +139,7 @@ class AdminSalesLeadController
             'email'          => $email,
             'source'         => $source,
             'source_chapter' => $chapter,
+            'source_pitch_id' => SalesLead::pitchId($request->input('source_pitch_id')),
             'assigned_to'    => $assignedTo,
             'status'         => $status,
             'temperature'    => $temperature,
@@ -179,6 +191,11 @@ class AdminSalesLeadController
             );
         }
 
+        // The pitch event: 0 or blank clears it.
+        if ($request->input('source_pitch_id') !== null) {
+            $data['source_pitch_id'] = SalesLead::pitchId($request->input('source_pitch_id'));
+        }
+
         if ($request->input('email') !== null) {
             $email = trim((string)$request->input('email'));
             if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -221,6 +238,15 @@ class AdminSalesLeadController
         }
 
         SalesLead::update($id, $data);
+
+        // A converted lead and its customer name the same event.
+        if (array_key_exists('source_pitch_id', $data) && !empty($raw['converted_client_id'])
+            && (int)($raw['source_pitch_id'] ?? 0) !== (int)($data['source_pitch_id'] ?? 0)) {
+            Database::execute(
+                'UPDATE ops_clients SET source_pitch_id = ? WHERE id = ? AND tenant_id = ?',
+                [$data['source_pitch_id'], (int)$raw['converted_client_id'], Database::tenantId()]
+            );
+        }
 
         if (isset($data['temperature']) && $data['temperature'] !== $raw['temperature']) {
             SalesActivity::log(
@@ -429,6 +455,14 @@ class AdminSalesLeadController
         }
 
         SalesLead::markConverted($id, $clientId, $projectId, $existing === null);
+
+        // The customer comes from the lead's pitch event, unless it already names one.
+        if (!empty($raw['source_pitch_id'])) {
+            Database::execute(
+                'UPDATE ops_clients SET source_pitch_id = ? WHERE id = ? AND tenant_id = ? AND source_pitch_id IS NULL',
+                [(int)$raw['source_pitch_id'], $clientId, $tenantId]
+            );
+        }
 
         SalesActivity::log(
             $id, 'lead_converted',
@@ -793,6 +827,14 @@ class AdminSalesLeadController
             $changes[] = $from === ''
                 ? $label . ' set to ' . ($to !== '' ? $to : '(empty)')
                 : $label . ': ' . $from . ' -> ' . ($to !== '' ? $to : '(cleared)');
+        }
+
+        if (array_key_exists('source_pitch_id', $after)
+            && (int)($before['source_pitch_id'] ?? 0) !== (int)($after['source_pitch_id'] ?? 0)) {
+            $pitch = $after['source_pitch_id']
+                ? Database::fetch('SELECT name FROM ops_pitches WHERE id = ? LIMIT 1', [(int)$after['source_pitch_id']])
+                : null;
+            $changes[] = $pitch ? 'Pitch event set to ' . $pitch['name'] : 'Pitch event cleared';
         }
 
         if (array_key_exists('switch_reason', $after)

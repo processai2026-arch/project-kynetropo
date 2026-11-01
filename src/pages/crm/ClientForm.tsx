@@ -149,11 +149,18 @@ export default function ClientForm() {
         side={
           <FormSectionCard icon={Megaphone} tone="amber" title="Source" description="Where this client came from">
             <div className="grid grid-cols-1 gap-4">
+              <Field label="Pitch event" hint="Counts this client in the event's leads, revenue and ROI under Growth → Pitches">
+                <NativeSelect value={form.source_pitch_id} placeholder="Not from a pitch event"
+                  options={pitches.map((p) => ({ value: p.id, label: `${p.name} (${p.date})` }))}
+                  onChange={(v) => {
+                    set("source_pitch_id", v);
+                    const p = pitches.find((x) => String(x.id) === v);
+                    // The source text follows the event, unless something else was typed.
+                    if (p && (!form.source.trim() || pitches.some((x) => x.name === form.source))) set("source", p.name);
+                  }} />
+              </Field>
               <Field label="Source" htmlFor="source">
                 <Input id="source" placeholder="Referral, YES Meet…" value={form.source} onChange={(e) => set("source", e.target.value)} />
-              </Field>
-              <Field label="Source pitch">
-                <NativeSelect value={form.source_pitch_id} placeholder="None" options={pitches.map((p) => ({ value: p.id, label: `${p.name} (${p.date})` }))} onChange={(v) => set("source_pitch_id", v)} />
               </Field>
             </div>
           </FormSectionCard>

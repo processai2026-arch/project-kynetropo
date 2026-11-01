@@ -235,7 +235,7 @@ class AdminOpsClientController
             'phone'           => trim((string)($body['phone'] ?? '')),
             'email'           => strtolower(trim((string)($body['email'] ?? ''))),
             'source'          => trim((string)($body['source'] ?? '')),
-            'source_pitch_id' => !empty($body['source_pitch_id']) ? (int)$body['source_pitch_id'] : null,
+            'source_pitch_id' => SalesLead::pitchId($body['source_pitch_id'] ?? null),
             'owner'           => trim((string)($body['owner'] ?? '')),
             'health'          => in_array($body['health'] ?? '', ['green','yellow','red']) ? $body['health'] : 'green',
             'stage'           => 'First Meetup',
@@ -277,7 +277,8 @@ class AdminOpsClientController
         foreach (['name','company','phone','email','source','owner','notes','current_software','switch_reason'] as $f) {
             if (isset($body[$f])) $updates[$f] = trim((string)$body[$f]);
         }
-        if (isset($body['source_pitch_id'])) $updates['source_pitch_id'] = !empty($body['source_pitch_id']) ? (int)$body['source_pitch_id'] : null;
+        // null clears it ("None" in the form), so the key's presence is what counts.
+        if (array_key_exists('source_pitch_id', $body)) $updates['source_pitch_id'] = SalesLead::pitchId($body['source_pitch_id']);
         if (isset($body['health']) && in_array($body['health'], ['green','yellow','red'])) $updates['health'] = $body['health'];
         if (array_key_exists('client_code', $body) && strtoupper(trim((string)$body['client_code'])) !== (string)($client['client_code'] ?? '')) {
             try {
@@ -290,6 +291,13 @@ class AdminOpsClientController
         if (!empty($updates)) {
             Database::update('ops_clients', $updates, ['id' => $id, 'tenant_id' => $tenantId]);
             $this->logActivity($tenantId, 'client', $id, 'updated', 'Client details updated', $body['updated_by'] ?? '');
+        }
+        // The customer's lead names the same pitch event.
+        if (array_key_exists('source_pitch_id', $updates) && (int)($client['source_pitch_id'] ?? 0) !== (int)($updates['source_pitch_id'] ?? 0)) {
+            Database::execute(
+                'UPDATE sales_leads SET source_pitch_id = ? WHERE tenant_id = ? AND converted_client_id = ?',
+                [$updates['source_pitch_id'], $tenantId, $id]
+            );
         }
 
         $row = Database::fetch('SELECT * FROM ops_clients WHERE id = ? LIMIT 1', [$id]);

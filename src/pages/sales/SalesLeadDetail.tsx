@@ -373,13 +373,13 @@ export default function SalesLeadDetail() {
   const scheduledMeetings = lead.meetings.filter((m) => m.status === "scheduled");
 
   const initials = (lead.company || lead.name).split(/\s+/).slice(0, 2).map((w: string) => w[0]?.toUpperCase() ?? "").join("");
-  const eyebrow = [lead.lead_code, lead.source ? sourceLabel(lead.source, lead.source_chapter) : null, `added ${formatDate(lead.acquired_on ?? lead.created_at)}`].filter(Boolean).join(" · ");
+  const eyebrow = [lead.lead_code, lead.source || lead.source_pitch_name ? sourceLabel(lead.source, lead.source_chapter, lead.source_pitch_name) : null, `added ${formatDate(lead.acquired_on ?? lead.created_at)}`].filter(Boolean).join(" · ");
   const factsData: Array<ProfileFact | null> = [
     lead.phone ? { icon: Phone, label: "Phone", value: lead.phone, href: `tel:${lead.phone}` } : null,
     lead.email ? { icon: Mail, label: "Email", value: lead.email, href: `mailto:${lead.email}` } : null,
     lead.company ? { icon: Building2, label: "Company", value: lead.company } : null,
     lead.contact_person ? { icon: UserCheck, label: "Contact", value: lead.contact_person } : null,
-    { icon: Megaphone, label: "Source", value: lead.source ? sourceLabel(lead.source, lead.source_chapter) : "Not recorded" },
+    { icon: Megaphone, label: "Source", value: lead.source || lead.source_pitch_name ? sourceLabel(lead.source, lead.source_chapter, lead.source_pitch_name) : "Not recorded" },
   ];
   const facts = factsData.filter((f): f is ProfileFact => f !== null);
 
@@ -554,7 +554,7 @@ export default function SalesLeadDetail() {
       { label: "Contact", value: contact },
       { label: "Phone", value: lead.phone ? <a href={`tel:${lead.phone}`} className="text-primary">{lead.phone}</a> : null },
       { label: "Email", value: lead.email ? <a href={`mailto:${lead.email}`} className="break-all text-primary">{lead.email}</a> : null },
-      { label: "Source", value: lead.source ? sourceLabel(lead.source, lead.source_chapter) : null },
+      { label: "Source", value: lead.source || lead.source_pitch_name ? sourceLabel(lead.source, lead.source_chapter, lead.source_pitch_name) : null },
       { label: "Came in", value: formatDate(lead.acquired_on ?? lead.created_at) },
       { label: "Owner", value: lead.assigned_to_name || "Unassigned" },
       { label: "Using now", value: lead.current_software },
@@ -581,7 +581,7 @@ export default function SalesLeadDetail() {
                 {lead.company && contact ? <p className="truncate text-sm text-muted-foreground">{contact}</p> : null}
                 <p className="mt-0.5 flex items-center gap-1 text-sm text-primary">
                   <Megaphone className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{lead.source ? sourceLabel(lead.source, lead.source_chapter) : "Source not recorded"}</span>
+                  <span className="truncate">{lead.source || lead.source_pitch_name ? sourceLabel(lead.source, lead.source_chapter, lead.source_pitch_name) : "Source not recorded"}</span>
                 </p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   <Pill tone={STATUS_TONE[lead.status] ?? "muted"}>{statusLabel(lead.status)}</Pill>

@@ -52,7 +52,7 @@ const AMC = [
 ];
 
 const PITCHES = [
-  { id: 1, name: "YES Meet Kanchipuram", date: "2026-07-15", venue: "Hotel Tamil Nadu", city: "Kanchipuram", type: "yes_meeting", spend: 3500, description: "Monthly YES chapter meeting. Presented Kynetropo to 40+ business owners.", created_by: "Founder", created_at: "2026-07-15", leads_count: 6, converted: 2, conversion_pct: 33.3, revenue: 320000, roi: 9043 },
+  { id: 1, name: "YES Meet Kanchipuram", date: "2026-07-15", venue: "Hotel Tamil Nadu", city: "Kanchipuram", type: "yes_meeting", spend: 3500, description: "Monthly YES chapter meeting. Presented Kynetropo to 40+ business owners.", created_by: "Founder", created_at: "2026-07-15", leads_count: 6, converted: 3, conversion_pct: 50, revenue: 320000, roi: 9042.9, quoted_count: 4, quoted_value: 465000 },
   { id: 2, name: "YES Meet Bangalore", date: "2026-06-20", venue: "The Lalit Ashok", city: "Bangalore", type: "yes_meeting", spend: 8500, description: "National YES meet. Good exposure but leads were from different city.", created_by: "Founder", created_at: "2026-06-20", leads_count: 3, converted: 1, conversion_pct: 33.3, revenue: 200000, roi: 2253 },
   { id: 3, name: "SME Business Forum Chennai", date: "2026-05-10", venue: "Chennai Trade Centre", city: "Chennai", type: "business_forum", spend: 5000, description: "SME digital transformation forum.", created_by: "Founder", created_at: "2026-05-10", leads_count: 2, converted: 0, conversion_pct: 0, revenue: 0, roi: -100 },
 ];
@@ -246,8 +246,17 @@ export function getMockResponse(path: string, method: string, body?: unknown): u
   if (url.match(/^\/admin\/ops\/pitches\/\d+$/) && method === "GET") {
     const id = Number(url.split("/").pop());
     const pitch = PITCHES.find(p => p.id === id);
-    return ok({ ...pitch, leads: CLIENTS.filter(c => c.source_pitch_id === id) });
+    const leads = id !== 1 ? [] : [
+      { lead_id: 1, lead_code: "LD-0001", client_id: 1, client_code: "CL-0001", name: "Cable TV CRM", company: "Sri Cable Network", lead_status: "converted", stage: "Development", assigned_to_name: "Karthik", quotes: 2, quote_amount: 145000, quote_status: "accepted", quote_version: 2, projects: 1, project_quoted: 150000, received: 105000, won: true, lost: false, revenue: 150000, revenue_from: "project", pipeline: 0, created_at: "2026-07-16" },
+      { lead_id: 7, lead_code: "LD-0007", client_id: null, client_code: null, name: "Murugan Textiles", company: "Murugan Textiles", lead_status: "onboarding", stage: null, assigned_to_name: "Karthik", quotes: 1, quote_amount: 170000, quote_status: "accepted", quote_version: 1, projects: 0, project_quoted: 0, received: 0, won: true, lost: false, revenue: 170000, revenue_from: "quotation", pipeline: 0, created_at: "2026-07-17" },
+      { lead_id: 8, lead_code: "LD-0008", client_id: null, client_code: null, name: "Lakshmi Silks", company: "", lead_status: "proposal", stage: null, assigned_to_name: "Priya", quotes: 1, quote_amount: 90000, quote_status: "sent", quote_version: 1, projects: 0, project_quoted: 0, received: 0, won: false, lost: false, revenue: 0, revenue_from: null, pipeline: 90000, created_at: "2026-07-18" },
+      { lead_id: 9, lead_code: "LD-0009", client_id: null, client_code: null, name: "Arun Motors", company: "", lead_status: "lost", stage: null, assigned_to_name: null, quotes: 1, quote_amount: 60000, quote_status: "rejected", quote_version: 1, projects: 0, project_quoted: 0, received: 0, won: false, lost: true, revenue: 0, revenue_from: null, pipeline: 0, created_at: "2026-07-18" },
+      { lead_id: 10, lead_code: "LD-0010", client_id: null, client_code: null, name: "Saravana Stores", company: "", lead_status: "contacted", stage: null, assigned_to_name: "Priya", quotes: 0, quote_amount: null, quote_status: null, quote_version: null, projects: 0, project_quoted: 0, received: 0, won: false, lost: false, revenue: 0, revenue_from: null, pipeline: 0, created_at: "2026-07-19" },
+      { lead_id: null, lead_code: null, client_id: 4, client_code: "CL-0004", name: "Agro Mart", company: "", lead_status: null, stage: "Requirements", assigned_to_name: null, quotes: 0, quote_amount: null, quote_status: null, quote_version: null, projects: 0, project_quoted: 0, received: 0, won: true, lost: false, revenue: 0, revenue_from: null, pipeline: 0, created_at: "2025-06-10" },
+    ];
+    return ok({ ...pitch, quoted_count: 4, quoted_value: 465000, lost: 1, received: 105000, pipeline: 90000, cost_per_lead: 583.33, leads });
   }
+  if (url.match(/^\/admin\/ops\/pitches\/\d+$/) && method === "DELETE") return ok({ message: "Deleted" });
   if (url === "/admin/ops/pitches" && method === "POST") return ok({ ...(body as object), id: 99, leads_count: 0, converted: 0, conversion_pct: 0, revenue: 0, roi: null, created_at: TODAY });
   if (url.match(/^\/admin\/ops\/pitches\/\d+$/) && method === "PUT") return ok({ ...(body as object) });
 

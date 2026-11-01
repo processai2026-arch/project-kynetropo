@@ -7,6 +7,7 @@ import type {
   FollowupOutcome,
   LeadCallSummary,
   Pagination,
+  PitchEvent,
   SalesAccessUser,
   SalesActivityEntry,
   SalesCall,
@@ -286,6 +287,9 @@ export const salesLeadsApi = {
   /** The YES chapters leads have come through, for the source dropdown. */
   chapters: async (): Promise<string[]> =>
     (await apiFetch<Envelope<string[]>>("/admin/sales/leads/chapters")).data ?? [],
+  /** The pitch events a lead can come from, newest first, for the source dropdown. */
+  pitches: async (): Promise<PitchEvent[]> =>
+    (await apiFetch<Envelope<PitchEvent[]>>("/admin/sales/leads/pitches")).data ?? [],
   convert: async (id: number, body: ConvertLeadBody = {}) =>
     (await apiFetch<Envelope<{
       lead_id: number;

@@ -2,10 +2,10 @@
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { salesLeadsApi } from "@/lib/api/sales";
-import type { ChallengeStatus, LeadStatus, LeadTemperature } from "@/types/sales";
+import type { ChallengeStatus, LeadStatus, LeadTemperature, PitchEvent } from "@/types/sales";
 
 /** Lead sources the backend already recognises. */
 export const LEAD_SOURCES = [
@@ -13,8 +13,12 @@ export const LEAD_SOURCES = [
   "event", "walk_in", "partner", "yes", "other",
 ] as const;
 
-/** A source as people say it: "YES" is the business network, not the word. */
-export function sourceLabel(source: string | null | undefined, chapter?: string | null): string {
+/**
+ * A source as people say it: "YES" is the business network, not the word.
+ * A lead from a pitch event reads as the event: "YES Meet Kanchipuram".
+ */
+export function sourceLabel(source: string | null | undefined, chapter?: string | null, pitch?: string | null): string {
+  if (pitch) return pitch;
   if (!source) return "";
   if (source.toLowerCase() === "yes") return chapter ? `YES · ${chapter}` : "YES";
   return source.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
@@ -22,6 +26,32 @@ export function sourceLabel(source: string | null | undefined, chapter?: string 
 
 const CUSTOM = "__custom__";
 const NEW_CHAPTER = "__new_chapter__";
+const PITCH = "pitch:";
+
+/** The source a pitch event's leads carry: a YES meeting is YES, and so on. */
+const PITCH_SOURCE: Record<string, string> = {
+  yes_meeting: "yes", business_forum: "event", referral_event: "referral",
+  cold_outreach: "cold_call", online: "social", other: "event",
+};
+
+/** The pitch events, fetched once per visit and shared by every form. */
+let pitchList: Promise<PitchEvent[]> | null = null;
+function usePitchEvents(enabled: boolean): PitchEvent[] {
+  const [pitches, setPitches] = useState<PitchEvent[]>([]);
+  useEffect(() => {
+    if (!enabled) return;
+    pitchList ??= salesLeadsApi.pitches().catch(() => { pitchList = null; return []; });
+    let alive = true;
+    void pitchList.then((p) => { if (alive) setPitches(p); });
+    return () => { alive = false; };
+  }, [enabled]);
+  return pitches;
+}
+
+const shortDate = (iso: string) => {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+};
 
 /** The YES chapters already used, fetched once per visit and shared by every form. */
 let chapterList: Promise<string[]> | null = null;
@@ -72,12 +102,16 @@ function ChapterSelect({ id, value, onChange }: { id: string; value: string; onC
  * anything not covered. The custom value is stored verbatim, so a source like
  * "IndiaMART" survives exactly as typed rather than collapsing into "other".
  * Choosing YES (the business network) asks which chapter the lead came from.
+ * The pitch events (Growth → Pitches) come first: picking one links the lead
+ * to it, so the event counts the lead, its quote and the revenue it brings.
  */
 export function SourceSelect({
   value,
   onChange,
   chapter = "",
   onChapter,
+  pitchId = null,
+  onPitch,
   id = "lead-source",
 }: {
   value: string;
@@ -85,10 +119,15 @@ export function SourceSelect({
   /** The YES chapter, asked for only while the source is YES. */
   chapter?: string;
   onChapter?: (value: string) => void;
+  /** The pitch event picked as the source; offered only with onPitch. */
+  pitchId?: number | null;
+  onPitch?: (pitch: PitchEvent | null) => void;
   id?: string;
 }) {
   const isPreset = (v: string) => (LEAD_SOURCES as readonly string[]).includes(v);
   const [custom, setCustom] = useState(!!value && !isPreset(value));
+  const pitches = usePitchEvents(!!onPitch);
+  const pitch = pitchId ? pitches.find((p) => p.id === pitchId) : undefined;
 
   // A value arriving from outside (editing an existing lead) decides the mode.
   useEffect(() => {
@@ -98,8 +137,19 @@ export function SourceSelect({
   return (
     <div className="space-y-2">
       <Select
-        value={custom ? CUSTOM : value}
+        value={pitchId && onPitch ? `${PITCH}${pitchId}` : custom ? CUSTOM : value}
         onValueChange={(v) => {
+          if (v.startsWith(PITCH)) {
+            const p = pitches.find((x) => `${PITCH}${x.id}` === v);
+            if (!p) return;
+            const src = PITCH_SOURCE[p.type] ?? "event";
+            setCustom(false);
+            onPitch?.(p);
+            onChange(src);
+            if (src === "yes") onChapter?.(p.city || p.name);
+            return;
+          }
+          if (pitchId) onPitch?.(null);
           if (v === CUSTOM) {
             setCustom(true);
             onChange("");
@@ -113,16 +163,36 @@ export function SourceSelect({
           <SelectValue placeholder="Select source" />
         </SelectTrigger>
         <SelectContent>
-          {LEAD_SOURCES.map((s) => (
-            <SelectItem key={s} value={s} className={s === "yes" ? undefined : "capitalize"}>
-              {s === "yes" ? "YES (business network)" : s.replace(/_/g, " ")}
-            </SelectItem>
-          ))}
-          <SelectItem value={CUSTOM}>Other — type your own</SelectItem>
+          {onPitch && (pitches.length > 0 || pitchId) && (
+            <SelectGroup>
+              <SelectLabel className="text-xs text-muted-foreground">Pitch events</SelectLabel>
+              {pitchId && !pitch && <SelectItem value={`${PITCH}${pitchId}`}>Pitch event</SelectItem>}
+              {pitches.map((p) => (
+                <SelectItem key={p.id} value={`${PITCH}${p.id}`}>
+                  {p.name} · {shortDate(p.date)}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          )}
+          <SelectGroup>
+            {onPitch && pitches.length > 0 && <SelectLabel className="text-xs text-muted-foreground">Other sources</SelectLabel>}
+            {LEAD_SOURCES.map((s) => (
+              <SelectItem key={s} value={s} className={s === "yes" ? undefined : "capitalize"}>
+                {s === "yes" ? "YES (business network)" : s.replace(/_/g, " ")}
+              </SelectItem>
+            ))}
+            <SelectItem value={CUSTOM}>Other — type your own</SelectItem>
+          </SelectGroup>
         </SelectContent>
       </Select>
 
-      {custom && (
+      {pitchId && onPitch && (
+        <p className="text-xs text-muted-foreground">
+          Counted in this event's leads, quotes and ROI under Growth → Pitches.
+        </p>
+      )}
+
+      {custom && !pitchId && (
         <Input
           autoFocus
           placeholder="Enter the source, e.g. IndiaMART"
@@ -132,7 +202,7 @@ export function SourceSelect({
         />
       )}
 
-      {value === "yes" && onChapter && (
+      {value === "yes" && onChapter && !pitchId && (
         <div className="space-y-1">
           <label htmlFor={`${id}-chapter`} className="text-xs font-medium text-foreground">Which YES chapter? *</label>
           <ChapterSelect id={`${id}-chapter`} value={chapter} onChange={onChapter} />

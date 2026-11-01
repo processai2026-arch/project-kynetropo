@@ -122,6 +122,11 @@ export function getSalesMock(url: string, method: string, query: URLSearchParams
   if (url === "/admin/sales/feed") return ok({ server_time: NOW, items: [] });
   if (url === "/admin/sales/assignable-users") return ok([{ user_id: 1, name: "Naresh" }, { user_id: 2, name: "Kaushik" }, { user_id: 3, name: "Karthi" }]);
   if (url === "/admin/sales/leads/chapters") return ok(["Bangalore", "Dindugal", "Kanchipuram"]);
+  if (url === "/admin/sales/leads/pitches") return ok([
+    { id: 1, name: "YES Meet Kanchipuram", date: "2026-07-15", city: "Kanchipuram", type: "yes_meeting" },
+    { id: 2, name: "YES Meet Bangalore", date: "2026-06-20", city: "Bangalore", type: "yes_meeting" },
+    { id: 3, name: "SME Business Forum Chennai", date: "2026-05-10", city: "Chennai", type: "business_forum" },
+  ]);
   if (url === "/admin/sales/leads") {
     const status = query.get("status");
     // Enough rows to page through: the five above plus filler.
