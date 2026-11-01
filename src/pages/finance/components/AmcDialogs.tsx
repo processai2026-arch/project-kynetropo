@@ -476,6 +476,10 @@ function AmcUserFields({ draft, set, idPrefix }: { draft: AmcDraft; set: (patch:
   const add = (category = "") => set({ users: [...rows, { category, included: "", step: "1", price: "", users: "" }] });
   const taken = new Set(rows.map((r) => r.category.trim().toLowerCase()));
   const plans = draftUsers(draft);
+  const base = Number(draft.amount) || 0;
+  // The calculator's "if they have … users", per row: a what-if, not saved.
+  const [whatIf, setWhatIf] = useState<Record<number, string>>({});
+  const usersText = (n: number) => `${n} user${n === 1 ? "" : "s"}`;
 
   return (
     <div className="sm:col-span-2 space-y-3 rounded-md border p-3">
@@ -512,12 +516,33 @@ function AmcUserFields({ draft, set, idPrefix }: { draft: AmcDraft; set: (patch:
               </Field>
             </div>
             {r.included !== "" && r.price !== "" && (
-              <p className="text-xs text-muted-foreground">
-                {r.category || "These"}: {p.included} user{p.included === 1 ? "" : "s"} in the base, then {rupees(p.price)} a year for {step === 1 ? "each user" : `every ${step} users`} more.
-                {" "}{p.users > p.included
-                  ? <b className="text-foreground">{p.users} now → +{rupees(extra)} a year.</b>
-                  : <>{p.users} now — inside the base.</>}
-              </p>
+              // Worked out as it is typed, like storage: the first steps, then a "what if".
+              <div className="space-y-2 rounded-md bg-background px-3 py-2 text-sm">
+                <ul className="space-y-0.5 text-muted-foreground">
+                  {[0, 1, 2].map((n) => (
+                    <li key={n}>
+                      {n === 0
+                        ? <>Up to <b className="text-foreground">{usersText(p.included)}</b></>
+                        : step === 1
+                          ? <b className="text-foreground">{usersText(p.included + n)}</b>
+                          : <>{p.included + (n - 1) * step + 1} – <b className="text-foreground">{usersText(p.included + n * step)}</b></>}
+                      {": "}<b className="text-foreground">{rupees(base + n * p.price)}</b> a year
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-muted-foreground">
+                  {p.users > p.included
+                    ? <b className="text-foreground">{usersText(p.users)} now → +{rupees(extra)} a year.</b>
+                    : <>{usersText(p.users)} now — inside the base.</>}
+                </p>
+                <div className="flex flex-wrap items-center gap-2 border-t pt-2">
+                  <label htmlFor={`${idPrefix}-u${i}-if`} className="text-muted-foreground">If they have</label>
+                  <Input id={`${idPrefix}-u${i}-if`} inputMode="numeric" className="h-8 w-24" placeholder="users" value={whatIf[i] ?? ""}
+                    onChange={(e) => setWhatIf((w) => ({ ...w, [i]: digits(e.target.value) }))} />
+                  <span className="text-muted-foreground">{r.category || "these"} users, the AMC from that year is</span>
+                  <b className="text-foreground">{rupees(base + (whatIf[i] ? userExtra({ ...p, users: Number(whatIf[i]) }) : 0))}</b>
+                </div>
+              </div>
             )}
           </div>
         );
