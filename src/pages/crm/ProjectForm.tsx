@@ -11,7 +11,8 @@ import { opsAmcApi, opsClientsApi, opsProjectsApi } from "@/lib/api/ops";
 import { errorMessage } from "@/lib/api/errors";
 import type { OpsAmcRecord, OpsClient } from "@/types/ops";
 import { HEALTH_OPTIONS, PRIORITY_OPTIONS } from "./components/crm";
-import { AmcPlanFields, amcDraft, amcDraftBody, amcDraftProblem, yearAfter, type AmcDraft } from "@/pages/finance/components/AmcDialogs";
+import { AmcPlanFields, amcDraft, amcDraftBody, amcDraftProblem, draftBreakdown, yearAfter, type AmcDraft } from "@/pages/finance/components/AmcDialogs";
+import { rupees } from "@/pages/crm/components/crm";
 
 const EMPTY = {
   project_code: "",
@@ -109,7 +110,8 @@ export default function ProjectForm() {
         ...(sendAmc ? { amc: amcDraftBody(amc) } : {}),
       };
       const res = editing ? await opsProjectsApi.update(editing, body) : await opsProjectsApi.create(body);
-      toast.success(editing ? "Project updated" : `Project ${res.data.project_code ?? ""} created`);
+      const amcSaved = sendAmc && amc.plan && amc.plan !== "none" ? ` · AMC ${rupees(draftBreakdown(amc).total)} a year` : "";
+      toast.success((editing ? "Project updated" : `Project ${res.data.project_code ?? ""} created`) + amcSaved);
       navigate(`/projects/${res.data.id}`, { replace: true });
     } catch (e) {
       const message = errorMessage(e);

@@ -11,12 +11,12 @@ import { Panel } from "@/components/Panel";
 import { opsAmcApi, opsClientsApi, opsProjectsApi } from "@/lib/api/ops";
 import { formatDate } from "@/lib/format";
 import type { OpsAmcRecord, OpsClient, OpsProject } from "@/types/ops";
-import { Plus, Pencil, CheckCircle, Trash2, Users } from "lucide-react";
+import { Plus, Pencil, CheckCircle, FileText, Trash2, Users } from "lucide-react";
 import { ActionDialog } from "@/components/ActionDialog";
 import { toast } from "sonner";
 import { ScrollableX } from "@/components/ui/scrollable-x";
 import { usePagedRows } from "@/hooks/usePagedRows";
-import { AmcCollectDialog, AmcFormDialog, AmcPriceParts, AmcStatusBadge, AmcUsageDialog, AmcYearBadge, amcPlanLabel, dueText } from "./components/AmcDialogs";
+import { AmcCollectDialog, AmcFormDialog, AmcPriceParts, AmcSheetDialog, AmcStatusBadge, AmcUsageDialog, AmcYearBadge, amcPlanLabel, dueText } from "./components/AmcDialogs";
 
 const COLUMNS = ["Client", "Project", "Per year", "This year", "Renewal", "Next due", "Status", ""];
 
@@ -32,6 +32,8 @@ export default function AMC() {
   const [collecting, setCollecting] = useState<OpsAmcRecord | null>(null);
   /** Users or storage changed: the yearly price follows. */
   const [usageOf, setUsageOf] = useState<OpsAmcRecord | null>(null);
+  /** The AMC sheet being previewed for the client. */
+  const [sheetOf, setSheetOf] = useState<OpsAmcRecord | null>(null);
   const [removing, setRemoving]     = useState<OpsAmcRecord | null>(null);
 
   const load = useCallback(async () => {
@@ -132,6 +134,7 @@ export default function AMC() {
                     <td className="py-3 px-4">
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" onClick={() => openEdit(a)} title="Edit" aria-label={`Edit AMC for ${a.project_name}`}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => setSheetOf(a)} title="AMC sheet — preview and PDF" aria-label={`AMC sheet for ${a.project_name}`}><FileText className="h-4 w-4 text-primary" /></Button>
                         <Button variant="ghost" size="icon" onClick={() => setCollecting(a)}
                           title={a.term_paid ? "Collect renewal" : "Collect this year's AMC"} aria-label={`Collect AMC for ${a.project_name}`}>
                           <CheckCircle className="h-4 w-4 text-emerald-600" />
@@ -163,6 +166,7 @@ export default function AMC() {
         projects={projects}
         onSaved={load}
       />
+      <AmcSheetDialog amc={sheetOf} onClose={() => setSheetOf(null)} />
       <AmcUsageDialog
         open={usageOf !== null}
         onOpenChange={(v) => { if (!v) setUsageOf(null); }}

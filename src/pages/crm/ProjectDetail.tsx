@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Activity, Bug, CalendarDays, CircleDollarSign, ClipboardList, FolderKanban, Hash, History, IndianRupee,
-  Pencil, Plus, ShieldCheck, Trash2, UserRound, Users, Wallet,
+  FileText, Pencil, Plus, ShieldCheck, Trash2, UserRound, Users, Wallet,
 } from "lucide-react";
 import { RecordDetailPage } from "@/components/RecordDetailPage";
 import { RecordProfileHeader, ProfileLinkCard } from "@/components/RecordProfileHeader";
@@ -30,7 +30,7 @@ import { initialsOf } from "@/lib/initials";
 import type { OpsAmcRecord, OpsPayment } from "@/types/ops";
 import { HealthBadge, PROJECT_STAGES, PriorityBadge, rupees } from "./components/crm";
 import { PAYMENT_MODES, PAYMENT_TYPES, PaymentDialog } from "./components/PaymentDialog";
-import { AmcCollectDialog, AmcFormDialog, AmcPriceParts, AmcStatusBadge, AmcUsageDialog, AmcYearBadge, amcPlanLabel, dueText } from "@/pages/finance/components/AmcDialogs";
+import { AmcCollectDialog, AmcFormDialog, AmcPriceParts, AmcSheetDialog, AmcStatusBadge, AmcUsageDialog, AmcYearBadge, amcPlanLabel, dueText } from "@/pages/finance/components/AmcDialogs";
 
 const label = (options: { value: string; label: string }[], v: string) => options.find((o) => o.value === v)?.label ?? humanise(v);
 
@@ -51,6 +51,7 @@ export default function ProjectDetail() {
   const [editingAmc, setEditingAmc] = useState<OpsAmcRecord | null>(null);
   const [collectingAmc, setCollectingAmc] = useState<OpsAmcRecord | null>(null);
   const [usageAmc, setUsageAmc] = useState<OpsAmcRecord | null>(null);
+  const [sheetAmc, setSheetAmc] = useState<OpsAmcRecord | null>(null);
 
   if (error) return <p className="text-destructive">{error}</p>;
 
@@ -211,6 +212,7 @@ export default function ProjectDetail() {
                             {((a.user_plans?.length ?? 0) > 0 || a.storage_gb) ? (
                               <DropdownMenuItem onSelect={() => setUsageAmc(a)}><Users className="h-4 w-4" /> Update users and storage</DropdownMenuItem>
                             ) : null}
+                            <DropdownMenuItem onSelect={() => setSheetAmc(a)}><FileText className="h-4 w-4" /> AMC sheet (preview / PDF)</DropdownMenuItem>
                             <DropdownMenuItem onSelect={() => openAmc(a)}><Pencil className="h-4 w-4" /> Edit AMC</DropdownMenuItem>
                           </RowActionsMenu>
                         </td>
@@ -302,6 +304,7 @@ export default function ProjectDetail() {
           successMessage="Payment deleted"
         />
         <AmcFormDialog open={amcFormOpen} onOpenChange={setAmcFormOpen} amc={editingAmc} project={p} onSaved={amcSaved} />
+        <AmcSheetDialog amc={sheetAmc} onClose={() => setSheetAmc(null)} />
         <AmcUsageDialog open={usageAmc !== null} onOpenChange={(v) => { if (!v) setUsageAmc(null); }} amc={usageAmc} onSaved={amcSaved} />
         <AmcCollectDialog open={collectingAmc !== null} onOpenChange={(v) => { if (!v) setCollectingAmc(null); }} amc={collectingAmc} onSaved={amcSaved} />
         <StatusDialog open={statusOpen} onOpenChange={setStatusOpen} project={p} userName={userName ?? ""} onSaved={reload} />

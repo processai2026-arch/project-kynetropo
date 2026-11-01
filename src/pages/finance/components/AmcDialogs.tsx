@@ -10,7 +10,8 @@ import { opsAmcApi } from "@/lib/api/ops";
 import { formatDate, parseDate, toIsoDate, todayIso } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { AmcUserPlan, OpsAmcPlan, OpsAmcPlanBody, OpsAmcRecord } from "@/types/ops";
-import { Plus, X } from "lucide-react";
+import { Download, ExternalLink, Plus, X } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { rupees } from "@/pages/crm/components/crm";
 import { PAYMENT_MODES } from "@/pages/crm/components/PaymentDialog";
@@ -372,17 +373,22 @@ export function AmcPlanFields({ draft, onChange, original, allowNone = true, sho
 
         <AmcStorageFields draft={draft} set={set} usedGb={usedGb} setUsedGb={setUsedGb} idPrefix={idPrefix} />
 
-        {(breakdown.users.length > 0 || breakdown.storage > 0) && Number(draft.amount) > 0 && (
-          <div className="sm:col-span-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
-            <p className="font-medium text-card-foreground">AMC a year now: {rupees(breakdown.total)}</p>
-            <p className="text-muted-foreground">
-              Base {rupees(Number(draft.amount))}
-              {breakdown.users.filter((u) => u.extra > 0).map((u) => <span key={u.category}> + {u.category} {rupees(u.extra)}</span>)}
-              {breakdown.storage > 0 && <> + storage {rupees(breakdown.storage)}</>}
-              . This is the amount Finance expects; it changes when users or storage change.
-            </p>
-          </div>
-        )}
+        {Number(draft.amount) > 0 && (() => {
+          const usersTotal = breakdown.users.reduce((s, u) => s + u.extra, 0);
+          return (
+            <div className="sm:col-span-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+              <p className="font-medium text-card-foreground">
+                AMC a year now: Base {rupees(Number(draft.amount))} + Storage {rupees(breakdown.storage)} + Users {rupees(usersTotal)} = <b>{rupees(breakdown.total)}</b>
+              </p>
+              {breakdown.users.length > 0 && (
+                <p className="text-muted-foreground">
+                  Users: {breakdown.users.map((u) => `${u.category || "—"} ${u.users}/${u.included} ${rupees(u.extra)}`).join(" · ")}
+                </p>
+              )}
+              <p className="text-muted-foreground">This is the amount Finance expects; it changes when users or storage change.</p>
+            </div>
+          );
+        })()}
 
         {showNotes && (
           <Field label="Notes" htmlFor={`${idPrefix}-notes`} className="sm:col-span-2">
@@ -472,7 +478,15 @@ function AmcUserFields({ draft, set, idPrefix }: { draft: AmcDraft; set: (patch:
   const digits = (v: string) => v.replace(/[^\d]/g, "");
   const money = (v: string) => v.replace(/[^\d.]/g, "");
   const rows = draft.users;
-  const setRow = (i: number, patch: Partial<UserDraft>) => set({ users: rows.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
+  const setRow = (i: number, patch: Partial<UserDraft>) => set({
+    users: rows.map((r, j) => {
+      if (j !== i) return r;
+      // "Users now" follows "Users in base" until it is set to something else,
+      // so the number on screen is always the number saved.
+      const follow = patch.included !== undefined && (r.users === "" || r.users === r.included);
+      return { ...r, ...patch, ...(follow ? { users: patch.included } : {}) };
+    }),
+  });
   const add = (category = "") => set({ users: [...rows, { category, included: "", step: "1", price: "", users: "" }] });
   const taken = new Set(rows.map((r) => r.category.trim().toLowerCase()));
   const plans = draftUsers(draft);
@@ -649,6 +663,69 @@ export function AmcUsageDialog({ open, onOpenChange, amc, onSaved }: {
         </div>
       )}
     </ActionDialog>
+  );
+}
+
+/**
+ * The AMC sheet for the client: the PDF itself shown as the preview, so what
+ * is seen is exactly what is sent, with a button to download it.
+ */
+export function AmcSheetDialog({ amc, onClose }: { amc: OpsAmcRecord | null; onClose: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [blob, setBlob] = useState<Blob | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!amc) return;
+    let made: string | null = null;
+    let live = true;
+    setUrl(null); setBlob(null); setError(null);
+    (async () => {
+      try {
+        const [{ buildAmcSheet }, { loadCompanyProfile }] = await Promise.all([import("./amcSheet"), import("@/lib/companyProfile")]);
+        const pdf = await buildAmcSheet(amc, await loadCompanyProfile());
+        if (!live) return;
+        made = URL.createObjectURL(pdf);
+        setBlob(pdf);
+        setUrl(made);
+      } catch (e) {
+        if (live) setError(e instanceof Error ? e.message : "Could not make the sheet");
+      }
+    })();
+    return () => { live = false; if (made) URL.revokeObjectURL(made); };
+  }, [amc]);
+
+  const download = async () => {
+    if (!amc || !blob) return;
+    const { amcSheetFileName } = await import("./amcSheet");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = amcSheetFileName(amc);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+
+  return (
+    <Dialog open={amc !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="flex h-[92vh] max-w-4xl flex-col gap-3">
+        <DialogHeader>
+          <DialogTitle>AMC sheet</DialogTitle>
+          {amc && <DialogDescription>{[amc.client_name, amc.client_company].filter(Boolean).join(" · ")} — {amc.project_name}</DialogDescription>}
+        </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-hidden rounded-md border bg-muted/40">
+          {error ? <p className="p-6 text-sm text-destructive">{error}</p>
+            : url ? <iframe title="AMC sheet preview" src={url} className="h-full w-full" />
+            : <p className="p-6 text-sm text-muted-foreground">Making the sheet…</p>}
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>Close</Button>
+          {url && <Button variant="outline" onClick={() => window.open(url, "_blank", "noopener")}><ExternalLink className="h-4 w-4" /> Open in new tab</Button>}
+          <Button onClick={() => void download()} disabled={!blob}><Download className="h-4 w-4" /> Download PDF</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
