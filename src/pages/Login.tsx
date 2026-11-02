@@ -88,12 +88,6 @@ const Login = () => {
               {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            New here?{" "}
-            <Link to="/signup" className="font-medium text-primary hover:underline">
-              Create a company account
-            </Link>
-          </p>
         </CardContent>
       </Card>
       <InstallCard />
