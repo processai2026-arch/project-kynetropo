@@ -40,6 +40,7 @@ $router->delete('/admin/ops/meetings/{id}',                  [AdminOpsMeetingCon
 $router->get('/admin/ops/finance/summary',                   [AdminOpsFinanceController::class, 'summary'],          'admin');
 $router->get('/admin/ops/finance/payments',                  [AdminOpsFinanceController::class, 'payments'],         'admin');
 $router->get('/admin/ops/finance/payments/{id}',             [AdminOpsFinanceController::class, 'payment'],          'admin');
+$router->post('/admin/ops/finance/expenses/import',          [AdminOpsFinanceController::class, 'importExpenses'],   'admin');
 $router->get('/admin/ops/finance/expenses/{id}',             [AdminOpsFinanceController::class, 'expense'],          'admin');
 $router->put('/admin/ops/finance/expenses/{id}',             [AdminOpsFinanceController::class, 'updateExpense'],    'admin');
 $router->get('/admin/ops/finance/expense-categories',        [AdminOpsFinanceController::class, 'expenseCategories'], 'admin');

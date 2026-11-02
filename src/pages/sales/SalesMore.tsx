@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { AtSign, Bell, CalendarDays, ChevronRight, ClipboardList, Download, History, LogOut, Phone, Settings, ShieldCheck, Sparkles, Trophy, User, UserCheck } from "lucide-react";
+import { AtSign, Bell, Receipt, CalendarDays, ChevronRight, ClipboardList, Download, History, LogOut, Phone, Settings, ShieldCheck, Sparkles, Trophy, User, UserCheck } from "lucide-react";
 import { SalesLayout } from "@/components/sales/SalesLayout";
 import { RecordListPage } from "@/components/RecordListPage";
 import { PageHeader } from "@/components/PageHeader";
@@ -82,6 +82,8 @@ export default function SalesMore() {
       { to: "/sales/mentions", label: "Mentioned", sub: "Where someone named you", icon: AtSign, tone: "sky" as const, show: can("sales.comments.view"), badge: unreadMentions },
       { to: "/sales/assistant", label: "AI Assistant", sub: "Ask about your pipeline", icon: Sparkles, tone: "violet" as const, show: can("sales.dashboard.view") },
       { to: "/sales/activity", label: "Team activity", sub: "What everyone did", icon: History, tone: "muted" as const, show: can("sales.dashboard.view") },
+      // The company's spending: for the people who run it, not the whole sales team.
+      { to: "/sales/expenses", label: "Expenses", sub: "Add and see what was spent, month by month", icon: Receipt, tone: "danger" as const, show: isSalesAdmin },
     ].filter((i) => i.show);
     const pushOn = push.state === "on";
     return (

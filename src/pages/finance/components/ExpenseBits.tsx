@@ -47,3 +47,15 @@ export function CategorySelect({ id, value, onChange }: { id?: string; value: st
     </div>
   );
 }
+
+/** "14:30" → "2:30 pm"; nothing when there is no time. */
+export function timeLabel(t: string | null | undefined): string {
+  if (!t) return "";
+  const [h, m] = t.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return "";
+  return new Date(2000, 0, 1, h, m).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+}
+
+/** "2026-10" → "October 2026". */
+export const monthLabel = (ym: string, short = false) =>
+  new Date(`${ym}-01T00:00:00`).toLocaleDateString("en-IN", { month: short ? "short" : "long", year: "numeric" });

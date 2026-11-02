@@ -19,6 +19,10 @@ const SalesTasks = lazy(() => import("@/pages/sales/SalesTasks"));
 const SalesMore = lazy(() => import("@/pages/sales/SalesMore"));
 const SalesAssistant = lazy(() => import("@/pages/sales/SalesAssistant"));
 const SalesMentions = lazy(() => import("@/pages/sales/SalesMentions"));
+// The company's expenses, in the phone app too (the same pages, laid out for a phone).
+const Expenses = lazy(() => import("@/pages/finance/Expenses"));
+const ExpenseDetail = lazy(() => import("@/pages/finance/ExpenseDetail"));
+const ExpenseForm = lazy(() => import("@/pages/finance/ExpenseForm"));
 
 export const routes: RouteDef[] = [
   { path: "/sales", element: SalesDashboard, salesScope: true },
@@ -43,4 +47,9 @@ export const routes: RouteDef[] = [
   // Deliberately outside SalesScope: your mentions are yours, and looking at a
   // colleague's work does not mean reading their post.
   { path: "/sales/mentions", element: SalesMentions },
+  // Company money, not a salesperson's pipeline: outside SalesScope too.
+  { path: "/sales/expenses", element: Expenses },
+  { path: "/sales/expenses/new", element: ExpenseForm },
+  { path: "/sales/expenses/:id", element: ExpenseDetail },
+  { path: "/sales/expenses/:id/edit", element: ExpenseForm },
 ];

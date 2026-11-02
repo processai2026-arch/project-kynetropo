@@ -266,6 +266,8 @@ export interface OpsExpense {
   pitch_id: number | null;
   pitch_name?: string | null;
   date: string;
+  /** "14:30" — the time it was paid, when known. */
+  time?: string | null;
   added_by: string;
   created_at: string;
 }

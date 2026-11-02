@@ -11,6 +11,7 @@ declare(strict_types=1);
  * GET  /admin/ops/finance/expenses/{id}  — one expense
  * GET  /admin/ops/finance/expense-categories — the usual ones and every one added
  * POST /admin/ops/finance/expenses   — add expense
+ * POST /admin/ops/finance/expenses/import — many at once (a Money Manager export); repeats are skipped
  * PUT  /admin/ops/finance/expenses/{id}  — edit expense
  * GET  /admin/ops/finance/projects/{id}  — a project's money: payments, AMC, expenses
  * PUT  /admin/ops/finance/payments/{id}  — update payment
@@ -221,7 +222,7 @@ class AdminOpsFinanceController
         if ($category) { $sql .= ' AND e.category = ?';                    $params[] = $category; }
         if ($month)    { $sql .= " AND DATE_FORMAT(e.date,'%Y-%m') = ?";   $params[] = $month; }
         if ($request->query('project_id')) { $sql .= ' AND e.project_id = ?'; $params[] = (int)$request->query('project_id'); }
-        $sql .= ' ORDER BY e.date DESC, e.id DESC';
+        $sql .= ' ORDER BY e.date DESC, e.expense_time DESC, e.id DESC';
         Response::success(array_map([self::class, 'expenseRow'], Database::fetchAll($sql, $params)));
     }
 
@@ -230,6 +231,79 @@ class AdminOpsFinanceController
                                       LEFT JOIN ops_projects pr ON pr.id = e.project_id AND pr.tenant_id = e.tenant_id
                                       LEFT JOIN ops_pitches  pi ON pi.id = e.pitch_id   AND pi.tenant_id = e.tenant_id";
 
+    /** "14:30" or "14:30:00" as a time, else null. */
+    private static function validTime(mixed $raw): ?string
+    {
+        $t = trim((string)$raw);
+        if (!preg_match('/^([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/', $t, $m)) return null;
+        return sprintf('%02d:%02d:00', (int)$m[1], (int)$m[2]);
+    }
+
+    /**
+     * POST /admin/ops/finance/expenses/import — { rows: [{date, time?, category,
+     * amount, description, notes?}], dry_run? }
+     *
+     * Adds each row as an expense. A row already there — same date, amount and
+     * what-for — is skipped, so the same file can be imported again safely
+     * (only what is new is added). dry_run says what would happen, adding nothing.
+     */
+    public function importExpenses(Request $request): void
+    {
+        $tenantId = Database::tenantId();
+        $body     = $request->body();
+        $rows     = is_array($body['rows'] ?? null) ? $body['rows'] : [];
+        $dryRun   = !empty($body['dry_run']);
+        if (!$rows) Response::error('Nothing to import', 422);
+        if (count($rows) > 5000) Response::error('At most 5,000 rows at a time', 422);
+
+        $key = fn(string $date, float $amount, string $what) => $date . '|' . number_format($amount, 2, '.', '') . '|' . mb_strtolower(trim(preg_replace('/\s+/', ' ', $what)));
+        $seen = [];
+        foreach (Database::fetchAll('SELECT date, amount, description FROM ops_expenses WHERE tenant_id = ?', [$tenantId]) as $e) {
+            $seen[$key((string)$e['date'], (float)$e['amount'], (string)$e['description'])] = true;
+        }
+
+        $by = (string)($request->user['name'] ?? '');
+        $added = 0; $addedAmount = 0.0; $skipped = [];
+        if (!$dryRun) Database::beginTransaction();
+        try {
+            foreach ($rows as $i => $r) {
+                $date   = OpsAmc::date($r['date'] ?? null);
+                $amount = (float)str_replace([',', '₹', ' '], '', (string)($r['amount'] ?? '0'));
+                $what   = mb_substr(trim((string)($r['description'] ?? '')), 0, 500);
+                if (!$date)        { $skipped[] = ['row' => $i + 1, 'reason' => 'No valid date']; continue; }
+                if ($amount <= 0)  { $skipped[] = ['row' => $i + 1, 'reason' => 'No amount']; continue; }
+                $k = $key($date, $amount, $what);
+                if (isset($seen[$k])) { $skipped[] = ['row' => $i + 1, 'reason' => 'Already there']; continue; }
+                $seen[$k] = true;
+                if (!$dryRun) {
+                    Database::insert('ops_expenses', [
+                        'tenant_id'    => $tenantId,
+                        'category'     => self::validCategory($r['category'] ?? ''),
+                        'amount'       => $amount,
+                        'description'  => $what,
+                        'notes'        => trim((string)($r['notes'] ?? '')) ?: null,
+                        'date'         => $date,
+                        'expense_time' => self::validTime($r['time'] ?? null),
+                        'added_by'     => $by,
+                    ]);
+                }
+                $added++;
+                $addedAmount += $amount;
+            }
+            if (!$dryRun) Database::commit();
+        } catch (\Throwable $e) {
+            if (!$dryRun) Database::rollBack();
+            throw $e;
+        }
+
+        Response::success([
+            'added'        => $added,
+            'added_amount' => $addedAmount,
+            'skipped'      => $skipped,
+            'dry_run'      => $dryRun,
+        ], $dryRun ? 'Checked' : "Imported {$added} expense" . ($added === 1 ? '' : 's'));
+    }
+
     private static function expenseRow(array $r): array
     {
         $r['id']         = (int)$r['id'];
@@ -237,6 +311,8 @@ class AdminOpsFinanceController
         $r['project_id'] = !empty($r['project_id']) ? (int)$r['project_id'] : null;
         $r['pitch_id']   = !empty($r['pitch_id']) ? (int)$r['pitch_id'] : null;
         $r['notes']      = $r['notes'] ?? null;
+        $r['time']       = !empty($r['expense_time']) ? substr((string)$r['expense_time'], 0, 5) : null;
+        unset($r['expense_time']);
         return $r;
     }
 
@@ -293,6 +369,7 @@ class AdminOpsFinanceController
         if (array_key_exists('notes', $body)) $updates['notes']  = trim((string)$body['notes']) ?: null;
         if (array_key_exists('project_id', $body)) $updates['project_id'] = !empty($body['project_id']) ? (int)$body['project_id'] : null;
         if (!empty($body['date']))       $updates['date']        = $body['date'];
+        if (array_key_exists('time', $body)) $updates['expense_time'] = self::validTime($body['time']);
         if (isset($body['added_by']))    $updates['added_by']    = trim((string)$body['added_by']);
         if ($updates) Database::update('ops_expenses', $updates, ['id' => $id, 'tenant_id' => $tenantId]);
 
@@ -372,6 +449,7 @@ class AdminOpsFinanceController
             'project_id'  => !empty($body['project_id']) ? (int)$body['project_id'] : null,
             'pitch_id'    => !empty($body['pitch_id'])   ? (int)$body['pitch_id']   : null,
             'date'        => !empty($body['date']) ? $body['date'] : date('Y-m-d'),
+            'expense_time' => self::validTime($body['time'] ?? null),
             'added_by'    => trim((string)($body['added_by'] ?? '')) ?: (string)($request->user['name'] ?? ''),
         ]);
 

@@ -167,6 +167,8 @@ export function routeTitle(pathname: string): string {
   const pitch = path.match(/^\/pitches\/(.+)$/);
   if (pitch) return `Pitch ${decodeURIComponent(pitch[1])}`;
   if (path === "/finance/expenses/new") return "New expense";
+  if (path === "/sales/expenses") return "Expenses";
+  if (path === "/sales/expenses/new") return "New expense";
   if (path === "/amc/new") return "New AMC";
   const amcEdit = path.match(/^\/amc\/([^/]+)\/edit$/);
   if (amcEdit) return `Edit AMC ${decodeURIComponent(amcEdit[1])}`;

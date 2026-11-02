@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { CalendarDays, FolderKanban, IndianRupee, List, Receipt, StickyNote, UserRound } from "lucide-react";
+import { FolderKanban, IndianRupee, List, Receipt, StickyNote, UserRound } from "lucide-react";
 import { RecordFormPage, FormLayout, FormSectionCard, IconInput } from "@/components/RecordFormPage";
 import { Field, NativeSelect } from "@/components/Field";
 import { SavingButton } from "@/components/SavingButton";
@@ -14,8 +14,11 @@ import { errorMessage } from "@/lib/api/errors";
 import { todayIso } from "@/lib/format";
 import type { OpsProject } from "@/types/ops";
 import { CategorySelect } from "./components/ExpenseBits";
+import { SalesLayout } from "@/components/sales/SalesLayout";
+import { ActionBar, TopBar, usePhoneApp } from "@/components/phone/PhoneKit";
 
-const EMPTY = { amount: "", date: todayIso(), category: "", description: "", notes: "", project_id: "", added_by: "" };
+const nowTime = () => new Date().toTimeString().slice(0, 5);
+const EMPTY = { amount: "", date: todayIso(), time: "", category: "", description: "", notes: "", project_id: "", added_by: "" };
 
 /** New expense (/finance/expenses/new, ?project_id= to book it to a project) and edit (/finance/expenses/:id/edit). */
 export default function ExpenseForm() {
@@ -24,7 +27,10 @@ export default function ExpenseForm() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { userName } = useAuth();
-  const [form, setForm] = useState(() => ({ ...EMPTY, project_id: params.get("project_id") ?? "", added_by: userName ?? "" }));
+  const phone = usePhoneApp();
+  // The phone app keeps its own copy of these pages under /sales.
+  const base = phone ? "/sales/expenses" : "/finance/expenses";
+  const [form, setForm] = useState(() => ({ ...EMPTY, time: nowTime(), project_id: params.get("project_id") ?? "", added_by: userName ?? "" }));
   const [projects, setProjects] = useState<OpsProject[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(!!editing);
@@ -39,7 +45,7 @@ export default function ExpenseForm() {
     opsFinanceApi.expense(editing).then((r) => {
       const e = r.data;
       setForm({
-        amount: String(e.amount), date: e.date, category: e.category, description: e.description ?? "",
+        amount: String(e.amount), date: e.date, time: e.time ?? "", category: e.category, description: e.description ?? "",
         notes: e.notes ?? "", project_id: e.project_id ? String(e.project_id) : "", added_by: e.added_by ?? "",
       });
     }).catch((e) => toast.error(errorMessage(e))).finally(() => setLoading(false));
@@ -57,13 +63,13 @@ export default function ExpenseForm() {
     setSaving(true);
     try {
       const body = {
-        amount: Number(form.amount), date: form.date, category: form.category.trim(),
+        amount: Number(form.amount), date: form.date, time: form.time || null, category: form.category.trim(),
         description: form.description.trim(), notes: form.notes.trim(),
         project_id: form.project_id ? Number(form.project_id) : null, added_by: form.added_by.trim(),
       };
       const res = editing ? await opsFinanceApi.updateExpense(editing, body) : await opsFinanceApi.addExpense(body);
       toast.success(editing ? "Expense updated" : "Expense added");
-      navigate(`/finance/expenses/${res.data.id}`, { replace: true });
+      navigate(`${base}/${res.data.id}`, { replace: true });
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -71,14 +77,68 @@ export default function ExpenseForm() {
     }
   };
 
+  const amountField = (
+    <Field label="Amount (₹)" htmlFor="exp-amount" required error={errors.amount}>
+      {(() => {
+        const input = <Input id="exp-amount" inputMode="decimal" autoFocus={!editing} value={form.amount} placeholder={phone ? "₹" : undefined}
+          onChange={(e) => set("amount", e.target.value.replace(/[^\d.]/g, ""))} />;
+        // The phone keeps plain boxes; the leading icon comes with the computer's form styles.
+        return phone ? input : <IconInput icon={IndianRupee}>{input}</IconInput>;
+      })()}
+    </Field>
+  );
+  const whenFields = (
+    <div className="grid grid-cols-2 gap-4">
+      <Field label="Date" htmlFor="exp-date" required error={errors.date}>
+        <Input id="exp-date" type="date" max={todayIso()} value={form.date} onChange={(e) => set("date", e.target.value)} />
+      </Field>
+      <Field label="Time" htmlFor="exp-time" hint="Optional">
+        <Input id="exp-time" type="time" value={form.time} onChange={(e) => set("time", e.target.value)} />
+      </Field>
+    </div>
+  );
+  const categoryField = (
+    <Field label="Category" htmlFor="exp-category" required error={errors.category}
+      hint="Not in the list? Choose “+ New category…” and type it — it will be there next time">
+      <CategorySelect id="exp-category" value={form.category} onChange={(v) => set("category", v)} />
+    </Field>
+  );
+  const whatField = (
+    <Field label="What for" htmlFor="exp-desc">
+      <Input id="exp-desc" placeholder="e.g. AWS bill for October" value={form.description} onChange={(e) => set("description", e.target.value)} />
+    </Field>
+  );
+  const notesField = <Textarea id="exp-notes" rows={4} placeholder="Bill number, who it was paid to, why…" value={form.notes} onChange={(e) => set("notes", e.target.value)} />;
+
+  if (phone) {
+    return (
+      <SalesLayout>
+        <TopBar title={editing ? "Edit expense" : "New expense"} back={editing ? `${base}/${editing}` : base} />
+        <div className="space-y-4">
+          <section className="space-y-4 rounded-2xl border bg-card p-4">{amountField}{whenFields}</section>
+          <section className="space-y-4 rounded-2xl border bg-card p-4">{categoryField}{whatField}</section>
+          <section className="space-y-2 rounded-2xl border bg-card p-4">
+            <h2 className="text-sm font-semibold text-muted-foreground">Notes</h2>
+            {notesField}
+          </section>
+        </div>
+        <ActionBar>
+          <Button className="h-12 w-full text-base" disabled={saving || loading} onClick={() => void save()}>
+            {saving ? "Saving…" : editing ? "Save changes" : "Add expense"}
+          </Button>
+        </ActionBar>
+      </SalesLayout>
+    );
+  }
+
   return (
     <RecordFormPage
       icon={Receipt}
       title={editing ? "Edit expense" : "New expense"}
       description={editing ? form.description || undefined : "Money spent — it comes off this month's profit in Finance"}
       backLabel="Expenses"
-      onBack={() => navigate(editing ? `/finance/expenses/${editing}` : "/finance/expenses")}
-      actions={<Button variant="outline" onClick={() => navigate("/finance/expenses")}><List className="h-4 w-4" /> View expenses</Button>}
+      onBack={() => navigate(editing ? `${base}/${editing}` : base)}
+      actions={<Button variant="outline" onClick={() => navigate(base)}><List className="h-4 w-4" /> View expenses</Button>}
       footer={<>
         <SavingButton type="button" saving={saving} onClick={() => void save()} disabled={loading} label={editing ? "Save changes" : "Add expense"} />
         <Button variant="outline" onClick={() => navigate(-1)}>Cancel</Button>
@@ -88,26 +148,14 @@ export default function ExpenseForm() {
         main={<>
           <FormSectionCard icon={IndianRupee} title="Expense" description="How much, when, and what for">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Amount (₹)" htmlFor="exp-amount" required error={errors.amount}>
-                <IconInput icon={IndianRupee}>
-                  <Input id="exp-amount" inputMode="decimal" autoFocus={!editing} value={form.amount}
-                    onChange={(e) => set("amount", e.target.value.replace(/[^\d.]/g, ""))} />
-                </IconInput>
-              </Field>
-              <Field label="Date" htmlFor="exp-date" required error={errors.date}>
-                <IconInput icon={CalendarDays}><Input id="exp-date" type="date" max={todayIso()} value={form.date} onChange={(e) => set("date", e.target.value)} /></IconInput>
-              </Field>
-              <Field label="Category" htmlFor="exp-category" required error={errors.category}
-                hint="Not in the list? Choose “+ New category…” and type it — it will be there next time">
-                <CategorySelect id="exp-category" value={form.category} onChange={(v) => set("category", v)} />
-              </Field>
-              <Field label="What for" htmlFor="exp-desc">
-                <Input id="exp-desc" placeholder="e.g. AWS bill for October" value={form.description} onChange={(e) => set("description", e.target.value)} />
-              </Field>
+              {amountField}
+              {whenFields}
+              {categoryField}
+              {whatField}
             </div>
           </FormSectionCard>
           <FormSectionCard icon={StickyNote} tone="violet" title="Notes" description="Anything more: bill number, who it was paid to, why">
-            <Textarea id="exp-notes" rows={4} placeholder="Notes" value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+            {notesField}
           </FormSectionCard>
         </>}
         side={

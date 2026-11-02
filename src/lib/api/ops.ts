@@ -6,6 +6,8 @@ import type {
   OpsPaymentDetail, OpsFinanceProject, OpsAmcDetail,
 } from "@/types/ops";
 
+export interface ExpenseImportRow { date: string; time?: string | null; category: string; amount: number; description: string; notes?: string }
+
 function qs(p?: Record<string, string>) {
   if (!p || !Object.keys(p).length) return "";
   return "?" + new URLSearchParams(p).toString();
@@ -70,6 +72,10 @@ export const opsFinanceApi = {
   payment:        (id: number) => apiFetch<{ data: OpsPaymentDetail }>(`/admin/ops/finance/payments/${id}`),
   expense:        (id: number) => apiFetch<{ data: OpsExpense }>(`/admin/ops/finance/expenses/${id}`),
   updateExpense:  (id: number, body: Partial<OpsExpense>) => apiFetch<{ data: OpsExpense }>(`/admin/ops/finance/expenses/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  /** Many expenses at once; ones already there (same date, amount, what for) are skipped. */
+  importExpenses: (rows: ExpenseImportRow[], dryRun = false) =>
+    apiFetch<{ data: { added: number; added_amount: number; skipped: { row: number; reason: string }[]; dry_run: boolean } }>(
+      "/admin/ops/finance/expenses/import", { method: "POST", body: JSON.stringify({ rows, dry_run: dryRun }) }),
   /** The usual categories, then every one added. */
   expenseCategories: () => apiFetch<{ data: string[] }>("/admin/ops/finance/expense-categories"),
   /** A project's money: payments, AMC, expenses. */

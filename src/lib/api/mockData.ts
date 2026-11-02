@@ -40,7 +40,7 @@ const PAYMENTS = [
 ];
 
 const EXPENSES = [
-  { id: 1, category: "hosting", amount: 2500, description: "AWS EC2 monthly billing", project_id: null, pitch_id: null, date: MONTH + "-01", added_by: "Founder", created_at: MONTH + "-01" },
+  { id: 1, category: "hosting", amount: 2500, description: "AWS EC2 monthly billing", project_id: null, pitch_id: null, time: "10:30", date: MONTH + "-01", added_by: "Founder", created_at: MONTH + "-01" },
   { id: 2, category: "tools", amount: 1200, description: "Linear + Figma subscriptions", project_id: null, pitch_id: null, date: MONTH + "-01", added_by: "Founder", created_at: MONTH + "-01" },
   { id: 3, category: "pitch", amount: 3500, description: "Pitch expense: YES Meet Kanchipuram", project_id: null, pitch_id: 1, date: "2026-07-15", added_by: "Founder", created_at: "2026-07-15" },
   { id: 4, category: "travel", amount: 1800, description: "Travel to VTT Gold client office", project_id: 3, pitch_id: null, date: "2026-07-20", added_by: "Founder", created_at: "2026-07-20" },
@@ -253,6 +253,10 @@ export function getMockResponse(path: string, method: string, body?: unknown): u
     return e ? ok({ ...e, notes: e.id === 4 ? "Cab both ways, bill no. 4471" : null, project_name: e.project_id ? "VTT Gold Portal" : null, project_code: e.project_id ? "PR-0003" : null, pitch_name: e.pitch_id ? "YES Meet Kanchipuram" : null }) : null;
   }
   if (url.match(/^\/admin\/ops\/finance\/expenses\/\d+$/) && method === "PUT") return ok({ ...(body as object), id: Number(url.split("/").pop()) });
+  if (url === "/admin/ops/finance/expenses/import") {
+    const b = body as { rows: { amount: number }[]; dry_run?: boolean };
+    return ok({ added: b.rows.length, added_amount: b.rows.reduce((t, r) => t + r.amount, 0), skipped: [], dry_run: !!b.dry_run });
+  }
   if (url === "/admin/ops/finance/expense-categories") return ok(["hosting", "tools", "travel", "marketing", "salary", "pitch", "other", "Office rent"]);
   if (url.match(/^\/admin\/ops\/finance\/projects\/\d+$/)) {
     return ok({ id: 3, project_code: "PR-0003", name: "VTT Gold Portal", stage: "Closed", client_id: 3, client_name: "VTT Gold", client_code: "CL-0003", client_company: "VTT Jewellers",
