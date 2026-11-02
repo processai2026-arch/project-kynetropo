@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -102,6 +101,7 @@ export function PitchFormDialog({ open, onOpenChange, editing, onSaved }: {
             <div className="space-y-1.5 col-span-2">
               <Label>Spend (₹) — travel, food, registration</Label>
               <Input type="number" value={form.spend || ""} onChange={(e) => set("spend", Number(e.target.value))} placeholder="0" />
+              <p className="text-xs text-muted-foreground">Used only for this event's ROI — it is not added to Finance → Expenses.</p>
             </div>
             <div className="space-y-1.5 col-span-2">
               <Label>Notes</Label>
@@ -120,16 +120,13 @@ export function PitchFormDialog({ open, onOpenChange, editing, onSaved }: {
 
 /**
  * Delete a pitch event. Its leads and customers stay (with their source
- * text); its spend can leave Expenses with it, or stay there.
+ * text); Finance is not touched.
  */
 export function PitchDeleteDialog({ pitch, onOpenChange, onDeleted }: {
   pitch: OpsPitch | null;
   onOpenChange: (open: boolean) => void;
   onDeleted: () => void;
 }) {
-  const [removeExpense, setRemoveExpense] = useState(true);
-  useEffect(() => { if (pitch) setRemoveExpense(true); }, [pitch]);
-
   return (
     <ActionDialog
       open={pitch !== null}
@@ -148,19 +145,9 @@ export function PitchDeleteDialog({ pitch, onOpenChange, onDeleted }: {
       </div>}
       onConfirm={async () => {
         if (!pitch) return;
-        await opsPitchesApi.remove(pitch.id, pitch.spend > 0 && removeExpense);
+        await opsPitchesApi.remove(pitch.id);
         onDeleted();
       }}
-    >
-      {pitch && pitch.spend > 0 && (
-        <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
-          <Checkbox checked={removeExpense} onCheckedChange={(v) => setRemoveExpense(v === true)} className="mt-0.5" />
-          <span>
-            Also remove its {inr(pitch.spend)} spend from Finance → Expenses
-            <span className="block text-xs text-muted-foreground">Untick if the money was really spent and should stay in the books.</span>
-          </span>
-        </label>
-      )}
-    </ActionDialog>
+    />
   );
 }

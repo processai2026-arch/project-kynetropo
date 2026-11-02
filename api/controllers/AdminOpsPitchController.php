@@ -5,9 +5,9 @@ declare(strict_types=1);
  * Ops Pitches & Marketing Controller
  * GET    /admin/ops/pitches            — list with ROI
  * GET    /admin/ops/pitches/{id}       — detail: the leads it brought, their quotes, revenue, ROI
- * POST   /admin/ops/pitches            — create (also creates expense)
+ * POST   /admin/ops/pitches            — create
  * PUT    /admin/ops/pitches/{id}       — update
- * DELETE /admin/ops/pitches/{id}       — ?remove_expense=1 also removes its spend from expenses
+ * DELETE /admin/ops/pitches/{id}       — delete
  *
  * An event's leads are the sales leads and customers whose source is this
  * event (sales_leads.source_pitch_id, ops_clients.source_pitch_id — kept in
@@ -15,6 +15,9 @@ declare(strict_types=1);
  * or the customer has reached Quotation Accepted or later. Revenue is what the
  * won ones are worth: their projects' quoted price, or the accepted quotation
  * while there is no project yet. ROI = (revenue − spend) / spend.
+ *
+ * An event's spend is kept on the event only, for its ROI — it is not added to
+ * Finance → Expenses (the money is recorded there by hand, once).
  */
 class AdminOpsPitchController
 {
@@ -58,7 +61,6 @@ class AdminOpsPitchController
         if (!$date) Response::error('Date is required', 422);
 
         $spend = (float)($body['spend'] ?? 0);
-
         $id = Database::insert('ops_pitches', [
             'tenant_id'   => $tenantId,
             'name'        => $name,
@@ -70,11 +72,6 @@ class AdminOpsPitchController
             'description' => trim((string)($body['description'] ?? '')),
             'created_by'  => trim((string)($body['created_by']  ?? '')) ?: (string)($request->user['name'] ?? ''),
         ]);
-
-        // Auto-create a Marketing expense for the spend
-        if ($spend > 0) {
-            $this->addExpense($tenantId, $id, $name, $date, $spend, (string)($body['created_by'] ?? $request->user['name'] ?? ''));
-        }
 
         $row = Database::fetch('SELECT * FROM ops_pitches WHERE id = ? LIMIT 1', [$id]);
         Response::success($this->format($row, []), 'Created', 201);
@@ -97,23 +94,7 @@ class AdminOpsPitchController
             if (isset($body[$f])) $updates[$f] = trim((string)$body[$f]);
         }
         if (!empty($body['date'])) $updates['date'] = $body['date'];
-        if (isset($body['spend'])) {
-            $updates['spend'] = (float)$body['spend'];
-            // The linked expense follows; an event first saved with no spend gets one now.
-            $linked = Database::count(
-                'SELECT COUNT(*) AS cnt FROM ops_expenses WHERE pitch_id = ? AND tenant_id = ?',
-                [$id, $tenantId]
-            );
-            if ($linked > 0) {
-                Database::query(
-                    'UPDATE ops_expenses SET amount = ? WHERE pitch_id = ? AND tenant_id = ?',
-                    [$updates['spend'], $id, $tenantId]
-                );
-            } elseif ($updates['spend'] > 0) {
-                $this->addExpense($tenantId, $id, $updates['name'] ?? $pitch['name'], $updates['date'] ?? $pitch['date'],
-                    $updates['spend'], (string)($request->user['name'] ?? ''));
-            }
-        }
+        if (isset($body['spend'])) $updates['spend'] = (float)$body['spend'];
         if (isset($body['type']) && in_array($body['type'], self::TYPES)) $updates['type'] = $body['type'];
 
         if (!empty($updates)) {
@@ -126,8 +107,7 @@ class AdminOpsPitchController
 
     /**
      * Deletes the event. Its leads and customers stay, with their source text,
-     * but no longer point at it. Its spend leaves Expenses only when asked
-     * (?remove_expense=1); otherwise the expense stays, unlinked.
+     * but no longer point at it. Expenses that named it stay, unlinked.
      */
     public function destroy(Request $request): void
     {
@@ -135,15 +115,11 @@ class AdminOpsPitchController
         $tenantId = Database::tenantId();
         Database::fetch('SELECT id FROM ops_pitches WHERE id = ? AND tenant_id = ?', [$id, $tenantId])
             ?: Response::error('Pitch not found', 404);
-        $removeExpense = in_array((string)$request->query('remove_expense', ''), ['1', 'true'], true);
 
         Database::beginTransaction();
         try {
             Database::execute('UPDATE sales_leads SET source_pitch_id = NULL WHERE tenant_id = ? AND source_pitch_id = ?', [$tenantId, $id]);
             Database::execute('UPDATE ops_clients SET source_pitch_id = NULL WHERE tenant_id = ? AND source_pitch_id = ?', [$tenantId, $id]);
-            if ($removeExpense) {
-                Database::execute("DELETE FROM ops_expenses WHERE tenant_id = ? AND pitch_id = ? AND category = 'pitch'", [$tenantId, $id]);
-            }
             Database::execute('UPDATE ops_expenses SET pitch_id = NULL WHERE tenant_id = ? AND pitch_id = ?', [$tenantId, $id]);
             Database::execute('DELETE FROM ops_pitches WHERE id = ? AND tenant_id = ?', [$id, $tenantId]);
             Database::commit();
@@ -152,19 +128,6 @@ class AdminOpsPitchController
             throw $e;
         }
         Response::success(['message' => 'Deleted']);
-    }
-
-    private function addExpense(int $tenantId, int $pitchId, string $name, string $date, float $spend, string $by): void
-    {
-        Database::insert('ops_expenses', [
-            'tenant_id'   => $tenantId,
-            'category'    => 'pitch',
-            'amount'      => $spend,
-            'description' => "Pitch expense: {$name}",
-            'pitch_id'    => $pitchId,
-            'date'        => $date,
-            'added_by'    => $by,
-        ]);
     }
 
     /**
