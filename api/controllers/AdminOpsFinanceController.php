@@ -17,6 +17,8 @@ declare(strict_types=1);
  * PUT  /admin/ops/finance/payments/{id}  — update payment
  * DELETE /admin/ops/finance/payments/{id}
  * DELETE /admin/ops/finance/expenses/{id}
+ * GET/POST /admin/ops/finance/other-income, PUT/DELETE /admin/ops/finance/other-income/{id}
+ *   — money in that is not a project payment (a hackathon prize, a grant)
  */
 class AdminOpsFinanceController
 {
@@ -56,6 +58,15 @@ class AdminOpsFinanceController
              WHERE tenant_id = ? AND payment_status != 'paid'",
             [$tenantId]
         );
+        $otherMonth = (float)Database::fetch(
+            "SELECT COALESCE(SUM(amount),0) AS total FROM ops_other_income
+             WHERE tenant_id = ? AND DATE_FORMAT(date,'%Y-%m') = ?",
+            [$tenantId, $month]
+        )['total'];
+        $otherAll = (float)Database::fetch(
+            'SELECT COALESCE(SUM(amount),0) AS total FROM ops_other_income WHERE tenant_id = ?',
+            [$tenantId]
+        )['total'];
         $amcMonth = Database::fetch(
             "SELECT COALESCE(SUM(amount),0) AS total FROM ops_payments
              WHERE tenant_id = ? AND type = 'amc' AND DATE_FORMAT(payment_date,'%Y-%m') = ?",
@@ -86,17 +97,18 @@ class AdminOpsFinanceController
         $revenue  = (float)$revenueMonth['total'];
         $amcIn    = (float)$amcMonth['total'];
         Response::success([
-            'total_revenue_all_time' => (float)$revenueAll['total'],
-            'total_revenue_month'    => $revenue,
-            'total_collected_month'  => $revenue,
-            // Of the month's money in: project payments and AMC.
+            'total_revenue_all_time' => (float)$revenueAll['total'] + $otherAll,
+            'total_revenue_month'    => $revenue + $otherMonth,
+            'total_collected_month'  => $revenue + $otherMonth,
+            // Of the month's money in: project payments, AMC, and other income.
             'project_collected_month' => $revenue - $amcIn,
             'amc_collected_month'    => $amcIn,
+            'other_income_month'     => $otherMonth,
             'total_pending'          => (float)$pendingAll['total'],
             // AMC due within 30 days or overdue, not collected yet.
             'amc_due'                => array_sum(array_column($byProject, 'amc_due')),
             'total_expenses_month'   => (float)$expensesMonth['total'],
-            'net_profit_month'       => $revenue - (float)$expensesMonth['total'],
+            'net_profit_month'       => $revenue + $otherMonth - (float)$expensesMonth['total'],
             'by_project'             => $byProject,
         ]);
     }
@@ -534,6 +546,80 @@ class AdminOpsFinanceController
             ?: Response::error('Expense not found', 404);
         Database::query('DELETE FROM ops_expenses WHERE id = ? AND tenant_id = ?', [$id, $tenantId]);
         Response::success(['message' => 'Expense deleted']);
+    }
+
+    /** GET /admin/ops/finance/other-income — newest first; ?month=YYYY-MM for one month. */
+    public function otherIncome(Request $request): void
+    {
+        $sql    = 'SELECT * FROM ops_other_income WHERE tenant_id = ?';
+        $params = [Database::tenantId()];
+        if ($month = $request->query('month')) { $sql .= " AND DATE_FORMAT(date,'%Y-%m') = ?"; $params[] = $month; }
+        $sql .= ' ORDER BY date DESC, id DESC';
+        Response::success(array_map([self::class, 'otherIncomeRow'], Database::fetchAll($sql, $params)));
+    }
+
+    /** POST /admin/ops/finance/other-income — {date, amount, source, notes?} */
+    public function addOtherIncome(Request $request): void
+    {
+        $id = Database::insert('ops_other_income', [
+            'tenant_id' => Database::tenantId(),
+            'added_by'  => (string)($request->user['name'] ?? ''),
+        ] + self::otherIncomeFields($request->body(), null));
+        $row = Database::fetch('SELECT * FROM ops_other_income WHERE id = ? LIMIT 1', [$id]);
+        Response::success(self::otherIncomeRow($row), 'Income recorded', 201);
+    }
+
+    /** PUT /admin/ops/finance/other-income/{id} */
+    public function updateOtherIncome(Request $request): void
+    {
+        $id       = (int)$request->param('id');
+        $tenantId = Database::tenantId();
+        $current  = Database::fetch('SELECT * FROM ops_other_income WHERE id = ? AND tenant_id = ? LIMIT 1', [$id, $tenantId])
+            ?: Response::error('Income not found', 404);
+        Database::update('ops_other_income', self::otherIncomeFields($request->body(), $current), ['id' => $id, 'tenant_id' => $tenantId]);
+        $row = Database::fetch('SELECT * FROM ops_other_income WHERE id = ? LIMIT 1', [$id]);
+        Response::success(self::otherIncomeRow($row), 'Income updated');
+    }
+
+    /** DELETE /admin/ops/finance/other-income/{id} */
+    public function deleteOtherIncome(Request $request): void
+    {
+        $id       = (int)$request->param('id');
+        $tenantId = Database::tenantId();
+        Database::fetch('SELECT id FROM ops_other_income WHERE id = ? AND tenant_id = ?', [$id, $tenantId])
+            ?: Response::error('Income not found', 404);
+        Database::query('DELETE FROM ops_other_income WHERE id = ? AND tenant_id = ?', [$id, $tenantId]);
+        Response::success(['message' => 'Income deleted']);
+    }
+
+    /** Other income's fields from a request body; a field left out keeps its current value. */
+    private static function otherIncomeFields(array $body, ?array $current): array
+    {
+        $amount = array_key_exists('amount', $body) ? (float)$body['amount'] : (float)($current['amount'] ?? 0);
+        $source = array_key_exists('source', $body) ? mb_substr(trim((string)$body['source']), 0, 150) : (string)($current['source'] ?? '');
+        $date   = array_key_exists('date', $body) ? OpsAmc::date($body['date']) : ($current['date'] ?? date('Y-m-d'));
+        if ($amount <= 0)   Response::error('Amount must be positive', 422);
+        if ($source === '') Response::error('Say where the money came from', 422);
+        if (!$date)         Response::error('Date is not valid', 422);
+        return [
+            'date'   => $date,
+            'amount' => $amount,
+            'source' => $source,
+            'notes'  => array_key_exists('notes', $body) ? (trim((string)$body['notes']) ?: null) : ($current['notes'] ?? null),
+        ];
+    }
+
+    private static function otherIncomeRow(array $r): array
+    {
+        return [
+            'id'         => (int)$r['id'],
+            'date'       => $r['date'],
+            'amount'     => (float)$r['amount'],
+            'source'     => $r['source'],
+            'notes'      => $r['notes'],
+            'added_by'   => $r['added_by'],
+            'created_at' => $r['created_at'],
+        ];
     }
 
     /**

@@ -253,6 +253,18 @@ export interface OpsPaymentDetail extends OpsPayment {
   amc_current?: boolean;
 }
 
+/** Money in that is not a client's payment on a project: a hackathon prize, a grant. */
+export interface OpsOtherIncome {
+  id: number;
+  date: string;
+  amount: number;
+  /** Where it came from, e.g. "Stud AI hackathon". */
+  source: string;
+  notes: string | null;
+  added_by: string;
+  created_at: string;
+}
+
 export interface OpsExpense {
   id: number;
   /** One of the usual ones (hosting, tools, travel, marketing, salary, pitch, other) or one added. */
@@ -658,6 +670,7 @@ export interface OpsFinanceSummary {
   /** Of the month's money in: project payments, and AMC. */
   project_collected_month?: number;
   amc_collected_month?: number;
+  other_income_month?: number;
   /** AMC due within 30 days or overdue, not collected yet. */
   amc_due?: number;
   by_project: {

@@ -257,6 +257,9 @@ export function getMockResponse(path: string, method: string, body?: unknown): u
     const b = body as { rows: { amount: number }[]; dry_run?: boolean };
     return ok({ added: b.rows.length, added_amount: b.rows.reduce((t, r) => t + r.amount, 0), skipped: [], dry_run: !!b.dry_run });
   }
+  if (url === "/admin/ops/finance/other-income" && method === "GET") return ok([{ id: 1, date: "2026-05-06", amount: 15000, source: "Stud AI hackathon", notes: "Half of the prize", added_by: "Founder", created_at: "2026-05-06" }]);
+  if (url === "/admin/ops/finance/other-income" && method === "POST") return ok({ ...(body as object), id: 99, added_by: "Admin", created_at: TODAY });
+  if (url.match(/^\/admin\/ops\/finance\/other-income\/\d+$/)) return ok({ ...(body as object), id: Number(url.split("/").pop()) });
   if (url === "/admin/ops/finance/expense-categories") return ok(["hosting", "tools", "travel", "marketing", "salary", "pitch", "other", "Office rent"]);
   if (url.match(/^\/admin\/ops\/finance\/projects\/\d+$/)) {
     return ok({ id: 3, project_code: "PR-0003", name: "VTT Gold Portal", stage: "Closed", client_id: 3, client_name: "VTT Gold", client_code: "CL-0003", client_company: "VTT Jewellers",

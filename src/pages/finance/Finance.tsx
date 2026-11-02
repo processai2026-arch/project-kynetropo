@@ -12,12 +12,13 @@ import { Panel } from "@/components/Panel";
 import { opsFinanceApi, opsProjectsApi } from "@/lib/api/ops";
 import { formatDate } from "@/lib/format";
 import { rowOpenProps, ROW_OPEN_CLASS } from "@/lib/rowNav";
-import type { OpsPayment, OpsExpense, OpsFinanceSummary, OpsProject } from "@/types/ops";
-import { IndianRupee, Plus, Receipt, ShieldCheck, TrendingUp, TrendingDown, Wallet, Clock } from "lucide-react";
+import type { OpsPayment, OpsExpense, OpsFinanceSummary, OpsProject, OpsOtherIncome } from "@/types/ops";
+import { IndianRupee, Plus, Receipt, Scale, ShieldCheck, TrendingUp, TrendingDown, Wallet, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollableX } from "@/components/ui/scrollable-x";
 import { usePagedRows } from "@/hooks/usePagedRows";
 import { PaymentDialog } from "@/pages/crm/components/PaymentDialog";
+import { OtherIncomeDialog } from "./components/OtherIncomeDialog";
 
 const payStatusStyles: Record<string, string> = {
   paid:    "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -26,7 +27,8 @@ const payStatusStyles: Record<string, string> = {
   overdue: "bg-red-50 text-red-600 border-red-200",
 };
 
-const TABS = ["summary", "payments", "pl"] as const;
+const TABS = ["summary", "payments", "other"] as const;
+const TAB_LABEL: Record<Tab, string> = { summary: "By project", payments: "Payments", other: "Other income" };
 type Tab = typeof TABS[number];
 
 const Th = ({ children, right }: { children: React.ReactNode; right?: boolean }) => (
@@ -39,8 +41,11 @@ export default function Finance() {
   // expense lands on the same tab and month.
   const [params, setParams] = useSearchParams();
   const activeTab: Tab = (TABS as readonly string[]).includes(params.get("tab") ?? "") ? params.get("tab") as Tab : "summary";
-  // Expenses have their own page now; an old ?tab=expenses link goes there.
-  useEffect(() => { if (params.get("tab") === "expenses") navigate("/finance/expenses", { replace: true }); }, [params, navigate]);
+  // Expenses and P&L have their own pages now; an old ?tab= link goes there.
+  useEffect(() => {
+    if (params.get("tab") === "expenses") navigate("/finance/expenses", { replace: true });
+    if (params.get("tab") === "pl") navigate("/finance/profit-loss", { replace: true });
+  }, [params, navigate]);
   const month = params.get("month") || new Date().toISOString().slice(0, 7);
   const setParam = (k: string, v: string) => setParams((p) => { const n = new URLSearchParams(p); n.set(k, v); return n; }, { replace: true });
 
@@ -51,18 +56,23 @@ export default function Finance() {
   const [projects, setProjects] = useState<OpsProject[]>([]);
   const [loading, setLoading]   = useState(true);
   const [payOpen, setPayOpen]   = useState(false);
+  const [other, setOther]       = useState<OpsOtherIncome[]>([]);
+  // The other income being added (null) or changed; undefined when the window is shut.
+  const [otherEdit, setOtherEdit] = useState<OpsOtherIncome | null | undefined>(undefined);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [sumRes, payRes, expRes] = await Promise.all([
+      const [sumRes, payRes, expRes, otherRes] = await Promise.all([
         opsFinanceApi.summary({ month }),
         opsFinanceApi.payments({ month }),
         opsFinanceApi.expenses({ month }),
+        opsFinanceApi.otherIncome(),
       ]);
       setSummary(sumRes.data);
       setPayments(payRes.data ?? []);
       setExpenses(expRes.data ?? []);
+      setOther(otherRes.data ?? []);
     } catch { toast.error("Failed to load finance data"); }
     finally  { setLoading(false); }
   }, [month]);
@@ -80,12 +90,13 @@ export default function Finance() {
     <RecordListPage>
       <PageHeader
         title="Income"
-        subtitle="Money in — project payments and AMC — with the month's profit"
+        subtitle="Money in — project payments, AMC and other income — with the month's profit"
         action={
           <div className="flex gap-2 items-center flex-wrap">
             <Input type="month" value={month} onChange={e => e.target.value && setParam("month", e.target.value)} className="w-[160px]" aria-label="Month" />
             <Button onClick={() => setPayOpen(true)}><Plus className="h-4 w-4 mr-2" />Add Payment</Button>
             <Button variant="outline" onClick={() => navigate("/finance/expenses")}><Receipt className="h-4 w-4 mr-2" />Expenses</Button>
+            <Button variant="outline" onClick={() => navigate("/finance/profit-loss")}><Scale className="h-4 w-4 mr-2" />Profit &amp; Loss</Button>
           </div>
         }
       />
@@ -95,22 +106,22 @@ export default function Finance() {
           <div key={i} className="bg-card rounded-xl border shadow-sm p-5"><Skeleton className="h-4 w-20 mb-2" /><Skeleton className="h-8 w-16" /></div>
         )) : <>
           <StatCard title="Collected" value={fmt(summary?.total_collected_month)}
-            subtitle={`Projects ${fmt(summary?.project_collected_month)} · AMC ${fmt(summary?.amc_collected_month)}`} icon={Wallet} subtitleColor="muted" />
+            subtitle={`Projects ${fmt(summary?.project_collected_month)} · AMC ${fmt(summary?.amc_collected_month)}${summary?.other_income_month ? ` · Other ${fmt(summary.other_income_month)}` : ""}`} icon={Wallet} subtitleColor="muted" />
           <StatCard title="Expenses" value={fmt(summary?.total_expenses_month)} subtitle={`${expenses.length} in ${monthShort}`} icon={TrendingDown} accent="rose" subtitleColor="muted" />
           <StatCard title="Net profit" value={fmt(summary?.net_profit_month)} subtitle={`${monthShort}: in − out`} icon={TrendingUp}
             accent={(summary?.net_profit_month ?? 0) >= 0 ? "emerald" : "rose"} subtitleColor="muted" />
           <StatCard title="Projects due" value={fmt(summary?.total_pending)} subtitle="Still to collect on projects" icon={Clock} accent="amber" subtitleColor="muted" />
           <StatCard title="AMC due" value={fmt(summary?.amc_due)} subtitle="Within 30 days or overdue" icon={ShieldCheck} accent="violet" subtitleColor="muted" />
-          <StatCard title="All time" value={fmt(summary?.total_revenue_all_time)} subtitle="Every payment" icon={IndianRupee} accent="teal" subtitleColor="muted" />
+          <StatCard title="All time" value={fmt(summary?.total_revenue_all_time)} subtitle="Every payment and other income" icon={IndianRupee} accent="teal" subtitleColor="muted" />
         </>}
       </div>
 
       <div className="flex gap-1 bg-muted/40 rounded-lg p-1 w-fit">
         {TABS.map(tab => (
           <button key={tab} onClick={() => setParam("tab", tab)}
-            className={cn("px-4 py-1.5 text-xs font-medium rounded-md capitalize transition-colors",
+            className={cn("px-4 py-1.5 text-xs font-medium rounded-md transition-colors",
               activeTab === tab ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}>
-            {tab === "pl" ? "P&L" : tab === "summary" ? "By project" : tab}
+            {TAB_LABEL[tab]}
           </button>
         ))}
       </div>
@@ -203,21 +214,37 @@ export default function Finance() {
         </Panel>
       )}
 
-      {activeTab === "pl" && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[
-            { label: `Collected — ${monthName}`, value: summary?.total_revenue_month ?? 0,  color: "text-emerald-700" },
-            { label: "Expenses", value: summary?.total_expenses_month ?? 0, color: "text-red-600" },
-            { label: "Net Profit",     value: summary?.net_profit_month ?? 0,
-              color: (summary?.net_profit_month ?? 0) >= 0 ? "text-emerald-700" : "text-red-600" },
-          ].map(item => (
-            <div key={item.label} className="bg-card rounded-xl border shadow-sm p-6 text-center">
-              <p className="text-sm text-muted-foreground mb-2">{item.label}</p>
-              <p className={cn("text-3xl font-bold", item.color)}>{fmt(item.value)}</p>
-            </div>
-          ))}
-        </div>
+      {activeTab === "other" && (
+        <Panel title={`Other income — ${other.length} · ${fmt(other.reduce((s, o) => s + Number(o.amount), 0))}`}
+          subtitle="Money in that is not a client's payment: a hackathon prize, a grant. Open one to change or delete it."
+          actions={<Button size="sm" onClick={() => setOtherEdit(null)}><Plus className="h-4 w-4 mr-1" />Add income</Button>} flush>
+          <ScrollableX>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50"><Th>Date</Th><Th>From</Th><Th right>Amount</Th><Th>Notes</Th><Th>Added by</Th></tr>
+              </thead>
+              <tbody>
+                {loading && <tr><td colSpan={5} className="p-4"><Skeleton className="h-4 w-full" /></td></tr>}
+                {!loading && other.length === 0 && (
+                  <tr><td colSpan={5} className="py-8 text-center text-muted-foreground text-sm">No other income yet</td></tr>
+                )}
+                {!loading && other.map(o => (
+                  <tr key={o.id} className={cn("border-b hover:bg-muted/30 transition-colors", ROW_OPEN_CLASS, o.date.startsWith(month) && "bg-primary/5")}
+                    {...rowOpenProps(() => setOtherEdit(o))}>
+                    <td className="py-3 px-4 text-card-foreground whitespace-nowrap">{formatDate(o.date)}</td>
+                    <td className="py-3 px-4 font-medium text-card-foreground">{o.source}</td>
+                    <td className="py-3 px-4 text-right tabular-nums font-medium text-emerald-700">{fmt(o.amount)}</td>
+                    <td className="py-3 px-4 text-muted-foreground max-w-xs truncate">{o.notes || "—"}</td>
+                    <td className="py-3 px-4 text-card-foreground">{o.added_by || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ScrollableX>
+        </Panel>
       )}
+
+      <OtherIncomeDialog income={otherEdit} onOpenChange={(v) => { if (!v) setOtherEdit(undefined); }} onSaved={() => void loadAll()} />
 
       <PaymentDialog open={payOpen} onOpenChange={setPayOpen}
         projects={projects.map((p) => ({ id: p.id, client_id: p.client_id, name: `${p.name}${p.client_name ? ` — ${p.client_name}` : ""}`, project_code: p.project_code, balance: p.balance }))}

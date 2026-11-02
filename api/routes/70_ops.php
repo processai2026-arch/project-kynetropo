@@ -51,6 +51,10 @@ $router->delete('/admin/ops/finance/payments/{id}',          [AdminOpsFinanceCon
 $router->get('/admin/ops/finance/expenses',                  [AdminOpsFinanceController::class, 'expenses'],         'admin');
 $router->post('/admin/ops/finance/expenses',                 [AdminOpsFinanceController::class, 'addExpense'],       'admin');
 $router->delete('/admin/ops/finance/expenses/{id}',          [AdminOpsFinanceController::class, 'deleteExpense'],    'admin');
+$router->get('/admin/ops/finance/other-income',              [AdminOpsFinanceController::class, 'otherIncome'],      'admin');
+$router->post('/admin/ops/finance/other-income',             [AdminOpsFinanceController::class, 'addOtherIncome'],   'admin');
+$router->put('/admin/ops/finance/other-income/{id}',         [AdminOpsFinanceController::class, 'updateOtherIncome'], 'admin');
+$router->delete('/admin/ops/finance/other-income/{id}',      [AdminOpsFinanceController::class, 'deleteOtherIncome'], 'admin');
 
 // ─── Kynetropo Ops — AMC ─────────────────────────────────────────────────────
 $router->get('/admin/ops/amc',                               [AdminOpsAmcController::class, 'index'],                'admin');

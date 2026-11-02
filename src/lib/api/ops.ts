@@ -3,7 +3,7 @@ import type {
   OpsClient, OpsClientDetail, OpsProject, OpsMeeting, OpsBug,
   OpsPayment, OpsExpense, OpsAmcRecord, OpsAmcCreateBody, OpsAmcCollectBody, OpsAmcPlanBody, OpsPitch, OpsEmployee,
   OpsHiringCandidate, OpsDashboardStats, OpsFinanceSummary, OpsProjectDetail,
-  OpsPaymentDetail, OpsFinanceProject, OpsAmcDetail,
+  OpsPaymentDetail, OpsFinanceProject, OpsAmcDetail, OpsOtherIncome,
 } from "@/types/ops";
 
 export interface ExpenseImportRow { date: string; time?: string | null; category: string; amount: number; description: string; notes?: string }
@@ -86,6 +86,11 @@ export const opsFinanceApi = {
   expenses:       (p?: Record<string, string>) => apiFetch<{ data: OpsExpense[] }>(`/admin/ops/finance/expenses${qs(p)}`),
   addExpense:     (body: Partial<OpsExpense>) => apiFetch<{ data: OpsExpense }>("/admin/ops/finance/expenses", { method: "POST", body: JSON.stringify(body) }),
   deleteExpense:  (id: number) => apiFetch<void>(`/admin/ops/finance/expenses/${id}`, { method: "DELETE" }),
+  /** Money in that is not a project payment: a hackathon prize, a grant. */
+  otherIncome:        (p?: Record<string, string>) => apiFetch<{ data: OpsOtherIncome[] }>(`/admin/ops/finance/other-income${qs(p)}`),
+  addOtherIncome:     (body: Partial<OpsOtherIncome>) => apiFetch<{ data: OpsOtherIncome }>("/admin/ops/finance/other-income", { method: "POST", body: JSON.stringify(body) }),
+  updateOtherIncome:  (id: number, body: Partial<OpsOtherIncome>) => apiFetch<{ data: OpsOtherIncome }>(`/admin/ops/finance/other-income/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  deleteOtherIncome:  (id: number) => apiFetch<void>(`/admin/ops/finance/other-income/${id}`, { method: "DELETE" }),
 };
 
 // ─── AMC ──────────────────────────────────────────────────────────────────────
