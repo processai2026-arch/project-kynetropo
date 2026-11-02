@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Activity, Bug, CalendarDays, CircleDollarSign, ClipboardList, FolderKanban, Hash, History, IndianRupee,
   FileText, Pencil, Plus, ShieldCheck, Trash2, UserRound, Users, Wallet,
@@ -30,7 +30,7 @@ import { initialsOf } from "@/lib/initials";
 import type { OpsAmcRecord, OpsPayment } from "@/types/ops";
 import { HealthBadge, PROJECT_STAGES, PriorityBadge, rupees } from "./components/crm";
 import { PAYMENT_MODES, PAYMENT_TYPES, PaymentDialog } from "./components/PaymentDialog";
-import { AmcCollectDialog, AmcFormDialog, AmcSheetDialog, AmcUsageDialog } from "@/pages/finance/components/AmcDialogs";
+import { AmcCollectDialog, AmcSheetDialog, AmcUsageDialog } from "@/pages/finance/components/AmcDialogs";
 import { AmcPanel } from "@/pages/finance/components/AmcTables";
 
 const label = (options: { value: string; label: string }[], v: string) => options.find((o) => o.value === v)?.label ?? humanise(v);
@@ -40,7 +40,8 @@ export default function ProjectDetail() {
   const navigate = useNavigate();
   const { userName } = useAuth();
   const { data: p, loading, error, reload } = useLoad(() => opsProjectsApi.get(id), [id]);
-  const [tab, setTab] = useState("status");
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState(() => searchParams.get("tab") ?? "status");
   const [payOpen, setPayOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<OpsPayment | null>(null);
   const [removingPayment, setRemovingPayment] = useState<OpsPayment | null>(null);
@@ -48,8 +49,6 @@ export default function ProjectDetail() {
   const [statusOpen, setStatusOpen] = useState(false);
   // AMC is separate from the project price, so it is loaded on its own.
   const { data: amcs, reload: reloadAmc } = useLoad(() => opsAmcApi.list({ project_id: String(id) }), [id]);
-  const [amcFormOpen, setAmcFormOpen] = useState(false);
-  const [editingAmc, setEditingAmc] = useState<OpsAmcRecord | null>(null);
   const [collectingAmc, setCollectingAmc] = useState<OpsAmcRecord | null>(null);
   const [usageAmc, setUsageAmc] = useState<OpsAmcRecord | null>(null);
   const [sheetAmc, setSheetAmc] = useState<OpsAmcRecord | null>(null);
@@ -67,7 +66,11 @@ export default function ProjectDetail() {
   // AMC payments are listed with the rest but are not part of what was received.
   const projectPayments = payments.filter((pay) => pay.type !== "amc").length;
   const openPayment = (payment: OpsPayment | null) => { setEditingPayment(payment); setPayOpen(true); };
-  const openAmc = (amc: OpsAmcRecord | null) => { setEditingAmc(amc); setAmcFormOpen(true); };
+  // Add and edit are a page; saving comes back to this project's AMC tab.
+  const openAmc = (amc: OpsAmcRecord | null) => {
+    const back = encodeURIComponent(`/projects/${id}?tab=amc`);
+    navigate(amc ? `/amc/${amc.id}/edit?back=${back}` : `/amc/new?project_id=${id}&back=${back}`);
+  };
   const amcSaved = () => { void reloadAmc(); void reload(); setAmcVersion((v) => v + 1); setTab("amc"); };
 
   return (
@@ -268,7 +271,6 @@ export default function ProjectDetail() {
           onConfirm={async () => { if (removingPayment) { await opsFinanceApi.deletePayment(removingPayment.id); await reload(); } }}
           successMessage="Payment deleted"
         />
-        <AmcFormDialog open={amcFormOpen} onOpenChange={setAmcFormOpen} amc={editingAmc} project={p} onSaved={amcSaved} />
         <AmcSheetDialog amc={sheetAmc} onClose={() => setSheetAmc(null)} />
         <AmcUsageDialog open={usageAmc !== null} onOpenChange={(v) => { if (!v) setUsageAmc(null); }} amc={usageAmc} onSaved={amcSaved} />
         <AmcCollectDialog open={collectingAmc !== null} onOpenChange={(v) => { if (!v) setCollectingAmc(null); }} amc={collectingAmc} onSaved={amcSaved} />

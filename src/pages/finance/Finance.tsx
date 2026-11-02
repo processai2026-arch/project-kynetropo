@@ -18,7 +18,6 @@ import { toast } from "sonner";
 import { ScrollableX } from "@/components/ui/scrollable-x";
 import { usePagedRows } from "@/hooks/usePagedRows";
 import { PaymentDialog } from "@/pages/crm/components/PaymentDialog";
-import { categoryLabel } from "./components/ExpenseBits";
 
 const payStatusStyles: Record<string, string> = {
   paid:    "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -27,7 +26,7 @@ const payStatusStyles: Record<string, string> = {
   overdue: "bg-red-50 text-red-600 border-red-200",
 };
 
-const TABS = ["summary", "payments", "expenses", "pl"] as const;
+const TABS = ["summary", "payments", "pl"] as const;
 type Tab = typeof TABS[number];
 
 const Th = ({ children, right }: { children: React.ReactNode; right?: boolean }) => (
@@ -40,6 +39,8 @@ export default function Finance() {
   // expense lands on the same tab and month.
   const [params, setParams] = useSearchParams();
   const activeTab: Tab = (TABS as readonly string[]).includes(params.get("tab") ?? "") ? params.get("tab") as Tab : "summary";
+  // Expenses have their own page now; an old ?tab=expenses link goes there.
+  useEffect(() => { if (params.get("tab") === "expenses") navigate("/finance/expenses", { replace: true }); }, [params, navigate]);
   const month = params.get("month") || new Date().toISOString().slice(0, 7);
   const setParam = (k: string, v: string) => setParams((p) => { const n = new URLSearchParams(p); n.set(k, v); return n; }, { replace: true });
 
@@ -47,7 +48,6 @@ export default function Finance() {
   const [payments, setPayments] = useState<OpsPayment[]>([]);
   const [expenses, setExpenses] = useState<OpsExpense[]>([]);
   const pagedPayments = usePagedRows(payments, "payments");
-  const pagedExpenses = usePagedRows(expenses, "expenses");
   const [projects, setProjects] = useState<OpsProject[]>([]);
   const [loading, setLoading]   = useState(true);
   const [payOpen, setPayOpen]   = useState(false);
@@ -79,12 +79,13 @@ export default function Finance() {
   return (
     <RecordListPage>
       <PageHeader
-        title="Finance"
+        title="Income"
+        subtitle="Money in — project payments and AMC — with the month's profit"
         action={
           <div className="flex gap-2 items-center flex-wrap">
             <Input type="month" value={month} onChange={e => e.target.value && setParam("month", e.target.value)} className="w-[160px]" aria-label="Month" />
             <Button onClick={() => setPayOpen(true)}><Plus className="h-4 w-4 mr-2" />Add Payment</Button>
-            <Button variant="outline" onClick={() => navigate("/finance/expenses/new")}><Receipt className="h-4 w-4 mr-2" />Add Expense</Button>
+            <Button variant="outline" onClick={() => navigate("/finance/expenses")}><Receipt className="h-4 w-4 mr-2" />Expenses</Button>
           </div>
         }
       />
@@ -199,43 +200,6 @@ export default function Finance() {
             </table>
           </ScrollableX>
           {pagedPayments.bar}
-        </Panel>
-      )}
-
-      {activeTab === "expenses" && (
-        <Panel title={`Expenses — ${monthName}`} subtitle="Open an expense to see its notes, change it or delete it" flush
-          actions={<Button size="sm" onClick={() => navigate("/finance/expenses/new")}><Plus className="h-4 w-4 mr-1" />Add Expense</Button>}>
-          <ScrollableX>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <Th>Date</Th><Th>Category</Th><Th>What for</Th><Th right>Amount</Th><Th>Project / event</Th><Th>Added by</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="border-b">{Array.from({ length: 6 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>)}</tr>
-                ))}
-                {!loading && expenses.length === 0 && (
-                  <tr><td colSpan={6} className="py-8 text-center text-muted-foreground text-sm">No expenses in {monthName}</td></tr>
-                )}
-                {!loading && pagedExpenses.rows.map(e => (
-                  <tr key={e.id} className={cn("border-b hover:bg-muted/30 transition-colors", ROW_OPEN_CLASS)} {...rowOpenProps(() => navigate(`/finance/expenses/${e.id}`))}>
-                    <td className="py-3 px-4 text-card-foreground whitespace-nowrap">{formatDate(e.date)}</td>
-                    <td className="py-3 px-4 text-card-foreground">{categoryLabel(e.category)}</td>
-                    <td className="py-3 px-4 text-card-foreground">
-                      {e.description || "—"}
-                      {e.notes && <div className="max-w-xs truncate text-xs text-muted-foreground">{e.notes}</div>}
-                    </td>
-                    <td className="py-3 px-4 text-right tabular-nums font-medium text-red-600">{fmt(e.amount)}</td>
-                    <td className="py-3 px-4 text-card-foreground">{e.project_name ?? e.pitch_name ?? "—"}</td>
-                    <td className="py-3 px-4 text-card-foreground">{e.added_by || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </ScrollableX>
-          {pagedExpenses.bar}
         </Panel>
       )}
 

@@ -21,6 +21,7 @@ import {
   BarChart3,
   Sparkles,
   UserPlus,
+  Receipt,
 } from "lucide-react";
 
 export type MenuItem = { title: string; url: string; icon: typeof LayoutDashboard };
@@ -67,8 +68,9 @@ export const sections: MenuSection[] = [
   {
     label: "Finance",
     items: [
-      { title: "Finance", url: "/finance", icon: IndianRupee },
-      { title: "AMC",     url: "/amc",     icon: RefreshCcw },
+      { title: "Income",   url: "/finance",          icon: IndianRupee },
+      { title: "Expenses", url: "/finance/expenses", icon: Receipt },
+      { title: "AMC",      url: "/amc",              icon: RefreshCcw },
     ],
   },
   {
@@ -165,6 +167,9 @@ export function routeTitle(pathname: string): string {
   const pitch = path.match(/^\/pitches\/(.+)$/);
   if (pitch) return `Pitch ${decodeURIComponent(pitch[1])}`;
   if (path === "/finance/expenses/new") return "New expense";
+  if (path === "/amc/new") return "New AMC";
+  const amcEdit = path.match(/^\/amc\/([^/]+)\/edit$/);
+  if (amcEdit) return `Edit AMC ${decodeURIComponent(amcEdit[1])}`;
   const expenseEdit = path.match(/^\/finance\/expenses\/([^/]+)\/edit$/);
   if (expenseEdit) return `Edit expense ${decodeURIComponent(expenseEdit[1])}`;
   const expense = path.match(/^\/finance\/expenses\/(.+)$/);

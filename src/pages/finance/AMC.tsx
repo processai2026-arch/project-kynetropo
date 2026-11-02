@@ -9,15 +9,15 @@ import { cn } from "@/lib/utils";
 import { RecordListPage } from "@/components/RecordListPage";
 import { PageHeader } from "@/components/PageHeader";
 import { Panel } from "@/components/Panel";
-import { opsAmcApi, opsClientsApi, opsProjectsApi } from "@/lib/api/ops";
+import { opsAmcApi } from "@/lib/api/ops";
 import { formatDate } from "@/lib/format";
-import type { OpsAmcRecord, OpsClient, OpsProject } from "@/types/ops";
+import type { OpsAmcRecord } from "@/types/ops";
 import { Plus, Pencil, CheckCircle, FileText, Trash2, Users } from "lucide-react";
 import { ActionDialog } from "@/components/ActionDialog";
 import { toast } from "sonner";
 import { ScrollableX } from "@/components/ui/scrollable-x";
 import { usePagedRows } from "@/hooks/usePagedRows";
-import { AmcCollectDialog, AmcFormDialog, AmcPriceParts, AmcSheetDialog, AmcStatusBadge, AmcUsageDialog, AmcYearBadge, amcPlanLabel, dueText } from "./components/AmcDialogs";
+import { AmcCollectDialog, AmcPriceParts, AmcSheetDialog, AmcStatusBadge, AmcUsageDialog, AmcYearBadge, amcPlanLabel, dueText } from "./components/AmcDialogs";
 
 const COLUMNS = ["Client", "Project", "Per year", "This year", "Renewal", "Next due", "Status", ""];
 
@@ -25,12 +25,8 @@ export default function AMC() {
   const navigate = useNavigate();
   const [items, setItems]       = useState<OpsAmcRecord[]>([]);
   const paged = usePagedRows(items, "AMC records");
-  const [clients, setClients]   = useState<OpsClient[]>([]);
-  const [projects, setProjects] = useState<OpsProject[]>([]);
   const [loading, setLoading]   = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
-  const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing]   = useState<OpsAmcRecord | null>(null);
   const [collecting, setCollecting] = useState<OpsAmcRecord | null>(null);
   /** Users or storage changed: the yearly price follows. */
   const [usageOf, setUsageOf] = useState<OpsAmcRecord | null>(null);
@@ -50,13 +46,9 @@ export default function AMC() {
   }, [statusFilter]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    opsClientsApi.list().then(r => setClients(r.data ?? [])).catch(() => {});
-    opsProjectsApi.list().then(r => setProjects(r.data ?? [])).catch(() => {});
-  }, []);
-
-  const openCreate = () => { setEditing(null); setFormOpen(true); };
-  const openEdit   = (a: OpsAmcRecord) => { setEditing(a); setFormOpen(true); };
+  // Add and edit are pages, so the long form scrolls with the page.
+  const openCreate = () => navigate("/amc/new");
+  const openEdit   = (a: OpsAmcRecord) => navigate(`/amc/${a.id}/edit`);
 
   const counts = {
     due:     items.filter(a => a.status === "due").length,
@@ -160,14 +152,6 @@ export default function AMC() {
         {paged.bar}
       </Panel>
 
-      <AmcFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        amc={editing}
-        clients={clients}
-        projects={projects}
-        onSaved={load}
-      />
       <AmcSheetDialog amc={sheetOf} onClose={() => setSheetOf(null)} />
       <AmcUsageDialog
         open={usageOf !== null}

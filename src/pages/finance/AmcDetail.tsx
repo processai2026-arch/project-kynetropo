@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   CalendarClock, CalendarDays, FileText, FolderKanban, IndianRupee, Pencil, Phone, RotateCcw, ShieldCheck, StickyNote,
   Trash2, Users, Wallet,
@@ -8,6 +8,7 @@ import { RecordDetailPage } from "@/components/RecordDetailPage";
 import { RecordProfileHeader, ProfileLinkCard } from "@/components/RecordProfileHeader";
 import { DetailStats, DetailWorkspace } from "@/components/DetailStats";
 import { StatCard } from "@/components/StatCard";
+import { DetailTabs } from "@/components/DetailTabs";
 import { SectionCard } from "@/components/SectionCard";
 import { ActionDialog } from "@/components/ActionDialog";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,7 @@ import { opsAmcApi } from "@/lib/api/ops";
 import { formatDate } from "@/lib/format";
 import { rupees } from "@/pages/crm/components/crm";
 import type { OpsAmcPayment } from "@/types/ops";
-import { AmcCollectDialog, AmcFormDialog, AmcSheetDialog, AmcStatusBadge, AmcUsageDialog, dueText } from "./components/AmcDialogs";
+import { AmcCollectDialog, AmcSheetDialog, AmcStatusBadge, AmcUsageDialog, dueText } from "./components/AmcDialogs";
 import { AmcContractTable, AmcPaymentsTable, AmcPriceTable, AmcRevertDialog } from "./components/AmcTables";
 
 /** One AMC: what is due, collecting it, reverting a collection, and every year's payment. */
@@ -25,7 +26,10 @@ export default function AmcDetail() {
   const navigate = useNavigate();
   const { data: a, loading, error, reload } = useLoad(() => opsAmcApi.get(id), [id]);
   const [collecting, setCollecting] = useState(false);
-  const [editing, setEditing] = useState(false);
+  // The tab is in the address, so Back from a payment returns to it.
+  const [params, setParams] = useSearchParams();
+  const tab = ["overview", "price", "payments"].includes(params.get("tab") ?? "") ? params.get("tab")! : "overview";
+  const setTab = (t: string) => setParams((p) => { const n = new URLSearchParams(p); n.set("tab", t); return n; }, { replace: true });
   const [usage, setUsage] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -62,7 +66,7 @@ export default function AmcDetail() {
           {latest && <Button variant="outline" onClick={() => setReverting(latest)}><RotateCcw className="h-4 w-4" /> Revert last collection</Button>}
           <Button variant="outline" onClick={() => setSheet(true)}><FileText className="h-4 w-4" /> Sheet</Button>
           {hasUsage && <Button variant="outline" onClick={() => setUsage(true)}><Users className="h-4 w-4" /> Users & storage</Button>}
-          <Button variant="outline" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" /> Edit</Button>
+          <Button variant="outline" onClick={() => navigate(`/amc/${a.id}/edit`)}><Pencil className="h-4 w-4" /> Edit</Button>
           <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setRemoving(true)}><Trash2 className="h-4 w-4" /> Delete</Button>
         </>}
       />
@@ -79,15 +83,26 @@ export default function AmcDetail() {
       {a && (
         <DetailWorkspace
           main={<>
-            <SectionCard icon={ShieldCheck} title="Contract">
-              <AmcContractTable amc={a} />
-            </SectionCard>
-            <SectionCard icon={IndianRupee} title="Price a year" subtitle="Base, plus what extra users and storage add" bodyPadding="">
-              <AmcPriceTable amc={a} />
-            </SectionCard>
-            <SectionCard icon={Wallet} title={`Payments (${payments.length})`} subtitle="Each year's AMC payment — the latest can be reverted" bodyPadding="">
-              <AmcPaymentsTable payments={payments} onRevert={setReverting} />
-            </SectionCard>
+            <DetailTabs value={tab} onValueChange={setTab} ariaLabel="AMC details" tabs={[
+              { value: "overview", label: "Overview", icon: ShieldCheck },
+              { value: "price", label: "Price a year", icon: IndianRupee, count: 1 + (a.user_plans?.length ?? 0) + (a.storage_gb ? 1 : 0) },
+              { value: "payments", label: "Payments", icon: Wallet, count: payments.length },
+            ]} />
+            {tab === "overview" && (
+              <SectionCard icon={ShieldCheck} title="Contract">
+                <AmcContractTable amc={a} />
+              </SectionCard>
+            )}
+            {tab === "price" && (
+              <SectionCard icon={IndianRupee} title="Price a year" subtitle="Base, plus what extra users and storage add" bodyPadding="">
+                <AmcPriceTable amc={a} />
+              </SectionCard>
+            )}
+            {tab === "payments" && (
+              <SectionCard icon={Wallet} title={`Payments (${payments.length})`} subtitle="Each year's AMC payment — the latest can be reverted" bodyPadding="">
+                <AmcPaymentsTable payments={payments} onRevert={setReverting} />
+              </SectionCard>
+            )}
           </>}
           side={<>
             <SectionCard icon={StickyNote} title="How it works">
@@ -103,9 +118,6 @@ export default function AmcDetail() {
 
       {a && <>
         <AmcCollectDialog open={collecting} onOpenChange={setCollecting} amc={a} onSaved={() => void reload()} />
-        {/* Edited to "No AMC" removes it: back to the list then. */}
-        <AmcFormDialog open={editing} onOpenChange={setEditing} amc={a}
-          onSaved={() => { opsAmcApi.get(a.id).then(() => reload(), () => navigate("/amc", { replace: true })); }} />
         <AmcUsageDialog open={usage} onOpenChange={setUsage} amc={a} onSaved={() => void reload()} />
         <AmcSheetDialog amc={sheet ? a : null} onClose={() => setSheet(false)} />
         <AmcRevertDialog amc={reverting ? a : null} payment={reverting} onOpenChange={(v) => { if (!v) setReverting(null); }}

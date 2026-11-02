@@ -36,8 +36,8 @@ export default function ExpenseDetail() {
   return (
     <RecordDetailPage>
       <RecordProfileHeader
-        backTo="/finance?tab=expenses"
-        backLabel="Finance"
+        backTo="/finance/expenses"
+        backLabel="Expenses"
         crumb={e ? `Expense ${rupees(e.amount)}` : "Expense"}
         icon={Receipt}
         loading={loading && !e}
@@ -79,7 +79,7 @@ export default function ExpenseDetail() {
           destructive
           confirmLabel="Delete expense"
           description={<p>{rupees(e.amount)} on {formatDate(e.date)} ({categoryLabel(e.category)}). It comes out of Finance and this month's profit goes up by as much.</p>}
-          onConfirm={async () => { await opsFinanceApi.deleteExpense(e.id); navigate("/finance?tab=expenses", { replace: true }); }}
+          onConfirm={async () => { await opsFinanceApi.deleteExpense(e.id); navigate("/finance/expenses", { replace: true }); }}
           successMessage="Expense deleted"
         />
       )}

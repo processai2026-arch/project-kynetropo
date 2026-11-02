@@ -76,9 +76,9 @@ export default function ExpenseForm() {
       icon={Receipt}
       title={editing ? "Edit expense" : "New expense"}
       description={editing ? form.description || undefined : "Money spent — it comes off this month's profit in Finance"}
-      backLabel="Finance"
-      onBack={() => navigate(editing ? `/finance/expenses/${editing}` : "/finance?tab=expenses")}
-      actions={<Button variant="outline" onClick={() => navigate("/finance?tab=expenses")}><List className="h-4 w-4" /> View expenses</Button>}
+      backLabel="Expenses"
+      onBack={() => navigate(editing ? `/finance/expenses/${editing}` : "/finance/expenses")}
+      actions={<Button variant="outline" onClick={() => navigate("/finance/expenses")}><List className="h-4 w-4" /> View expenses</Button>}
       footer={<>
         <SavingButton type="button" saving={saving} onClick={() => void save()} disabled={loading} label={editing ? "Save changes" : "Add expense"} />
         <Button variant="outline" onClick={() => navigate(-1)}>Cancel</Button>

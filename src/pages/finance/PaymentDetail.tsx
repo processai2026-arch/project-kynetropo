@@ -43,7 +43,7 @@ export default function PaymentDetail() {
     <RecordDetailPage>
       <RecordProfileHeader
         backTo="/finance?tab=payments"
-        backLabel="Finance"
+        backLabel="Income"
         crumb={p ? `Payment ${rupees(p.amount)}` : "Payment"}
         icon={Wallet}
         loading={loading && !p}

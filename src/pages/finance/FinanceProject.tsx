@@ -37,7 +37,7 @@ export default function FinanceProject() {
     <RecordDetailPage>
       <RecordProfileHeader
         backTo="/finance"
-        backLabel="Finance"
+        backLabel="Income"
         crumb={p?.name ?? "Project"}
         icon={FolderKanban}
         loading={loading && !p}
