@@ -234,18 +234,83 @@ export interface OpsPayment {
   payment_date: string;
   notes: string | null;
   created_at: string;
+  /** An AMC payment: the AMC it paid and the year it paid for. */
+  amc_id?: number | null;
+  amc_from?: string | null;
+  amc_to?: string | null;
+}
+
+/** One payment, with its client, its project's money, and its AMC if it paid one. */
+export interface OpsPaymentDetail extends OpsPayment {
+  client_company: string | null;
+  client_phone: string | null;
+  project_quoted: number | null;
+  project_received: number | null;
+  project_balance: number | null;
+  project_payment_status: string | null;
+  amc: OpsAmcRecord | null;
+  /** It is the AMC's latest collection: deleting it puts the AMC back. */
+  amc_current?: boolean;
 }
 
 export interface OpsExpense {
   id: number;
-  category: "hosting" | "tools" | "travel" | "marketing" | "salary" | "pitch" | "other";
+  /** One of the usual ones (hosting, tools, travel, marketing, salary, pitch, other) or one added. */
+  category: string;
   amount: number;
   description: string | null;
+  notes?: string | null;
   project_id: number | null;
+  project_name?: string | null;
+  project_code?: string | null;
   pitch_id: number | null;
+  pitch_name?: string | null;
   date: string;
   added_by: string;
   created_at: string;
+}
+
+/** An AMC payment, with the year it paid. */
+export interface OpsAmcPayment {
+  id: number;
+  amount: number;
+  payment_date: string;
+  mode: string;
+  reference: string | null;
+  recorded_by: string;
+  notes: string | null;
+  year_from: string | null;
+  year_to: string | null;
+  /** The AMC's latest collection — the one Revert undoes. */
+  current: boolean;
+}
+
+export interface OpsAmcDetail extends OpsAmcRecord {
+  payments: OpsAmcPayment[];
+}
+
+/** A project's money in one place. */
+export interface OpsFinanceProject {
+  id: number;
+  project_code: string | null;
+  name: string;
+  stage: string;
+  client_id: number;
+  client_name: string | null;
+  client_code: string | null;
+  client_company: string | null;
+  quoted: number;
+  received: number;
+  balance: number;
+  payment_status: string;
+  pct_collected: number;
+  amc_collected: number;
+  amc_per_year: number;
+  expenses_total: number;
+  net: number;
+  payments: OpsPayment[];
+  amcs: OpsAmcRecord[];
+  expenses: OpsExpense[];
 }
 
 /**
@@ -257,6 +322,8 @@ export interface OpsAmcRecord {
   client_id: number;
   client_name: string | null;
   client_company: string;
+  client_code?: string | null;
+  client_phone?: string | null;
   project_id: number;
   project_name: string | null;
   project_code: string | null;
@@ -586,7 +653,16 @@ export interface OpsFinanceSummary {
   total_pending: number;
   total_expenses_month: number;
   net_profit_month: number;
-  by_project: { id: number; name: string; client_name: string; quoted: number; received: number; balance: number; payment_status: string; pct_collected: number }[];
+  /** Of the month's money in: project payments, and AMC. */
+  project_collected_month?: number;
+  amc_collected_month?: number;
+  /** AMC due within 30 days or overdue, not collected yet. */
+  amc_due?: number;
+  by_project: {
+    id: number; project_code?: string | null; name: string; stage?: string; client_id?: number | null; client_code?: string | null;
+    client_name: string | null; quoted: number; received: number; balance: number; payment_status: string; pct_collected: number;
+    amc_per_year?: number; amc_due?: number; amc_next_due?: string | null; amc_collected?: number; expenses?: number;
+  }[];
 }
 
 // ─── AI Command Bar ───────────────────────────────────────────────────────────

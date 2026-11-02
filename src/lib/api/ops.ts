@@ -3,6 +3,7 @@ import type {
   OpsClient, OpsClientDetail, OpsProject, OpsMeeting, OpsBug,
   OpsPayment, OpsExpense, OpsAmcRecord, OpsAmcCreateBody, OpsAmcCollectBody, OpsAmcPlanBody, OpsPitch, OpsEmployee,
   OpsHiringCandidate, OpsDashboardStats, OpsFinanceSummary, OpsProjectDetail,
+  OpsPaymentDetail, OpsFinanceProject, OpsAmcDetail,
 } from "@/types/ops";
 
 function qs(p?: Record<string, string>) {
@@ -66,6 +67,13 @@ export const opsMeetingsApi = {
 export const opsFinanceApi = {
   summary:        (p?: Record<string, string>) => apiFetch<{ data: OpsFinanceSummary }>(`/admin/ops/finance/summary${qs(p)}`),
   payments:       (p?: Record<string, string>) => apiFetch<{ data: OpsPayment[] }>(`/admin/ops/finance/payments${qs(p)}`),
+  payment:        (id: number) => apiFetch<{ data: OpsPaymentDetail }>(`/admin/ops/finance/payments/${id}`),
+  expense:        (id: number) => apiFetch<{ data: OpsExpense }>(`/admin/ops/finance/expenses/${id}`),
+  updateExpense:  (id: number, body: Partial<OpsExpense>) => apiFetch<{ data: OpsExpense }>(`/admin/ops/finance/expenses/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  /** The usual categories, then every one added. */
+  expenseCategories: () => apiFetch<{ data: string[] }>("/admin/ops/finance/expense-categories"),
+  /** A project's money: payments, AMC, expenses. */
+  project:        (id: number) => apiFetch<{ data: OpsFinanceProject }>(`/admin/ops/finance/projects/${id}`),
   addPayment:     (body: Partial<OpsPayment>) => apiFetch<{ data: OpsPayment }>("/admin/ops/finance/payments", { method: "POST", body: JSON.stringify(body) }),
   updatePayment:  (id: number, body: Partial<OpsPayment>) => apiFetch<{ data: OpsPayment }>(`/admin/ops/finance/payments/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deletePayment:  (id: number) => apiFetch<void>(`/admin/ops/finance/payments/${id}`, { method: "DELETE" }),
@@ -77,6 +85,11 @@ export const opsFinanceApi = {
 // ─── AMC ──────────────────────────────────────────────────────────────────────
 export const opsAmcApi = {
   list:   (p?: Record<string, string>) => apiFetch<{ data: OpsAmcRecord[] }>(`/admin/ops/amc${qs(p)}`),
+  /** One AMC with every payment it has had. */
+  get:    (id: number) => apiFetch<{ data: OpsAmcDetail }>(`/admin/ops/amc/${id}`),
+  /** Undo the latest collection: its payment leaves Finance and the AMC goes back. */
+  revert: (id: number, recorded_by?: string) =>
+    apiFetch<{ data: OpsAmcRecord; message?: string }>(`/admin/ops/amc/${id}/revert`, { method: "POST", body: JSON.stringify({ recorded_by }) }),
   create: (body: OpsAmcCreateBody) => apiFetch<{ data: OpsAmcRecord }>("/admin/ops/amc", { method: "POST", body: JSON.stringify(body) }),
   /** Anything can change; the first year's Finance payment follows. */
   update: (id: number, body: OpsAmcPlanBody & { recorded_by?: string }) =>

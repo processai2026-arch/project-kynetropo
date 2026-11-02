@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { rowOpenProps, ROW_OPEN_CLASS } from "@/lib/rowNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,6 +22,7 @@ import { AmcCollectDialog, AmcFormDialog, AmcPriceParts, AmcSheetDialog, AmcStat
 const COLUMNS = ["Client", "Project", "Per year", "This year", "Renewal", "Next due", "Status", ""];
 
 export default function AMC() {
+  const navigate = useNavigate();
   const [items, setItems]       = useState<OpsAmcRecord[]>([]);
   const paged = usePagedRows(items, "AMC records");
   const [clients, setClients]   = useState<OpsClient[]>([]);
@@ -108,7 +110,7 @@ export default function AMC() {
               {!loading && paged.rows.map(a => {
                 const rowColor = a.status === "overdue" ? "bg-red-50/40" : a.status === "due" ? "bg-amber-50/40" : "";
                 return (
-                  <tr key={a.id} className={cn("border-b hover:bg-muted/30 transition-colors", rowColor)}>
+                  <tr key={a.id} className={cn("border-b hover:bg-muted/30 transition-colors", ROW_OPEN_CLASS, rowColor)} {...rowOpenProps(() => navigate(`/amc/${a.id}`))}>
                     <td className="py-3 px-4">
                       <Link to={`/clients/${a.client_id}`} className="font-medium text-card-foreground hover:text-primary">{a.client_name}</Link>
                       {a.client_company && <div className="text-xs text-muted-foreground">{a.client_company}</div>}

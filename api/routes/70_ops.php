@@ -39,6 +39,11 @@ $router->delete('/admin/ops/meetings/{id}',                  [AdminOpsMeetingCon
 // ─── Kynetropo Ops — Finance ──────────────────────────────────────────────────
 $router->get('/admin/ops/finance/summary',                   [AdminOpsFinanceController::class, 'summary'],          'admin');
 $router->get('/admin/ops/finance/payments',                  [AdminOpsFinanceController::class, 'payments'],         'admin');
+$router->get('/admin/ops/finance/payments/{id}',             [AdminOpsFinanceController::class, 'payment'],          'admin');
+$router->get('/admin/ops/finance/expenses/{id}',             [AdminOpsFinanceController::class, 'expense'],          'admin');
+$router->put('/admin/ops/finance/expenses/{id}',             [AdminOpsFinanceController::class, 'updateExpense'],    'admin');
+$router->get('/admin/ops/finance/expense-categories',        [AdminOpsFinanceController::class, 'expenseCategories'], 'admin');
+$router->get('/admin/ops/finance/projects/{id}',             [AdminOpsFinanceController::class, 'project'],          'admin');
 $router->post('/admin/ops/finance/payments',                 [AdminOpsFinanceController::class, 'addPayment'],       'admin');
 $router->put('/admin/ops/finance/payments/{id}',             [AdminOpsFinanceController::class, 'updatePayment'],    'admin');
 $router->delete('/admin/ops/finance/payments/{id}',          [AdminOpsFinanceController::class, 'deletePayment'],    'admin');
@@ -50,7 +55,9 @@ $router->delete('/admin/ops/finance/expenses/{id}',          [AdminOpsFinanceCon
 $router->get('/admin/ops/amc',                               [AdminOpsAmcController::class, 'index'],                'admin');
 $router->post('/admin/ops/amc',                              [AdminOpsAmcController::class, 'store'],                'admin');
 $router->put('/admin/ops/amc/{id}',                          [AdminOpsAmcController::class, 'update'],               'admin');
+$router->get('/admin/ops/amc/{id}',                          [AdminOpsAmcController::class, 'show'],                 'admin');
 $router->post('/admin/ops/amc/{id}/collect',                 [AdminOpsAmcController::class, 'collect'],              'admin');
+$router->post('/admin/ops/amc/{id}/revert',                  [AdminOpsAmcController::class, 'revert'],               'admin');
 $router->put('/admin/ops/amc/{id}/usage',                    [AdminOpsAmcController::class, 'usage'],                'admin');
 $router->delete('/admin/ops/amc/{id}',                       [AdminOpsAmcController::class, 'destroy'],              'admin');
 

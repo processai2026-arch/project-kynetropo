@@ -29,13 +29,18 @@ declare(strict_types=1);
  * unpaying or repricing a first year changes its AMC payment in Finance to
  * match, so Finance always shows what the AMC says. AMC payments never touch
  * a project's received amount or balance.
+ *
+ * Each AMC payment knows its AMC and the year it paid (amc_id, amc_from,
+ * amc_to), and a collected one keeps the AMC as it was just before
+ * (amc_prev), so the latest collection can be reverted exactly.
  */
 final class OpsAmc
 {
     public const MODES = ['cash', 'bank_transfer', 'upi', 'cheque', 'other'];
     public const PLANS = ['second_year', 'first_year', 'none'];
 
-    public const SELECT = "SELECT a.*, c.name AS client_name, c.company AS client_company, p.name AS project_name,
+    public const SELECT = "SELECT a.*, c.name AS client_name, c.company AS client_company, c.client_code, c.phone AS client_phone,
+                                  p.name AS project_name,
                                   p.project_code, p.amc_reason, pay.payment_date AS paid_on,
                                   IF(a.term_paid, a.renewal_date, a.start_date) AS due_date,
                                   DATEDIFF(IF(a.term_paid, a.renewal_date, a.start_date), CURDATE()) AS days_until_due
@@ -275,7 +280,7 @@ final class OpsAmc
             'notes'           => $amc['notes'],
         ]);
         if ($amc['paid']) {
-            $payId = self::insertPayment($tenantId, (int)$project['client_id'], (int)$project['id'], $amc['amount'], $amc['payment_mode'],
+            $payId = self::insertPayment($tenantId, $id, (int)$project['client_id'], (int)$project['id'], $amc['amount'], $amc['payment_mode'],
                 $amc['payment_date'], $amc['start_date'], $amc['renewal_date'], '', $by);
             Database::update('ops_amc_records', ['payment_id' => $payId], ['id' => $id]);
         }
@@ -326,7 +331,8 @@ final class OpsAmc
         $payment = $payId ? Database::fetch('SELECT * FROM ops_payments WHERE id = ? AND tenant_id = ? LIMIT 1', [$payId, $tenantId]) : null;
         if ($amc['paid']) {
             if ($payment) {
-                $change = ['payment_date' => $amc['payment_date'], 'mode' => $amc['payment_mode']];
+                $change = ['payment_date' => $amc['payment_date'], 'mode' => $amc['payment_mode'],
+                           'amc_id' => $id, 'amc_from' => $amc['start_date'], 'amc_to' => $amc['renewal_date']];
                 if (!$usageChanged) $change['amount'] = $amc['amount'];
                 // A reference typed in Finance stays; the generated one follows the dates.
                 if ((string)$payment['reference'] === 'AMC ' . $current['start_date'] . ' to ' . $current['renewal_date']) {
@@ -334,7 +340,7 @@ final class OpsAmc
                 }
                 Database::update('ops_payments', $change, ['id' => $payId, 'tenant_id' => $tenantId]);
             } else {
-                $payId = self::insertPayment($tenantId, (int)$current['client_id'], (int)$current['project_id'], $amc['amount'],
+                $payId = self::insertPayment($tenantId, $id, (int)$current['client_id'], (int)$current['project_id'], $amc['amount'],
                     $amc['payment_mode'], $amc['payment_date'], $amc['start_date'], $amc['renewal_date'], '', $by);
             }
             $updates['payment_id']   = $payId;
@@ -395,7 +401,11 @@ final class OpsAmc
         $renewing = (int)$current['term_paid'] === 1;
         $start    = $renewing ? (string)$current['renewal_date'] : (string)$current['start_date'];
         $renewal  = $renewing ? self::yearAfter($start) : (string)$current['renewal_date'];
-        $payId = self::insertPayment($tenantId, (int)$current['client_id'], (int)$current['project_id'], $amount, $mode, $paidOn, $start, $renewal, $reference, $by);
+        // What the AMC was before, so this collection can be reverted exactly.
+        $before = [];
+        foreach (self::REVERTIBLE as $k) $before[$k] = $current[$k] ?? null;
+        $payId = self::insertPayment($tenantId, (int)$current['id'], (int)$current['client_id'], (int)$current['project_id'], $amount, $mode,
+            $paidOn, $start, $renewal, $reference, $by, $before);
         Database::update('ops_amc_records', [
             'start_date'   => $start,
             'renewal_date' => $renewal,
@@ -406,6 +416,83 @@ final class OpsAmc
         ], ['id' => (int)$current['id'], 'tenant_id' => $tenantId]);
         self::log($tenantId, (int)$current['client_id'], 'amc_paid',
             'AMC ' . ($renewing ? 'renewed' : 'paid') . ' — ₹' . number_format($amount) . ' for ' . self::human($start) . ' to ' . self::human($renewal), $by);
+    }
+
+    /** What a collection changes on the AMC, and so what reverting it puts back. */
+    private const REVERTIBLE = ['start_date', 'renewal_date', 'term_paid', 'payment_id', 'payment_mode'];
+
+    /**
+     * The AMC payment $payment (the AMC's current one) is going: put the AMC
+     * back as it was before it was collected. A payment recorded before that
+     * was kept (or entered with the first year) leaves the year unpaid.
+     * Returns what the AMC went back to, in words. The caller deletes the payment.
+     */
+    public static function restoreBefore(int $tenantId, array $amc, array $payment, string $by): string
+    {
+        $prev = json_decode((string)($payment['amc_prev'] ?? ''), true);
+        if (is_array($prev) && !empty($prev['start_date']) && !empty($prev['renewal_date'])) {
+            $paid = (int)($prev['term_paid'] ?? 0) === 1;
+            $payId = !empty($prev['payment_id']) ? (int)$prev['payment_id'] : null;
+            // The earlier payment must still be there to be the current one again.
+            if ($payId && !Database::fetch('SELECT id FROM ops_payments WHERE id = ? AND tenant_id = ? LIMIT 1', [$payId, $tenantId])) $payId = null;
+            Database::update('ops_amc_records', [
+                'start_date'   => $prev['start_date'],
+                'renewal_date' => $prev['renewal_date'],
+                'term_paid'    => $paid ? 1 : 0,
+                'payment_id'   => $payId,
+                'payment_mode' => $prev['payment_mode'] ?? null,
+                'status'       => self::statusFor($paid ? (string)$prev['renewal_date'] : (string)$prev['start_date']),
+            ], ['id' => (int)$amc['id'], 'tenant_id' => $tenantId]);
+            $now = self::human((string)$prev['start_date']) . ' to ' . self::human((string)$prev['renewal_date'])
+                 . ($paid ? ', next due ' . self::human((string)$prev['renewal_date']) : ', not paid');
+        } else {
+            Database::update('ops_amc_records', [
+                'term_paid'    => 0,
+                'payment_id'   => null,
+                'payment_mode' => null,
+                'status'       => self::statusFor((string)$amc['start_date']),
+            ], ['id' => (int)$amc['id'], 'tenant_id' => $tenantId]);
+            $now = self::human((string)$amc['start_date']) . ' to ' . self::human((string)$amc['renewal_date']) . ', not paid';
+        }
+        self::log($tenantId, (int)$amc['client_id'], 'amc_reverted',
+            'AMC collection of ₹' . number_format((float)$payment['amount']) . ' on ' . self::human((string)$payment['payment_date'])
+            . ' reverted — back to ' . $now, $by);
+        return $now;
+    }
+
+    /** Undo the latest collection: its payment leaves Finance and the AMC goes back. */
+    public static function revert(int $tenantId, array $current, string $by): string
+    {
+        $payId = (int)($current['payment_id'] ?? 0);
+        $payment = $payId ? Database::fetch("SELECT * FROM ops_payments WHERE id = ? AND tenant_id = ? AND type = 'amc' LIMIT 1", [$payId, $tenantId]) : null;
+        if (!$payment) throw new AppException('There is no collection to revert on this AMC', 409);
+        $now = self::restoreBefore($tenantId, $current, $payment, $by);
+        Database::execute('DELETE FROM ops_payments WHERE id = ? AND tenant_id = ?', [$payId, $tenantId]);
+        return $now;
+    }
+
+    /** Every AMC payment of this AMC, newest first, with the year it paid. */
+    public static function history(int $tenantId, array $amc): array
+    {
+        $rows = Database::fetchAll(
+            "SELECT * FROM ops_payments
+              WHERE tenant_id = ? AND type = 'amc' AND (amc_id = ? OR (amc_id IS NULL AND project_id = ?))
+              ORDER BY payment_date DESC, id DESC",
+            [$tenantId, (int)$amc['id'], (int)$amc['project_id']]
+        );
+        return array_map(fn($r) => [
+            'id'           => (int)$r['id'],
+            'amount'       => (float)$r['amount'],
+            'payment_date' => $r['payment_date'],
+            'mode'         => $r['mode'],
+            'reference'    => $r['reference'],
+            'recorded_by'  => $r['recorded_by'],
+            'notes'        => $r['notes'],
+            'year_from'    => $r['amc_from'] ?? null,
+            'year_to'      => $r['amc_to'] ?? null,
+            // The AMC's current payment: the one Revert undoes.
+            'current'      => (int)$r['id'] === (int)($amc['payment_id'] ?? 0),
+        ], $rows);
     }
 
     /** True once the contract has rolled on past its first year. */
@@ -438,6 +525,8 @@ final class OpsAmc
             'client_id'       => (int)$row['client_id'],
             'client_name'     => $row['client_name'] ?? null,
             'client_company'  => $row['client_company'] ?? '',
+            'client_code'     => $row['client_code'] ?? null,
+            'client_phone'    => $row['client_phone'] ?? null,
             'project_id'      => (int)$row['project_id'],
             'project_name'    => $row['project_name'] ?? null,
             'project_code'    => $row['project_code'] ?? null,
@@ -488,10 +577,15 @@ final class OpsAmc
         return "from the 1st year, $price, first year " . ($amc['paid'] ? 'paid' : 'not paid yet');
     }
 
-    private static function insertPayment(int $tenantId, int $clientId, int $projectId, float $amount, string $mode,
-                                           string $paidOn, string $from, string $to, string $reference, string $by): int
+    private static function insertPayment(int $tenantId, int $amcId, int $clientId, int $projectId, float $amount, string $mode,
+                                           string $paidOn, string $from, string $to, string $reference, string $by,
+                                           ?array $before = null): int
     {
         return Database::insert('ops_payments', [
+            'amc_id'       => $amcId,
+            'amc_from'     => $from,
+            'amc_to'       => $to,
+            'amc_prev'     => $before !== null ? json_encode($before) : null,
             'tenant_id'    => $tenantId,
             'client_id'    => $clientId,
             'project_id'   => $projectId,

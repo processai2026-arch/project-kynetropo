@@ -6,7 +6,9 @@ declare(strict_types=1);
  * GET    /admin/ops/amc               — list (?status=, ?project_id=)
  * POST   /admin/ops/amc               — create
  * PUT    /admin/ops/amc/{id}          — edit anything: plan, price, dates, first year paid or not
+ * GET    /admin/ops/amc/{id}          — one AMC with each year's payment
  * POST   /admin/ops/amc/{id}/collect  — record this year's AMC payment
+ * POST   /admin/ops/amc/{id}/revert   — undo the latest collection
  * PUT    /admin/ops/amc/{id}/usage    — users now per category, storage used: the price follows
  * DELETE /admin/ops/amc/{id}
  */
@@ -38,6 +40,35 @@ class AdminOpsAmcController
         if ($status) $rows = array_values(array_filter($rows, fn($r) => $r['status'] === $status));
 
         Response::success(array_map([OpsAmc::class, 'format'], $rows));
+    }
+
+    /** GET /admin/ops/amc/{id} — the AMC, and every payment it has had. */
+    public function show(Request $request): void
+    {
+        $tenantId = Database::tenantId();
+        $row = OpsAmc::find((int)$request->param('id'), $tenantId) ?? Response::error('AMC record not found', 404);
+        $computed = OpsAmc::statusFor((string)$row['due_date']);
+        if ($computed !== $row['status']) {
+            Database::update('ops_amc_records', ['status' => $computed], ['id' => $row['id']]);
+            $row['status'] = $computed;
+        }
+        $data = OpsAmc::format($row);
+        $data['payments'] = OpsAmc::history($tenantId, $row);
+        Response::success($data);
+    }
+
+    /** POST /admin/ops/amc/{id}/revert — the latest collection's payment goes, and the AMC goes back. */
+    public function revert(Request $request): void
+    {
+        $id       = (int) $request->param('id');
+        $tenantId = Database::tenantId();
+        $current  = OpsAmc::find($id, $tenantId) ?? Response::error('AMC record not found', 404);
+        try {
+            $now = $this->inTransaction(fn() => OpsAmc::revert($tenantId, $current, (string)($request->body()['recorded_by'] ?? '')));
+        } catch (AppException $e) {
+            Response::error($e->getMessage(), $e->getCode());
+        }
+        Response::success(OpsAmc::format(OpsAmc::find($id, $tenantId)), 'Reverted — back to ' . $now);
     }
 
     /** POST /admin/ops/amc — see OpsAmc::normalise for the fields. */
@@ -137,18 +168,16 @@ class AdminOpsAmcController
     }
 
     /**
-     * A Finance payment of $paymentId was deleted: if it paid an AMC's current
-     * year, that year is unpaid again, so the amount is due from its start.
+     * A Finance payment of $paymentId is being deleted: if it is an AMC's
+     * current payment, the AMC goes back to how it was before it was
+     * collected (or, for an older payment, that year is unpaid again).
      */
-    public static function paymentRemoved(int $tenantId, int $paymentId): void
+    public static function paymentRemoved(int $tenantId, int $paymentId, string $by = ''): void
     {
         $amc = Database::fetch('SELECT * FROM ops_amc_records WHERE payment_id = ? AND tenant_id = ? LIMIT 1', [$paymentId, $tenantId]);
-        if (!$amc) return;
-        Database::update('ops_amc_records', [
-            'term_paid'  => 0,
-            'payment_id' => null,
-            'status'     => OpsAmc::statusFor((string)$amc['start_date']),
-        ], ['id' => $amc['id'], 'tenant_id' => $tenantId]);
+        $payment = Database::fetch('SELECT * FROM ops_payments WHERE id = ? AND tenant_id = ? LIMIT 1', [$paymentId, $tenantId]);
+        if (!$amc || !$payment) return;
+        OpsAmc::restoreBefore($tenantId, $amc, $payment, $by);
     }
 
     private function inTransaction(callable $work): mixed

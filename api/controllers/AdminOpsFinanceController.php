@@ -5,15 +5,30 @@ declare(strict_types=1);
  * Ops Finance Controller
  * GET  /admin/ops/finance/summary    — P&L summary
  * GET  /admin/ops/finance/payments   — payment log
+ * GET  /admin/ops/finance/payments/{id}  — one payment, with its project and AMC
  * POST /admin/ops/finance/payments   — add payment (updates project balance + client timeline)
  * GET  /admin/ops/finance/expenses   — expense log
+ * GET  /admin/ops/finance/expenses/{id}  — one expense
+ * GET  /admin/ops/finance/expense-categories — the usual ones and every one added
  * POST /admin/ops/finance/expenses   — add expense
+ * PUT  /admin/ops/finance/expenses/{id}  — edit expense
+ * GET  /admin/ops/finance/projects/{id}  — a project's money: payments, AMC, expenses
  * PUT  /admin/ops/finance/payments/{id}  — update payment
  * DELETE /admin/ops/finance/payments/{id}
  * DELETE /admin/ops/finance/expenses/{id}
  */
 class AdminOpsFinanceController
 {
+    /** The categories offered before any are added. Any other name can be added from the form. */
+    private const EXPENSE_CATEGORIES = ['hosting','tools','travel','marketing','salary','pitch','other'];
+
+    /** The AMC money a project's AMC brings: its price a year, what is due now, what was collected. */
+    private const AMC_BY_PROJECT = "SELECT a.project_id,
+                                           SUM(a.amount) AS amc_per_year,
+                                           SUM(IF(DATEDIFF(IF(a.term_paid, a.renewal_date, a.start_date), CURDATE()) <= 30, a.amount, 0)) AS amc_due,
+                                           MIN(IF(a.term_paid, a.renewal_date, a.start_date)) AS amc_next_due
+                                      FROM ops_amc_records a WHERE a.tenant_id = ? GROUP BY a.project_id";
+
     public function summary(Request $request): void
     {
         $tenantId = Database::tenantId();
@@ -34,29 +49,53 @@ class AdminOpsFinanceController
              WHERE tenant_id = ? AND DATE_FORMAT(date,'%Y-%m') = ?",
             [$tenantId, $month]
         );
+        // Every project, closed ones too: a closed project with money owed is still owed.
         $pendingAll = Database::fetch(
             "SELECT COALESCE(SUM(balance),0) AS total FROM ops_projects
              WHERE tenant_id = ? AND payment_status != 'paid'",
             [$tenantId]
         );
-
-        $byProject = Database::fetchAll(
-            "SELECT p.id, p.project_code, p.name, c.client_code, c.name AS client_name, p.quoted, p.received, p.balance, p.payment_status,
-                    CASE WHEN p.quoted > 0 THEN ROUND(p.received / p.quoted * 100, 1) ELSE 0 END AS pct_collected
-             FROM ops_projects p
-             JOIN ops_clients c ON c.id = p.client_id
-             WHERE p.tenant_id = ? AND p.stage != 'Closed'
-             ORDER BY p.balance DESC",
-            [$tenantId]
+        $amcMonth = Database::fetch(
+            "SELECT COALESCE(SUM(amount),0) AS total FROM ops_payments
+             WHERE tenant_id = ? AND type = 'amc' AND DATE_FORMAT(payment_date,'%Y-%m') = ?",
+            [$tenantId, $month]
         );
 
+        $byProject = Database::fetchAll(
+            "SELECT p.id, p.project_code, p.name, p.stage, p.client_id, c.client_code, c.name AS client_name,
+                    p.quoted, p.received, p.balance, p.payment_status,
+                    CASE WHEN p.quoted > 0 THEN ROUND(p.received / p.quoted * 100, 1) ELSE 0 END AS pct_collected,
+                    COALESCE(am.amc_per_year, 0) AS amc_per_year, COALESCE(am.amc_due, 0) AS amc_due, am.amc_next_due,
+                    (SELECT COALESCE(SUM(x.amount),0) FROM ops_payments x WHERE x.tenant_id = p.tenant_id AND x.project_id = p.id AND x.type = 'amc') AS amc_collected,
+                    (SELECT COALESCE(SUM(e.amount),0) FROM ops_expenses e WHERE e.tenant_id = p.tenant_id AND e.project_id = p.id) AS expenses
+             FROM ops_projects p
+             LEFT JOIN ops_clients c ON c.id = p.client_id AND c.tenant_id = p.tenant_id
+             LEFT JOIN (" . self::AMC_BY_PROJECT . ") am ON am.project_id = p.id
+             WHERE p.tenant_id = ?
+             ORDER BY p.balance DESC, p.id DESC",
+            [$tenantId, $tenantId]
+        );
+        foreach ($byProject as &$r) {
+            foreach (['quoted','received','balance','pct_collected','amc_per_year','amc_due','amc_collected','expenses'] as $k) $r[$k] = (float)$r[$k];
+            $r['id'] = (int)$r['id'];
+            $r['client_id'] = $r['client_id'] !== null ? (int)$r['client_id'] : null;
+        }
+        unset($r);
+
+        $revenue  = (float)$revenueMonth['total'];
+        $amcIn    = (float)$amcMonth['total'];
         Response::success([
             'total_revenue_all_time' => (float)$revenueAll['total'],
-            'total_revenue_month'    => (float)$revenueMonth['total'],
-            'total_collected_month'  => (float)$revenueMonth['total'],
+            'total_revenue_month'    => $revenue,
+            'total_collected_month'  => $revenue,
+            // Of the month's money in: project payments and AMC.
+            'project_collected_month' => $revenue - $amcIn,
+            'amc_collected_month'    => $amcIn,
             'total_pending'          => (float)$pendingAll['total'],
+            // AMC due within 30 days or overdue, not collected yet.
+            'amc_due'                => array_sum(array_column($byProject, 'amc_due')),
             'total_expenses_month'   => (float)$expensesMonth['total'],
-            'net_profit_month'       => (float)$revenueMonth['total'] - (float)$expensesMonth['total'],
+            'net_profit_month'       => $revenue - (float)$expensesMonth['total'],
             'by_project'             => $byProject,
         ]);
     }
@@ -69,14 +108,55 @@ class AdminOpsFinanceController
 
         $sql    = "SELECT p.*, c.name AS client_name, c.client_code, pr.name AS project_name, pr.project_code
                    FROM ops_payments p
-                   JOIN ops_clients  c  ON c.id  = p.client_id  AND c.tenant_id  = p.tenant_id
-                   JOIN ops_projects pr ON pr.id = p.project_id AND pr.tenant_id = p.tenant_id
+                   LEFT JOIN ops_clients  c  ON c.id  = p.client_id  AND c.tenant_id  = p.tenant_id
+                   LEFT JOIN ops_projects pr ON pr.id = p.project_id AND pr.tenant_id = p.tenant_id
                    WHERE p.tenant_id = ?";
         $params = [$tenantId];
         if ($projectId) { $sql .= ' AND p.project_id = ?';                   $params[] = $projectId; }
         if ($month)     { $sql .= " AND DATE_FORMAT(p.payment_date,'%Y-%m') = ?"; $params[] = $month; }
-        $sql .= ' ORDER BY p.payment_date DESC';
-        Response::success(Database::fetchAll($sql, $params));
+        $sql .= ' ORDER BY p.payment_date DESC, p.id DESC';
+        Response::success(array_map([self::class, 'paymentRow'], Database::fetchAll($sql, $params)));
+    }
+
+    /** GET /admin/ops/finance/payments/{id} — the payment, its client and project, and its AMC if it paid one. */
+    public function payment(Request $request): void
+    {
+        $tenantId = Database::tenantId();
+        $row = Database::fetch(
+            "SELECT p.*, c.name AS client_name, c.client_code, c.company AS client_company, c.phone AS client_phone,
+                    pr.name AS project_name, pr.project_code, pr.quoted AS project_quoted, pr.received AS project_received,
+                    pr.balance AS project_balance, pr.payment_status AS project_payment_status
+               FROM ops_payments p
+               LEFT JOIN ops_clients  c  ON c.id  = p.client_id  AND c.tenant_id  = p.tenant_id
+               LEFT JOIN ops_projects pr ON pr.id = p.project_id AND pr.tenant_id = p.tenant_id
+              WHERE p.id = ? AND p.tenant_id = ? LIMIT 1",
+            [(int)$request->param('id'), $tenantId]
+        ) ?? Response::error('Payment not found', 404);
+
+        $data = self::paymentRow($row);
+        foreach (['client_company','client_phone','project_payment_status'] as $k) $data[$k] = $row[$k] ?? null;
+        foreach (['project_quoted','project_received','project_balance'] as $k) $data[$k] = $row[$k] !== null ? (float)$row[$k] : null;
+        $data['amc'] = null;
+        if ($row['type'] === 'amc' && !empty($row['amc_id'])) {
+            $amc = OpsAmc::find((int)$row['amc_id'], $tenantId);
+            if ($amc) {
+                $data['amc'] = OpsAmc::format($amc);
+                // Only the AMC's latest collection can be reverted (it puts the AMC back).
+                $data['amc_current'] = (int)($amc['payment_id'] ?? 0) === (int)$row['id'];
+            }
+        }
+        Response::success($data);
+    }
+
+    private static function paymentRow(array $r): array
+    {
+        $r['id']         = (int)$r['id'];
+        $r['client_id']  = (int)$r['client_id'];
+        $r['project_id'] = (int)$r['project_id'];
+        $r['amount']     = (float)$r['amount'];
+        $r['amc_id']     = !empty($r['amc_id']) ? (int)$r['amc_id'] : null;
+        unset($r['amc_prev']);
+        return $r;
     }
 
     public function addPayment(Request $request): void
@@ -107,7 +187,7 @@ class AdminOpsFinanceController
             'type'         => in_array($body['type'] ?? '', ['advance','mid','final','amc','other']) ? $body['type'] : 'advance',
             'mode'         => in_array($body['mode'] ?? '', ['cash','bank_transfer','upi','cheque','other']) ? $body['mode'] : 'bank_transfer',
             'reference'    => trim((string)($body['reference']   ?? '')) ?: null,
-            'recorded_by'  => trim((string)($body['recorded_by'] ?? '')),
+            'recorded_by'  => trim((string)($body['recorded_by'] ?? '')) ?: (string)($request->user['name'] ?? ''),
             'payment_date' => $payDate,
             'notes'        => trim((string)($body['notes'] ?? '')),
         ]);
@@ -136,12 +216,143 @@ class AdminOpsFinanceController
         $category = $request->query('category');
         $month    = $request->query('month');
 
-        $sql    = 'SELECT * FROM ops_expenses WHERE tenant_id = ?';
+        $sql    = self::EXPENSE_SELECT . ' WHERE e.tenant_id = ?';
         $params = [$tenantId];
-        if ($category) { $sql .= ' AND category = ?';                    $params[] = $category; }
-        if ($month)    { $sql .= " AND DATE_FORMAT(date,'%Y-%m') = ?";   $params[] = $month; }
-        $sql .= ' ORDER BY date DESC';
-        Response::success(Database::fetchAll($sql, $params));
+        if ($category) { $sql .= ' AND e.category = ?';                    $params[] = $category; }
+        if ($month)    { $sql .= " AND DATE_FORMAT(e.date,'%Y-%m') = ?";   $params[] = $month; }
+        if ($request->query('project_id')) { $sql .= ' AND e.project_id = ?'; $params[] = (int)$request->query('project_id'); }
+        $sql .= ' ORDER BY e.date DESC, e.id DESC';
+        Response::success(array_map([self::class, 'expenseRow'], Database::fetchAll($sql, $params)));
+    }
+
+    private const EXPENSE_SELECT = "SELECT e.*, pr.name AS project_name, pr.project_code, pi.name AS pitch_name
+                                      FROM ops_expenses e
+                                      LEFT JOIN ops_projects pr ON pr.id = e.project_id AND pr.tenant_id = e.tenant_id
+                                      LEFT JOIN ops_pitches  pi ON pi.id = e.pitch_id   AND pi.tenant_id = e.tenant_id";
+
+    private static function expenseRow(array $r): array
+    {
+        $r['id']         = (int)$r['id'];
+        $r['amount']     = (float)$r['amount'];
+        $r['project_id'] = !empty($r['project_id']) ? (int)$r['project_id'] : null;
+        $r['pitch_id']   = !empty($r['pitch_id']) ? (int)$r['pitch_id'] : null;
+        $r['notes']      = $r['notes'] ?? null;
+        return $r;
+    }
+
+    /** GET /admin/ops/finance/expenses/{id} */
+    public function expense(Request $request): void
+    {
+        $row = Database::fetch(self::EXPENSE_SELECT . ' WHERE e.id = ? AND e.tenant_id = ? LIMIT 1',
+            [(int)$request->param('id'), Database::tenantId()]) ?? Response::error('Expense not found', 404);
+        Response::success(self::expenseRow($row));
+    }
+
+    /** GET /admin/ops/finance/expense-categories — the usual categories, then every other one used, a-z. */
+    public function expenseCategories(Request $request): void
+    {
+        $used = array_column(Database::fetchAll(
+            "SELECT DISTINCT TRIM(category) AS category FROM ops_expenses WHERE tenant_id = ? AND TRIM(category) <> '' ORDER BY category",
+            [Database::tenantId()]
+        ), 'category');
+        $out = self::EXPENSE_CATEGORIES;
+        $seen = array_flip(array_map('mb_strtolower', $out));
+        foreach ($used as $c) {
+            if (!isset($seen[mb_strtolower($c)])) { $out[] = $c; $seen[mb_strtolower($c)] = true; }
+        }
+        Response::success($out);
+    }
+
+    /** A category as typed, or one of the usual ones however it was cased. */
+    private static function validCategory(mixed $raw): string
+    {
+        $c = mb_substr(trim(preg_replace('/\s+/', ' ', (string)$raw)), 0, 60);
+        if ($c === '') return 'other';
+        foreach (self::EXPENSE_CATEGORIES as $known) if (mb_strtolower($c) === $known) return $known;
+        // An earlier spelling of the same new category wins, so one category is not two.
+        $same = Database::fetch('SELECT category FROM ops_expenses WHERE tenant_id = ? AND LOWER(category) = LOWER(?) LIMIT 1', [Database::tenantId(), $c]);
+        return $same ? (string)$same['category'] : $c;
+    }
+
+    /** PUT /admin/ops/finance/expenses/{id} — any field. */
+    public function updateExpense(Request $request): void
+    {
+        $id       = (int)$request->param('id');
+        $tenantId = Database::tenantId();
+        $body     = $request->body();
+        Database::fetch('SELECT id FROM ops_expenses WHERE id = ? AND tenant_id = ? LIMIT 1', [$id, $tenantId])
+            ?? Response::error('Expense not found', 404);
+
+        $updates = [];
+        if (isset($body['amount'])) {
+            if ((float)$body['amount'] <= 0) Response::error('Amount must be positive', 422);
+            $updates['amount'] = (float)$body['amount'];
+        }
+        if (isset($body['category']))    $updates['category']    = self::validCategory($body['category']);
+        if (isset($body['description'])) $updates['description'] = trim((string)$body['description']);
+        if (array_key_exists('notes', $body)) $updates['notes']  = trim((string)$body['notes']) ?: null;
+        if (array_key_exists('project_id', $body)) $updates['project_id'] = !empty($body['project_id']) ? (int)$body['project_id'] : null;
+        if (!empty($body['date']))       $updates['date']        = $body['date'];
+        if (isset($body['added_by']))    $updates['added_by']    = trim((string)$body['added_by']);
+        if ($updates) Database::update('ops_expenses', $updates, ['id' => $id, 'tenant_id' => $tenantId]);
+
+        $row = Database::fetch(self::EXPENSE_SELECT . ' WHERE e.id = ? AND e.tenant_id = ? LIMIT 1', [$id, $tenantId]);
+        Response::success(self::expenseRow($row), 'Expense updated');
+    }
+
+    /**
+     * GET /admin/ops/finance/projects/{id} — a project's money in one place:
+     * quoted, received and balance, each payment, its AMC and AMC payments, and
+     * the expenses booked against it.
+     */
+    public function project(Request $request): void
+    {
+        $id       = (int)$request->param('id');
+        $tenantId = Database::tenantId();
+        $p = Database::fetch(
+            "SELECT p.*, c.name AS client_name, c.client_code, c.company AS client_company
+               FROM ops_projects p
+               LEFT JOIN ops_clients c ON c.id = p.client_id AND c.tenant_id = p.tenant_id
+              WHERE p.id = ? AND p.tenant_id = ? LIMIT 1",
+            [$id, $tenantId]
+        ) ?? Response::error('Project not found', 404);
+
+        $payments = array_map([self::class, 'paymentRow'], Database::fetchAll(
+            'SELECT * FROM ops_payments WHERE tenant_id = ? AND project_id = ? ORDER BY payment_date DESC, id DESC',
+            [$tenantId, $id]
+        ));
+        $expenses = array_map([self::class, 'expenseRow'], Database::fetchAll(
+            self::EXPENSE_SELECT . ' WHERE e.tenant_id = ? AND e.project_id = ? ORDER BY e.date DESC, e.id DESC',
+            [$tenantId, $id]
+        ));
+        $amcs = array_map([OpsAmc::class, 'format'], Database::fetchAll(OpsAmc::SELECT . ' WHERE a.project_id = ? AND a.tenant_id = ? ORDER BY a.id', [$id, $tenantId]));
+
+        $amcIn  = array_sum(array_map(fn($x) => $x['type'] === 'amc' ? $x['amount'] : 0, $payments));
+        $spent  = array_sum(array_column($expenses, 'amount'));
+        $received = (float)$p['received'];
+        Response::success([
+            'id'             => (int)$p['id'],
+            'project_code'   => $p['project_code'] ?? null,
+            'name'           => $p['name'],
+            'stage'          => $p['stage'],
+            'client_id'      => (int)$p['client_id'],
+            'client_name'    => $p['client_name'],
+            'client_code'    => $p['client_code'],
+            'client_company' => $p['client_company'],
+            'quoted'         => (float)$p['quoted'],
+            'received'       => $received,
+            'balance'        => (float)$p['balance'],
+            'payment_status' => $p['payment_status'],
+            'pct_collected'  => (float)$p['quoted'] > 0 ? round($received / (float)$p['quoted'] * 100, 1) : 0,
+            'amc_collected'  => $amcIn,
+            'amc_per_year'   => array_sum(array_column($amcs, 'amount')),
+            'expenses_total' => $spent,
+            // What the project has brought in, less what was spent on it.
+            'net'            => $received + $amcIn - $spent,
+            'payments'       => $payments,
+            'amcs'           => $amcs,
+            'expenses'       => $expenses,
+        ]);
     }
 
     public function addExpense(Request $request): void
@@ -152,22 +363,20 @@ class AdminOpsFinanceController
 
         if ($amount <= 0) Response::error('Amount must be positive', 422);
 
-        $validCats = ['hosting','tools','travel','marketing','salary','pitch','other'];
-        $category  = in_array($body['category'] ?? '', $validCats) ? $body['category'] : 'other';
-
         $id = Database::insert('ops_expenses', [
             'tenant_id'   => $tenantId,
-            'category'    => $category,
+            'category'    => self::validCategory($body['category'] ?? ''),
             'amount'      => $amount,
             'description' => trim((string)($body['description'] ?? '')),
+            'notes'       => trim((string)($body['notes'] ?? '')) ?: null,
             'project_id'  => !empty($body['project_id']) ? (int)$body['project_id'] : null,
             'pitch_id'    => !empty($body['pitch_id'])   ? (int)$body['pitch_id']   : null,
-            'date'        => $body['date'] ?? date('Y-m-d'),
-            'added_by'    => trim((string)($body['added_by'] ?? '')),
+            'date'        => !empty($body['date']) ? $body['date'] : date('Y-m-d'),
+            'added_by'    => trim((string)($body['added_by'] ?? '')) ?: (string)($request->user['name'] ?? ''),
         ]);
 
-        $row = Database::fetch('SELECT * FROM ops_expenses WHERE id = ? LIMIT 1', [$id]);
-        Response::success($row, 'Expense recorded', 201);
+        $row = Database::fetch(self::EXPENSE_SELECT . ' WHERE e.id = ? LIMIT 1', [$id]);
+        Response::success(self::expenseRow($row), 'Expense recorded', 201);
     }
 
     public function updatePayment(Request $request): void
@@ -221,8 +430,8 @@ class AdminOpsFinanceController
         $project = Database::fetch('SELECT * FROM ops_projects WHERE id = ? AND tenant_id = ? LIMIT 1', [(int)$pay['project_id'], $tenantId]);
         if ($project) self::adjustProject($project, $tenantId, -self::projectShare((string)$pay['type'], (float)$pay['amount']));
 
-        // If it paid an AMC's current year, that year is unpaid again
-        if ((string)($pay['type'] ?? '') === 'amc') AdminOpsAmcController::paymentRemoved($tenantId, $id);
+        // If it was an AMC's latest collection, the AMC goes back to how it was before
+        if ((string)($pay['type'] ?? '') === 'amc') AdminOpsAmcController::paymentRemoved($tenantId, $id, (string)($request->user['name'] ?? ''));
 
         Database::query('DELETE FROM ops_payments WHERE id = ? AND tenant_id = ?', [$id, $tenantId]);
 

@@ -1,26 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { RecordListPage } from "@/components/RecordListPage";
 import { PageHeader } from "@/components/PageHeader";
 import { Panel } from "@/components/Panel";
-import { opsFinanceApi, opsClientsApi, opsProjectsApi } from "@/lib/api/ops";
-import type { OpsPayment, OpsExpense, OpsFinanceSummary, OpsClient, OpsProject } from "@/types/ops";
-import { IndianRupee, Plus, Trash2, TrendingUp, TrendingDown, Wallet, Clock } from "lucide-react";
+import { opsFinanceApi, opsProjectsApi } from "@/lib/api/ops";
+import { formatDate } from "@/lib/format";
+import { rowOpenProps, ROW_OPEN_CLASS } from "@/lib/rowNav";
+import type { OpsPayment, OpsExpense, OpsFinanceSummary, OpsProject } from "@/types/ops";
+import { IndianRupee, Plus, Receipt, ShieldCheck, TrendingUp, TrendingDown, Wallet, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollableX } from "@/components/ui/scrollable-x";
 import { usePagedRows } from "@/hooks/usePagedRows";
-
-const EMPTY_PAY = { client_id: 0, project_id: 0, amount: 0, type: "advance", mode: "bank_transfer", reference: "", payment_date: "", notes: "" };
-const EMPTY_EXP = { category: "other", amount: 0, description: "", project_id: undefined as number | undefined, date: "", added_by: "" };
+import { PaymentDialog } from "@/pages/crm/components/PaymentDialog";
+import { categoryLabel } from "./components/ExpenseBits";
 
 const payStatusStyles: Record<string, string> = {
   paid:    "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -29,23 +27,30 @@ const payStatusStyles: Record<string, string> = {
   overdue: "bg-red-50 text-red-600 border-red-200",
 };
 
+const TABS = ["summary", "payments", "expenses", "pl"] as const;
+type Tab = typeof TABS[number];
+
+const Th = ({ children, right }: { children: React.ReactNode; right?: boolean }) => (
+  <th className={cn("py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap", right ? "text-right" : "text-left")}>{children}</th>
+);
+
 export default function Finance() {
+  const navigate = useNavigate();
+  // The tab and month live in the address, so coming back from a payment or
+  // expense lands on the same tab and month.
+  const [params, setParams] = useSearchParams();
+  const activeTab: Tab = (TABS as readonly string[]).includes(params.get("tab") ?? "") ? params.get("tab") as Tab : "summary";
+  const month = params.get("month") || new Date().toISOString().slice(0, 7);
+  const setParam = (k: string, v: string) => setParams((p) => { const n = new URLSearchParams(p); n.set(k, v); return n; }, { replace: true });
+
   const [summary, setSummary]   = useState<OpsFinanceSummary | null>(null);
   const [payments, setPayments] = useState<OpsPayment[]>([]);
   const [expenses, setExpenses] = useState<OpsExpense[]>([]);
   const pagedPayments = usePagedRows(payments, "payments");
   const pagedExpenses = usePagedRows(expenses, "expenses");
-  const [clients, setClients]   = useState<OpsClient[]>([]);
   const [projects, setProjects] = useState<OpsProject[]>([]);
   const [loading, setLoading]   = useState(true);
-  const [activeTab, setActiveTab] = useState<"summary"|"payments"|"expenses"|"pl">("summary");
-  const [month, setMonth]       = useState(new Date().toISOString().slice(0,7));
   const [payOpen, setPayOpen]   = useState(false);
-  const [payForm, setPayForm]   = useState(EMPTY_PAY);
-  const [payingSaving, setPayingSaving] = useState(false);
-  const [expOpen, setExpOpen]   = useState(false);
-  const [expForm, setExpForm]   = useState(EMPTY_EXP);
-  const [expSaving, setExpSaving] = useState(false);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -64,58 +69,22 @@ export default function Finance() {
 
   useEffect(() => { loadAll(); }, [loadAll]);
   useEffect(() => {
-    opsClientsApi.list().then(r => setClients(r.data ?? [])).catch(() => {});
     opsProjectsApi.list().then(r => setProjects(r.data ?? [])).catch(() => {});
   }, []);
 
-  const clientProjects = payForm.client_id ? projects.filter(p => p.client_id === payForm.client_id) : projects;
-
-  const handleAddPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!payForm.client_id || !payForm.project_id) { toast.error("Client and project required"); return; }
-    if (payForm.amount <= 0) { toast.error("Amount required"); return; }
-    setPayingSaving(true);
-    try {
-      await opsFinanceApi.addPayment({ ...payForm, payment_date: payForm.payment_date || new Date().toISOString().split("T")[0] } as Partial<OpsPayment>);
-      toast.success("Payment recorded"); setPayOpen(false); loadAll();
-    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); }
-    finally       { setPayingSaving(false); }
-  };
-
-  const handleAddExpense = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (expForm.amount <= 0) { toast.error("Amount required"); return; }
-    setExpSaving(true);
-    try {
-      await opsFinanceApi.addExpense({ ...expForm, date: expForm.date || new Date().toISOString().split("T")[0] } as Partial<OpsExpense>);
-      toast.success("Expense recorded"); setExpOpen(false); loadAll();
-    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); }
-    finally       { setExpSaving(false); }
-  };
-
-  const handleDeletePayment = async (id: number) => {
-    if (!confirm("Delete this payment? Project balance will be reversed.")) return;
-    try { await opsFinanceApi.deletePayment(id); toast.success("Deleted"); loadAll(); }
-    catch { toast.error("Failed"); }
-  };
-
-  const handleDeleteExpense = async (id: number) => {
-    if (!confirm("Delete this expense?")) return;
-    try { await opsFinanceApi.deleteExpense(id); toast.success("Deleted"); loadAll(); }
-    catch { toast.error("Failed"); }
-  };
-
-  const fmt = (n: number) => "₹" + n.toLocaleString("en-IN");
+  const fmt = (n: number | null | undefined) => "₹" + Number(n ?? 0).toLocaleString("en-IN");
+  const monthName = new Date(`${month}-01T00:00:00`).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  const monthShort = new Date(`${month}-01T00:00:00`).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
 
   return (
     <RecordListPage>
       <PageHeader
         title="Finance"
         action={
-          <div className="flex gap-2 items-center">
-            <Input type="month" value={month} onChange={e => setMonth(e.target.value)} className="w-[160px]" />
+          <div className="flex gap-2 items-center flex-wrap">
+            <Input type="month" value={month} onChange={e => e.target.value && setParam("month", e.target.value)} className="w-[160px]" aria-label="Month" />
             <Button onClick={() => setPayOpen(true)}><Plus className="h-4 w-4 mr-2" />Add Payment</Button>
-            <Button variant="outline" onClick={() => setExpOpen(true)}><Plus className="h-4 w-4 mr-2" />Add Expense</Button>
+            <Button variant="outline" onClick={() => navigate("/finance/expenses/new")}><Receipt className="h-4 w-4 mr-2" />Add Expense</Button>
           </div>
         }
       />
@@ -124,57 +93,66 @@ export default function Finance() {
         {loading ? Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="bg-card rounded-xl border shadow-sm p-5"><Skeleton className="h-4 w-20 mb-2" /><Skeleton className="h-8 w-16" /></div>
         )) : <>
-          <StatCard title="All-time Revenue"   value={fmt(summary?.total_revenue_all_time ?? 0)}  icon={TrendingUp}    subtitleColor="primary" />
-          <StatCard title="This Month Revenue" value={fmt(summary?.total_revenue_month ?? 0)}     icon={IndianRupee}   subtitleColor="primary" />
-          <StatCard title="Collected Month"    value={fmt(summary?.total_collected_month ?? 0)}   icon={Wallet}        subtitleColor="primary" />
-          <StatCard title="Total Pending"      value={fmt(summary?.total_pending ?? 0)}           icon={Clock}         subtitleColor="muted" />
-          <StatCard title="Expenses Month"     value={fmt(summary?.total_expenses_month ?? 0)}    icon={TrendingDown}  subtitleColor="muted" />
-          <StatCard title="Net Profit Month"   value={fmt(summary?.net_profit_month ?? 0)}        icon={TrendingUp}
-            subtitleColor={(summary?.net_profit_month ?? 0) >= 0 ? "primary" : "muted"} />
+          <StatCard title="Collected" value={fmt(summary?.total_collected_month)}
+            subtitle={`Projects ${fmt(summary?.project_collected_month)} · AMC ${fmt(summary?.amc_collected_month)}`} icon={Wallet} subtitleColor="muted" />
+          <StatCard title="Expenses" value={fmt(summary?.total_expenses_month)} subtitle={`${expenses.length} in ${monthShort}`} icon={TrendingDown} accent="rose" subtitleColor="muted" />
+          <StatCard title="Net profit" value={fmt(summary?.net_profit_month)} subtitle={`${monthShort}: in − out`} icon={TrendingUp}
+            accent={(summary?.net_profit_month ?? 0) >= 0 ? "emerald" : "rose"} subtitleColor="muted" />
+          <StatCard title="Projects due" value={fmt(summary?.total_pending)} subtitle="Still to collect on projects" icon={Clock} accent="amber" subtitleColor="muted" />
+          <StatCard title="AMC due" value={fmt(summary?.amc_due)} subtitle="Within 30 days or overdue" icon={ShieldCheck} accent="violet" subtitleColor="muted" />
+          <StatCard title="All time" value={fmt(summary?.total_revenue_all_time)} subtitle="Every payment" icon={IndianRupee} accent="teal" subtitleColor="muted" />
         </>}
       </div>
 
       <div className="flex gap-1 bg-muted/40 rounded-lg p-1 w-fit">
-        {(["summary","payments","expenses","pl"] as const).map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)}
+        {TABS.map(tab => (
+          <button key={tab} onClick={() => setParam("tab", tab)}
             className={cn("px-4 py-1.5 text-xs font-medium rounded-md capitalize transition-colors",
               activeTab === tab ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}>
-            {tab === "pl" ? "P&L" : tab}
+            {tab === "pl" ? "P&L" : tab === "summary" ? "By project" : tab}
           </button>
         ))}
       </div>
 
       {activeTab === "summary" && (
-        <Panel title="Revenue by Project" flush>
+        <Panel title="Money by project" subtitle="Every project — open one to see its payments, AMC and expenses" flush>
           <ScrollableX>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  {["Project","Client","Quoted","Received","Balance","Status","% Collected"].map(h => (
-                    <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
-                  ))}
+                  <Th>Project</Th><Th>Client</Th><Th right>Quoted</Th><Th right>Received</Th><Th right>Balance</Th>
+                  <Th>Status</Th><Th right>AMC a year</Th><Th>AMC next due</Th><Th right>Spent</Th>
                 </tr>
               </thead>
               <tbody>
                 {loading && Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="border-b">{Array.from({ length: 7 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>)}</tr>
+                  <tr key={i} className="border-b">{Array.from({ length: 9 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>)}</tr>
                 ))}
                 {!loading && (summary?.by_project ?? []).length === 0 && (
-                  <tr><td colSpan={7} className="py-8 text-center text-muted-foreground text-sm">No projects</td></tr>
+                  <tr><td colSpan={9} className="py-8 text-center text-muted-foreground text-sm">No projects</td></tr>
                 )}
                 {!loading && (summary?.by_project ?? []).map(p => (
-                  <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
-                    <td className="py-3 px-4 font-medium text-card-foreground">{p.name}</td>
-                    <td className="py-3 px-4 text-card-foreground">{p.client_name}</td>
-                    <td className="py-3 px-4 text-card-foreground">{fmt(p.quoted)}</td>
-                    <td className="py-3 px-4 text-emerald-700 font-medium">{fmt(p.received)}</td>
-                    <td className="py-3 px-4 text-red-600 font-medium">{fmt(p.balance)}</td>
+                  <tr key={p.id} className={cn("border-b hover:bg-muted/30 transition-colors", ROW_OPEN_CLASS)} {...rowOpenProps(() => navigate(`/finance/projects/${p.id}`))}>
+                    <td className="py-3 px-4">
+                      <div className="font-medium text-card-foreground">{p.name}</div>
+                      <div className="text-xs text-muted-foreground">{[p.project_code, p.stage].filter(Boolean).join(" · ")}</div>
+                    </td>
+                    <td className="py-3 px-4 text-card-foreground">{p.client_name ?? "—"}</td>
+                    <td className="py-3 px-4 text-right tabular-nums text-card-foreground">{fmt(p.quoted)}</td>
+                    <td className="py-3 px-4 text-right tabular-nums text-emerald-700 font-medium">
+                      {fmt(p.received)} <span className="text-xs font-normal text-muted-foreground">{p.pct_collected}%</span>
+                    </td>
+                    <td className="py-3 px-4 text-right tabular-nums text-red-600 font-medium">{fmt(p.balance)}</td>
                     <td className="py-3 px-4">
                       <Badge className={cn("border capitalize text-xs", payStatusStyles[p.payment_status] ?? "bg-muted text-muted-foreground")}>
                         {p.payment_status}
                       </Badge>
                     </td>
-                    <td className="py-3 px-4 text-card-foreground">{p.pct_collected}%</td>
+                    <td className="py-3 px-4 text-right tabular-nums text-card-foreground">{p.amc_per_year ? fmt(p.amc_per_year) : "—"}</td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      {p.amc_next_due ? <span className={cn((p.amc_due ?? 0) > 0 ? "text-amber-700 font-medium" : "text-card-foreground")}>{formatDate(p.amc_next_due)}</span> : "—"}
+                    </td>
+                    <td className="py-3 px-4 text-right tabular-nums text-card-foreground">{p.expenses ? fmt(p.expenses) : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -184,40 +162,37 @@ export default function Finance() {
       )}
 
       {activeTab === "payments" && (
-        <Panel title={`Payment Log — ${month}`} flush>
+        <Panel title={`Payments — ${monthName}`} subtitle="Open a payment to see it, change it or delete it" flush>
           <ScrollableX>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  {["Date","Client","Project","Amount","Type","Mode","Reference","Recorded By",""].map(h => (
-                    <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
-                  ))}
+                  <Th>Date</Th><Th>Client</Th><Th>Project</Th><Th right>Amount</Th><Th>For</Th><Th>Mode</Th><Th>Reference</Th><Th>Recorded by</Th>
                 </tr>
               </thead>
               <tbody>
                 {loading && Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="border-b">{Array.from({ length: 9 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>)}</tr>
+                  <tr key={i} className="border-b">{Array.from({ length: 8 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>)}</tr>
                 ))}
                 {!loading && payments.length === 0 && (
-                  <tr><td colSpan={9} className="py-8 text-center text-muted-foreground text-sm">No payments this month</td></tr>
+                  <tr><td colSpan={8} className="py-8 text-center text-muted-foreground text-sm">No payments in {monthName}</td></tr>
                 )}
                 {!loading && pagedPayments.rows.map(p => (
-                  <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
-                    <td className="py-3 px-4 text-card-foreground">{p.payment_date}</td>
+                  <tr key={p.id} className={cn("border-b hover:bg-muted/30 transition-colors", ROW_OPEN_CLASS)} {...rowOpenProps(() => navigate(`/finance/payments/${p.id}`))}>
+                    <td className="py-3 px-4 text-card-foreground whitespace-nowrap">{formatDate(p.payment_date)}</td>
                     <td className="py-3 px-4 text-card-foreground">
                       {p.client_code && <span className="mr-1 font-mono text-xs text-muted-foreground">{p.client_code}</span>}{p.client_name ?? "—"}
                     </td>
                     <td className="py-3 px-4 text-card-foreground">
                       {p.project_code && <span className="mr-1 font-mono text-xs text-muted-foreground">{p.project_code}</span>}{p.project_name ?? "—"}
                     </td>
-                    <td className="py-3 px-4 font-medium text-emerald-700">{fmt(p.amount)}</td>
-                    <td className="py-3 px-4 capitalize text-card-foreground">{p.type}</td>
-                    <td className="py-3 px-4 capitalize text-card-foreground">{p.mode.replace("_"," ")}</td>
-                    <td className="py-3 px-4 text-card-foreground">{p.reference ?? "—"}</td>
-                    <td className="py-3 px-4 text-card-foreground">{p.recorded_by || "—"}</td>
+                    <td className="py-3 px-4 text-right tabular-nums font-medium text-emerald-700">{fmt(p.amount)}</td>
                     <td className="py-3 px-4">
-                      <Button variant="ghost" size="icon" onClick={() => handleDeletePayment(p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      {p.type === "amc" ? <Badge variant="outline" className="border-violet-200 bg-violet-50 text-violet-700">AMC</Badge> : <span className="capitalize text-card-foreground">{p.type}</span>}
                     </td>
+                    <td className="py-3 px-4 capitalize text-card-foreground">{p.mode.replace("_"," ")}</td>
+                    <td className="py-3 px-4 text-card-foreground">{p.reference || "—"}</td>
+                    <td className="py-3 px-4 text-card-foreground">{p.recorded_by || "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -228,36 +203,33 @@ export default function Finance() {
       )}
 
       {activeTab === "expenses" && (
-        <Panel title={`Expense Log — ${month}`} flush>
+        <Panel title={`Expenses — ${monthName}`} subtitle="Open an expense to see its notes, change it or delete it" flush
+          actions={<Button size="sm" onClick={() => navigate("/finance/expenses/new")}><Plus className="h-4 w-4 mr-1" />Add Expense</Button>}>
           <ScrollableX>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  {["Date","Category","Description","Amount","Project","Added By",""].map(h => (
-                    <th key={h} className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
-                  ))}
+                  <Th>Date</Th><Th>Category</Th><Th>What for</Th><Th right>Amount</Th><Th>Project / event</Th><Th>Added by</Th>
                 </tr>
               </thead>
               <tbody>
                 {loading && Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="border-b">{Array.from({ length: 7 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>)}</tr>
+                  <tr key={i} className="border-b">{Array.from({ length: 6 }).map((_, j) => <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>)}</tr>
                 ))}
                 {!loading && expenses.length === 0 && (
-                  <tr><td colSpan={7} className="py-8 text-center text-muted-foreground text-sm">No expenses this month</td></tr>
+                  <tr><td colSpan={6} className="py-8 text-center text-muted-foreground text-sm">No expenses in {monthName}</td></tr>
                 )}
                 {!loading && pagedExpenses.rows.map(e => (
-                  <tr key={e.id} className="border-b hover:bg-muted/30 transition-colors">
-                    <td className="py-3 px-4 text-card-foreground">{e.date}</td>
-                    <td className="py-3 px-4 capitalize text-card-foreground">{e.category}</td>
-                    <td className="py-3 px-4 text-card-foreground">{e.description || "—"}</td>
-                    <td className="py-3 px-4 font-medium text-red-600">{fmt(e.amount)}</td>
+                  <tr key={e.id} className={cn("border-b hover:bg-muted/30 transition-colors", ROW_OPEN_CLASS)} {...rowOpenProps(() => navigate(`/finance/expenses/${e.id}`))}>
+                    <td className="py-3 px-4 text-card-foreground whitespace-nowrap">{formatDate(e.date)}</td>
+                    <td className="py-3 px-4 text-card-foreground">{categoryLabel(e.category)}</td>
                     <td className="py-3 px-4 text-card-foreground">
-                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                      {(e as any).project_name ?? "—"}</td>
-                    <td className="py-3 px-4 text-card-foreground">{e.added_by || "—"}</td>
-                    <td className="py-3 px-4">
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteExpense(e.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      {e.description || "—"}
+                      {e.notes && <div className="max-w-xs truncate text-xs text-muted-foreground">{e.notes}</div>}
                     </td>
+                    <td className="py-3 px-4 text-right tabular-nums font-medium text-red-600">{fmt(e.amount)}</td>
+                    <td className="py-3 px-4 text-card-foreground">{e.project_name ?? e.pitch_name ?? "—"}</td>
+                    <td className="py-3 px-4 text-card-foreground">{e.added_by || "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -270,8 +242,8 @@ export default function Finance() {
       {activeTab === "pl" && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
-            { label: "Total Revenue",  value: summary?.total_revenue_month ?? 0,  color: "text-emerald-700" },
-            { label: "Total Expenses", value: summary?.total_expenses_month ?? 0, color: "text-red-600" },
+            { label: `Collected — ${monthName}`, value: summary?.total_revenue_month ?? 0,  color: "text-emerald-700" },
+            { label: "Expenses", value: summary?.total_expenses_month ?? 0, color: "text-red-600" },
             { label: "Net Profit",     value: summary?.net_profit_month ?? 0,
               color: (summary?.net_profit_month ?? 0) >= 0 ? "text-emerald-700" : "text-red-600" },
           ].map(item => (
@@ -283,118 +255,9 @@ export default function Finance() {
         </div>
       )}
 
-      <Dialog open={payOpen} onOpenChange={v => { if (!payingSaving) setPayOpen(v); }}>
-        <DialogContent className="max-w-lg" onInteractOutside={e => e.preventDefault()}>
-          <DialogHeader><DialogTitle>Record Payment</DialogTitle></DialogHeader>
-          <form onSubmit={handleAddPayment} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5 col-span-2">
-                <Label>Client *</Label>
-                <Select value={String(payForm.client_id || "")} onValueChange={v => setPayForm(f => ({ ...f, client_id: Number(v), project_id: 0 }))}>
-                  <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
-                  <SelectContent>{clients.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5 col-span-2">
-                <Label>Project *</Label>
-                <Select value={String(payForm.project_id || "")} onValueChange={v => setPayForm(f => ({ ...f, project_id: Number(v) }))}>
-                  <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
-                  <SelectContent>
-                    {clientProjects.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Amount *</Label>
-                <Input type="number" value={payForm.amount || ""} onChange={e => setPayForm(f => ({ ...f, amount: Number(e.target.value) }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Date</Label>
-                <Input type="date" value={payForm.payment_date} onChange={e => setPayForm(f => ({ ...f, payment_date: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Type</Label>
-                <Select value={payForm.type} onValueChange={v => setPayForm(f => ({ ...f, type: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {["advance","mid","final","amc","other"].map(t => <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Mode</Label>
-                <Select value={payForm.mode} onValueChange={v => setPayForm(f => ({ ...f, mode: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {["cash","bank_transfer","upi","cheque","other"].map(m => <SelectItem key={m} value={m}>{m.replace("_"," ")}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5 col-span-2">
-                <Label>Reference</Label>
-                <Input value={payForm.reference} onChange={e => setPayForm(f => ({ ...f, reference: e.target.value }))} placeholder="UTR / cheque no." />
-              </div>
-              <div className="space-y-1.5 col-span-2">
-                <Label>Notes</Label>
-                <Textarea value={payForm.notes} onChange={e => setPayForm(f => ({ ...f, notes: e.target.value }))} rows={2} />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setPayOpen(false)} disabled={payingSaving}>Cancel</Button>
-              <Button type="submit" disabled={payingSaving}>{payingSaving ? "Saving…" : "Record Payment"}</Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={expOpen} onOpenChange={v => { if (!expSaving) setExpOpen(v); }}>
-        <DialogContent className="max-w-lg" onInteractOutside={e => e.preventDefault()}>
-          <DialogHeader><DialogTitle>Add Expense</DialogTitle></DialogHeader>
-          <form onSubmit={handleAddExpense} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Category</Label>
-                <Select value={expForm.category} onValueChange={v => setExpForm(f => ({ ...f, category: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {["hosting","tools","travel","marketing","salary","pitch","other"].map(c => <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Amount *</Label>
-                <Input type="number" value={expForm.amount || ""} onChange={e => setExpForm(f => ({ ...f, amount: Number(e.target.value) }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Date</Label>
-                <Input type="date" value={expForm.date} onChange={e => setExpForm(f => ({ ...f, date: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Project (optional)</Label>
-                <Select value={String(expForm.project_id ?? "")} onValueChange={v => setExpForm(f => ({ ...f, project_id: v ? Number(v) : undefined }))}>
-                  <SelectTrigger><SelectValue placeholder="No project" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">None</SelectItem>
-                    {projects.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5 col-span-2">
-                <Label>Description</Label>
-                <Textarea value={expForm.description} onChange={e => setExpForm(f => ({ ...f, description: e.target.value }))} rows={2} />
-              </div>
-              <div className="space-y-1.5 col-span-2">
-                <Label>Added By</Label>
-                <Input value={expForm.added_by} onChange={e => setExpForm(f => ({ ...f, added_by: e.target.value }))} />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setExpOpen(false)} disabled={expSaving}>Cancel</Button>
-              <Button type="submit" disabled={expSaving}>{expSaving ? "Saving…" : "Add Expense"}</Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <PaymentDialog open={payOpen} onOpenChange={setPayOpen}
+        projects={projects.map((p) => ({ id: p.id, client_id: p.client_id, name: `${p.name}${p.client_name ? ` — ${p.client_name}` : ""}`, project_code: p.project_code, balance: p.balance }))}
+        onSaved={() => void loadAll()} />
     </RecordListPage>
   );
 }

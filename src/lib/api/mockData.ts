@@ -46,6 +46,10 @@ const EXPENSES = [
   { id: 4, category: "travel", amount: 1800, description: "Travel to VTT Gold client office", project_id: 3, pitch_id: null, date: "2026-07-20", added_by: "Founder", created_at: "2026-07-20" },
 ];
 
+const AMC_PAYMENTS = [
+  { id: 21, client_id: 3, client_name: "VTT Gold", project_id: 3, project_name: "VTT Gold Portal", project_code: "PR-0003", amount: 18000, type: "amc", mode: "upi", reference: "AMC 2025-04-01 to 2026-04-01", recorded_by: "Founder", payment_date: "2025-04-03", notes: "AMC payment", created_at: "2025-04-03", amc_id: 1, amc_from: "2025-04-01", amc_to: "2026-04-01" },
+];
+
 const AMC = [
   { id: 1, client_id: 3, client_name: "VTT Gold", client_company: "", project_id: 3, project_name: "VTT Gold Portal", project_code: null, amount: 18000, base_amount: 18000, user_plans: [{ category: "ERP", included: 5, step: 1, price: 500, users: 5 }, { category: "Web APK", included: 50, step: 5, price: 500, users: 50 }], storage_gb: 30, storage_step_gb: 10, storage_step_price: 500, storage_used_gb: null, reason: "Hosted from go-live", plan: "first_year", first_year_free: false, term_paid: true, in_free_year: false, renewed: false, contract_start: "2025-04-01", payment_id: null, paid_on: null, start_date: "2025-04-01", renewal_date: "2026-04-01", due_date: "2026-04-01", status: "overdue", payment_mode: "bank_transfer", notes: "Annual maintenance contract", days_until_due: -126 },
   { id: 2, client_id: 1, client_name: "Cable TV CRM", client_company: "", project_id: 1, project_name: "Cable TV CRM Phase 2", project_code: null, amount: 25500, base_amount: 24000, user_plans: [{ category: "ERP", included: 5, step: 1, price: 500, users: 7 }, { category: "Web APK", included: 10, step: 5, price: 500, users: 12 }], storage_gb: 20, storage_step_gb: 10, storage_step_price: 500, storage_used_gb: 18, plan: "second_year", first_year_free: true, term_paid: true, in_free_year: true, renewed: false, contract_start: "2026-05-01", payment_id: null, paid_on: null, start_date: "2026-05-01", renewal_date: "2027-05-01", due_date: "2027-05-01", status: "active", payment_mode: null, notes: null, days_until_due: 269 },
@@ -76,10 +80,13 @@ const FINANCE_SUMMARY = {
   total_pending: 125000,
   total_expenses_month: 9000,
   net_profit_month: -9000,
+  project_collected_month: 0,
+  amc_collected_month: 0,
+  amc_due: 18000,
   by_project: [
-    { id: 1, name: "Cable TV CRM Phase 2", client_name: "Cable TV CRM", quoted: 120000, received: 75000, balance: 45000, payment_status: "partial", pct_collected: 62.5 },
-    { id: 2, name: "Biomass ERP v1",       client_name: "Biomass ERP",  quoted: 200000, received: 120000, balance: 80000, payment_status: "partial", pct_collected: 60 },
-    { id: 3, name: "VTT Gold Portal",       client_name: "VTT Gold",    quoted: 150000, received: 150000, balance: 0,      payment_status: "paid",    pct_collected: 100 },
+    { id: 1, project_code: "PR-0001", stage: "Bug Fixing", name: "Cable TV CRM Phase 2", client_name: "Cable TV CRM", quoted: 120000, received: 75000, balance: 45000, payment_status: "partial", pct_collected: 62.5, amc_per_year: 25500, amc_due: 0, amc_next_due: "2027-05-01", amc_collected: 0, expenses: 0 },
+    { id: 2, project_code: "PR-0002", stage: "Development", name: "Biomass ERP v1",       client_name: "Biomass ERP",  quoted: 200000, received: 120000, balance: 80000, payment_status: "partial", pct_collected: 60, amc_per_year: 0, amc_due: 0, amc_next_due: null, amc_collected: 0, expenses: 0 },
+    { id: 3, project_code: "PR-0003", stage: "Closed", name: "VTT Gold Portal",       client_name: "VTT Gold",    quoted: 150000, received: 150000, balance: 0,      payment_status: "paid",    pct_collected: 100, amc_per_year: 18000, amc_due: 18000, amc_next_due: "2026-04-01", amc_collected: 18000, expenses: 1800 },
   ],
 };
 
@@ -235,9 +242,31 @@ export function getMockResponse(path: string, method: string, body?: unknown): u
   if (url === "/admin/ops/finance/expenses" && method === "GET") return ok([...EXPENSES]);
   if (url === "/admin/ops/finance/expenses" && method === "POST") return ok({ ...(body as object), id: 99, created_at: TODAY });
   if (url.match(/^\/admin\/ops\/finance\/(payments|expenses)\/\d+$/) && method === "DELETE") return ok({ message: "Deleted" });
+  if (url.match(/^\/admin\/ops\/finance\/payments\/\d+$/) && method === "GET") {
+    const pay = AMC_PAYMENTS.find((x) => x.id === Number(url.split("/").pop())) ?? PAYMENTS.find((x) => x.id === Number(url.split("/").pop()));
+    if (!pay) return null;
+    const amc = pay.type === "amc" ? AMC[0] : null;
+    return ok({ ...pay, client_company: null, client_phone: null, project_quoted: 150000, project_received: 150000, project_balance: 0, project_payment_status: "paid", amc, amc_current: pay.id === 21 });
+  }
+  if (url.match(/^\/admin\/ops\/finance\/expenses\/\d+$/) && method === "GET") {
+    const e = EXPENSES.find((x) => x.id === Number(url.split("/").pop()));
+    return e ? ok({ ...e, notes: e.id === 4 ? "Cab both ways, bill no. 4471" : null, project_name: e.project_id ? "VTT Gold Portal" : null, project_code: e.project_id ? "PR-0003" : null, pitch_name: e.pitch_id ? "YES Meet Kanchipuram" : null }) : null;
+  }
+  if (url.match(/^\/admin\/ops\/finance\/expenses\/\d+$/) && method === "PUT") return ok({ ...(body as object), id: Number(url.split("/").pop()) });
+  if (url === "/admin/ops/finance/expense-categories") return ok(["hosting", "tools", "travel", "marketing", "salary", "pitch", "other", "Office rent"]);
+  if (url.match(/^\/admin\/ops\/finance\/projects\/\d+$/)) {
+    return ok({ id: 3, project_code: "PR-0003", name: "VTT Gold Portal", stage: "Closed", client_id: 3, client_name: "VTT Gold", client_code: "CL-0003", client_company: "VTT Jewellers",
+      quoted: 150000, received: 150000, balance: 0, payment_status: "paid", pct_collected: 100, amc_collected: 18000, amc_per_year: 18000, expenses_total: 1800, net: 166200,
+      payments: [...AMC_PAYMENTS, PAYMENTS[4]], amcs: [AMC[0]], expenses: [{ ...EXPENSES[3], project_name: "VTT Gold Portal" }] });
+  }
 
   // AMC
   if (url === "/admin/ops/amc" && method === "GET") return ok([...AMC]);
+  if (url.match(/^\/admin\/ops\/amc\/\d+$/) && method === "GET") {
+    const a = AMC.find((x) => x.id === Number(url.split("/").pop()));
+    return a ? ok({ ...a, client_code: "CL-0003", client_phone: "9988776655", payments: a.id === 1 ? AMC_PAYMENTS.map((x) => ({ id: x.id, amount: x.amount, payment_date: x.payment_date, mode: x.mode, reference: x.reference, recorded_by: x.recorded_by, notes: x.notes, year_from: x.amc_from, year_to: x.amc_to, current: x.id === 21 })) : [] }) : null;
+  }
+  if (url.match(/^\/admin\/ops\/amc\/\d+\/revert$/)) return ok({ ...AMC[0], term_paid: false });
   if (url === "/admin/ops/amc" && method === "POST") return ok({ ...(body as object), id: 99, status: "active", days_until_due: 365 });
   if (url.match(/^\/admin\/ops\/amc\/\d+$/) && method === "PUT") return ok({ ...(body as object) });
 

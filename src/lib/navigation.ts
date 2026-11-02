@@ -164,6 +164,17 @@ export function routeTitle(pathname: string): string {
   if (bug) return `Bug ${decodeURIComponent(bug[1])}`;
   const pitch = path.match(/^\/pitches\/(.+)$/);
   if (pitch) return `Pitch ${decodeURIComponent(pitch[1])}`;
+  if (path === "/finance/expenses/new") return "New expense";
+  const expenseEdit = path.match(/^\/finance\/expenses\/([^/]+)\/edit$/);
+  if (expenseEdit) return `Edit expense ${decodeURIComponent(expenseEdit[1])}`;
+  const expense = path.match(/^\/finance\/expenses\/(.+)$/);
+  if (expense) return `Expense ${decodeURIComponent(expense[1])}`;
+  const payment = path.match(/^\/finance\/payments\/(.+)$/);
+  if (payment) return `Payment ${decodeURIComponent(payment[1])}`;
+  const money = path.match(/^\/finance\/projects\/(.+)$/);
+  if (money) return `Project money ${decodeURIComponent(money[1])}`;
+  const amc = path.match(/^\/amc\/(.+)$/);
+  if (amc) return `AMC ${decodeURIComponent(amc[1])}`;
 
   const last = path.split("/").filter(Boolean).pop();
   return last ? titleCaseSlug(last) : "Dashboard";
@@ -190,6 +201,8 @@ export function routeIcon(pathname: string): MenuItem["icon"] {
   if (/^\/projects\//.test(path)) return FolderKanban;
   if (/^\/bugs\//.test(path)) return Bug;
   if (/^\/pitches\//.test(path)) return Megaphone;
+  if (/^\/finance\//.test(path)) return IndianRupee;
+  if (/^\/amc\//.test(path)) return RefreshCcw;
   return FileText;
 }
 

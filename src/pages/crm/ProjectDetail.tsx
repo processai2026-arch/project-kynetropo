@@ -30,7 +30,8 @@ import { initialsOf } from "@/lib/initials";
 import type { OpsAmcRecord, OpsPayment } from "@/types/ops";
 import { HealthBadge, PROJECT_STAGES, PriorityBadge, rupees } from "./components/crm";
 import { PAYMENT_MODES, PAYMENT_TYPES, PaymentDialog } from "./components/PaymentDialog";
-import { AmcCollectDialog, AmcFormDialog, AmcPriceParts, AmcSheetDialog, AmcStatusBadge, AmcUsageDialog, AmcYearBadge, amcPlanLabel, dueText } from "@/pages/finance/components/AmcDialogs";
+import { AmcCollectDialog, AmcFormDialog, AmcSheetDialog, AmcUsageDialog } from "@/pages/finance/components/AmcDialogs";
+import { AmcPanel } from "@/pages/finance/components/AmcTables";
 
 const label = (options: { value: string; label: string }[], v: string) => options.find((o) => o.value === v)?.label ?? humanise(v);
 
@@ -52,6 +53,8 @@ export default function ProjectDetail() {
   const [collectingAmc, setCollectingAmc] = useState<OpsAmcRecord | null>(null);
   const [usageAmc, setUsageAmc] = useState<OpsAmcRecord | null>(null);
   const [sheetAmc, setSheetAmc] = useState<OpsAmcRecord | null>(null);
+  // Bumped after a change, so each AMC panel loads its payments again.
+  const [amcVersion, setAmcVersion] = useState(0);
 
   if (error) return <p className="text-destructive">{error}</p>;
 
@@ -65,7 +68,7 @@ export default function ProjectDetail() {
   const projectPayments = payments.filter((pay) => pay.type !== "amc").length;
   const openPayment = (payment: OpsPayment | null) => { setEditingPayment(payment); setPayOpen(true); };
   const openAmc = (amc: OpsAmcRecord | null) => { setEditingAmc(amc); setAmcFormOpen(true); };
-  const amcSaved = () => { void reloadAmc(); void reload(); setTab("amc"); };
+  const amcSaved = () => { void reloadAmc(); void reload(); setAmcVersion((v) => v + 1); setTab("amc"); };
 
   return (
     <RecordDetailPage>
@@ -170,58 +173,20 @@ export default function ProjectDetail() {
           )}
 
           {tab === "amc" && p && (
-            <SectionCard icon={ShieldCheck} title="AMC" subtitle="Yearly maintenance — separate from the quoted amount and balance" bodyPadding=""
-              headerAction={<Button size="sm" onClick={() => openAmc(null)}><Plus className="h-4 w-4" /> Add AMC</Button>}>
-              <ScrollableX>
-                <table className="w-full text-sm">
-                  <thead><tr>
-                    <th className="text-left">AMC</th><th className="text-right">Per year</th><th className="text-left">This year</th><th className="text-left">Renewal</th>
-                    <th className="text-left">Next due</th><th className="text-left">Status</th><th />
-                  </tr></thead>
-                  <tbody>
-                    {amcList.length === 0 && (
-                      <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">
-                        No AMC for this project{p.amc_reason ? <> — <span className="text-foreground">{p.amc_reason}</span></> : null}
-                      </td></tr>
-                    )}
-                    {amcList.map((a) => (
-                      <tr key={a.id}>
-                        <td>
-                          <span className="whitespace-nowrap">{amcPlanLabel(a)}</span>
-                          {a.reason && <span className="block text-xs text-muted-foreground">{a.reason}</span>}
-                          {a.storage_gb ? (
-                            <span className="block whitespace-nowrap text-xs text-muted-foreground">
-                              {a.storage_gb} GB included · +{rupees(a.storage_step_price ?? 0)} per {a.storage_step_gb} GB more
-                            </span>
-                          ) : null}
-                          {(a.user_plans ?? []).map((u) => (
-                            <span key={u.category} className="block whitespace-nowrap text-xs text-muted-foreground">
-                              {u.category}: {u.included} users included · +{rupees(u.price)} per {u.step === 1 ? "user" : `${u.step} users`} more
-                            </span>
-                          ))}
-                          <AmcPriceParts amc={a} className="mt-0.5 font-medium" />
-                        </td>
-                        <td className="text-right font-medium tabular-nums">{rupees(a.amount)}</td>
-                        <td className="whitespace-nowrap"><AmcYearBadge amc={a} /> <span className="text-xs text-muted-foreground">from {formatDate(a.start_date)}</span></td>
-                        <td className="whitespace-nowrap">{formatDate(a.renewal_date)}</td>
-                        <td className="whitespace-nowrap">{formatDate(a.due_date)} <span className="text-xs">{dueText(a.days_until_due)}</span></td>
-                        <td><AmcStatusBadge status={a.status} /></td>
-                        <td className="w-10">
-                          <RowActionsMenu ariaLabel={`Actions for AMC of ${rupees(a.amount)}`}>
-                            <DropdownMenuItem onSelect={() => setCollectingAmc(a)}><Wallet className="h-4 w-4" /> {a.term_paid ? "Collect renewal" : "Collect this year's AMC"}</DropdownMenuItem>
-                            {((a.user_plans?.length ?? 0) > 0 || a.storage_gb) ? (
-                              <DropdownMenuItem onSelect={() => setUsageAmc(a)}><Users className="h-4 w-4" /> Update users and storage</DropdownMenuItem>
-                            ) : null}
-                            <DropdownMenuItem onSelect={() => setSheetAmc(a)}><FileText className="h-4 w-4" /> AMC sheet (preview / PDF)</DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => openAmc(a)}><Pencil className="h-4 w-4" /> Edit AMC</DropdownMenuItem>
-                          </RowActionsMenu>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </ScrollableX>
-            </SectionCard>
+            <div className="space-y-4">
+              {amcList.length === 0 && (
+                <SectionCard icon={ShieldCheck} title="AMC" subtitle="Yearly maintenance — separate from the quoted amount and balance"
+                  headerAction={<Button size="sm" onClick={() => openAmc(null)}><Plus className="h-4 w-4" /> Add AMC</Button>}>
+                  <p className="py-4 text-center text-sm text-muted-foreground">
+                    No AMC for this project{p.amc_reason ? <> — <span className="text-foreground">{p.amc_reason}</span></> : null}
+                  </p>
+                </SectionCard>
+              )}
+              {amcList.map((a) => (
+                <AmcPanel key={a.id} amc={a} reloadKey={amcVersion} onCollect={setCollectingAmc} onUsage={setUsageAmc}
+                  onSheet={setSheetAmc} onEdit={openAmc} onChanged={amcSaved} />
+              ))}
+            </div>
           )}
 
           {tab === "bugs" && p && (
