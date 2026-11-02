@@ -137,27 +137,6 @@ export default function Expenses() {
           subtitle={byCategory[0] ? fmt(byCategory[0][1]) : "Nothing spent"} icon={Tag} accent="amber" subtitleColor="muted" />
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Select value={month} onValueChange={(v) => setParam("month", v)}>
-          <SelectTrigger className="w-[200px]" aria-label="Month"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>All time</SelectItem>
-            {months.map((m) => <SelectItem key={m.month} value={m.month}>{monthLabel(m.month)} · {fmt(m.total)}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={category} onValueChange={(v) => setParam("category", v)}>
-          <SelectTrigger className="w-[200px]" aria-label="Category"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>All categories</SelectItem>
-            {categories.map((c) => <SelectItem key={c} value={c}>{categoryLabel(c)}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Input placeholder="Search what for, notes, project…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full sm:w-[280px]" />
-        {(month !== ALL || category !== ALL || search) && (
-          <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setParams({}, { replace: true }); }}>Clear</Button>
-        )}
-      </div>
-
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Panel title="Month by month" subtitle="Click a month to see its expenses" flush>
           <ScrollableX>
@@ -208,6 +187,26 @@ export default function Expenses() {
       </div>
 
       <Panel title={`${period} — ${shown.length} expense${shown.length === 1 ? "" : "s"} · ${fmt(total)}`} subtitle="Open an expense to see its notes, change it or delete it" flush>
+        <div className="flex flex-wrap items-center gap-3 border-b px-4 py-3">
+          <Select value={month} onValueChange={(v) => setParam("month", v)}>
+            <SelectTrigger className="w-[200px]" aria-label="Month"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All time</SelectItem>
+              {months.map((m) => <SelectItem key={m.month} value={m.month}>{monthLabel(m.month)} · {fmt(m.total)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={category} onValueChange={(v) => setParam("category", v)}>
+            <SelectTrigger className="w-[200px]" aria-label="Category"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All categories</SelectItem>
+              {categories.map((c) => <SelectItem key={c} value={c}>{categoryLabel(c)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Input placeholder="Search what for, notes, project…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full sm:w-[280px]" />
+          {(month !== ALL || category !== ALL || search) && (
+            <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setParams({}, { replace: true }); }}>Clear</Button>
+          )}
+        </div>
         <ScrollableX>
           <table className="w-full text-sm">
             <thead>

@@ -7,6 +7,7 @@ import {
   CalendarClock,
   ClipboardList,
   IndianRupee,
+  Scale,
   RefreshCcw,
   Megaphone,
   Target,
@@ -70,6 +71,7 @@ export const sections: MenuSection[] = [
     items: [
       { title: "Income",   url: "/finance",          icon: IndianRupee },
       { title: "Expenses", url: "/finance/expenses", icon: Receipt },
+      { title: "Profit & Loss", url: "/finance/profit-loss", icon: Scale },
       { title: "AMC",      url: "/amc",              icon: RefreshCcw },
     ],
   },

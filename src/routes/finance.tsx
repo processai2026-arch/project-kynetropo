@@ -7,6 +7,7 @@ const PaymentDetail = lazy(() => import("@/pages/finance/PaymentDetail"));
 const ExpenseDetail = lazy(() => import("@/pages/finance/ExpenseDetail"));
 const ExpenseForm = lazy(() => import("@/pages/finance/ExpenseForm"));
 const Expenses = lazy(() => import("@/pages/finance/Expenses"));
+const ProfitLoss = lazy(() => import("@/pages/finance/ProfitLoss"));
 const AmcForm = lazy(() => import("@/pages/finance/AmcForm"));
 const AMC = lazy(() => import("@/pages/finance/AMC"));
 const AmcDetail = lazy(() => import("@/pages/finance/AmcDetail"));
@@ -16,6 +17,7 @@ export const routes: RouteDef[] = [
   { path: "/finance/projects/:id", element: FinanceProject },
   { path: "/finance/payments/:id", element: PaymentDetail },
   { path: "/finance/expenses", element: Expenses },
+  { path: "/finance/profit-loss", element: ProfitLoss },
   { path: "/finance/expenses/new", element: ExpenseForm },
   { path: "/finance/expenses/:id", element: ExpenseDetail },
   { path: "/finance/expenses/:id/edit", element: ExpenseForm },
