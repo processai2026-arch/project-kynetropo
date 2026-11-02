@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   CalendarClock, CalendarDays, FileText, FolderKanban, IndianRupee, Pencil, Phone, RotateCcw, ShieldCheck, StickyNote,
   Trash2, Users, Wallet,
@@ -13,6 +13,7 @@ import { SectionCard } from "@/components/SectionCard";
 import { ActionDialog } from "@/components/ActionDialog";
 import { Button } from "@/components/ui/button";
 import { useLoad } from "@/hooks/useLoad";
+import { useUrlTab } from "@/hooks/useUrlTab";
 import { opsAmcApi } from "@/lib/api/ops";
 import { formatDate } from "@/lib/format";
 import { rupees } from "@/pages/crm/components/crm";
@@ -26,10 +27,7 @@ export default function AmcDetail() {
   const navigate = useNavigate();
   const { data: a, loading, error, reload } = useLoad(() => opsAmcApi.get(id), [id]);
   const [collecting, setCollecting] = useState(false);
-  // The tab is in the address, so Back from a payment returns to it.
-  const [params, setParams] = useSearchParams();
-  const tab = ["overview", "price", "payments"].includes(params.get("tab") ?? "") ? params.get("tab")! : "overview";
-  const setTab = (t: string) => setParams((p) => { const n = new URLSearchParams(p); n.set("tab", t); return n; }, { replace: true });
+  const [tab, setTab] = useUrlTab(["overview", "price", "payments"] as const, "overview");
   const [usage, setUsage] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [removing, setRemoving] = useState(false);

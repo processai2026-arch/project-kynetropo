@@ -3,11 +3,14 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { CalendarDays, FolderKanban, IndianRupee, Megaphone, Pencil, Receipt, StickyNote, Tag, Trash2, UserRound } from "lucide-react";
 import { RecordDetailPage } from "@/components/RecordDetailPage";
 import { RecordProfileHeader } from "@/components/RecordProfileHeader";
-import { DetailWorkspace } from "@/components/DetailStats";
+import { DetailTabs } from "@/components/DetailTabs";
+import { ScrollableX } from "@/components/ui/scrollable-x";
 import { SectionCard } from "@/components/SectionCard";
 import { ActionDialog } from "@/components/ActionDialog";
 import { Button } from "@/components/ui/button";
 import { useLoad } from "@/hooks/useLoad";
+import { useUrlTab } from "@/hooks/useUrlTab";
+import { rowOpenProps, ROW_OPEN_CLASS } from "@/lib/rowNav";
 import { opsFinanceApi } from "@/lib/api/ops";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { rupees } from "@/pages/crm/components/crm";
@@ -19,9 +22,16 @@ export default function ExpenseDetail() {
   const navigate = useNavigate();
   const { data: e, loading, error } = useLoad(() => opsFinanceApi.expense(id), [id]);
   const [removing, setRemoving] = useState(false);
+  const [tab, setTab] = useUrlTab(["expense", "notes", "category"] as const, "expense");
+  // The rest of this category, for comparison.
+  const { data: sameCategory } = useLoad(
+    () => (e ? opsFinanceApi.expenses({ category: e.category }) : Promise.resolve({ data: [] })),
+    [e?.category],
+  );
 
   if (error) return <p className="text-destructive">{error}</p>;
 
+  const others = (sameCategory ?? []).filter((x) => x.id !== e?.id);
   const rows: [string, React.ReactNode][] = e ? [
     ["Amount", <span className="font-semibold text-red-600">{rupees(e.amount)}</span>],
     ["Date", formatDate(e.date)],
@@ -57,18 +67,54 @@ export default function ExpenseDetail() {
       />
 
       {e && (
-        <DetailWorkspace
-          main={<SectionCard icon={IndianRupee} title="Expense">
-            <table className="w-full text-sm"><tbody>
-              {rows.map(([k, v]) => (
-                <tr key={k}><th scope="row" className="w-40 text-left font-normal text-muted-foreground">{k}</th><td>{v}</td></tr>
-              ))}
-            </tbody></table>
-          </SectionCard>}
-          side={<SectionCard icon={StickyNote} title="Notes">
-            <p className="whitespace-pre-wrap text-sm text-muted-foreground">{e.notes || "No notes."}</p>
-          </SectionCard>}
-        />
+        <div className="space-y-4">
+          <DetailTabs value={tab} onValueChange={setTab} ariaLabel="Expense details" tabs={[
+            { value: "expense", label: "Expense", icon: IndianRupee },
+            { value: "notes", label: "Notes", icon: StickyNote, count: e.notes ? 1 : 0 },
+            { value: "category", label: `Other ${categoryLabel(e.category).toLowerCase()}`, icon: Tag, count: others.length },
+          ]} />
+
+          {tab === "expense" && (
+            <SectionCard icon={IndianRupee} title="Expense">
+              <table className="w-full text-sm"><tbody>
+                {rows.map(([k, v]) => (
+                  <tr key={k}><th scope="row" className="w-40 text-left font-normal text-muted-foreground">{k}</th><td>{v}</td></tr>
+                ))}
+              </tbody></table>
+            </SectionCard>
+          )}
+
+          {tab === "notes" && (
+            <SectionCard icon={StickyNote} title="Notes"
+              headerAction={<Button size="sm" variant="outline" onClick={() => navigate(`/finance/expenses/${e.id}/edit`)}><Pencil className="h-4 w-4" /> Edit notes</Button>}>
+              <p className="whitespace-pre-wrap text-sm text-muted-foreground">{e.notes || "No notes."}</p>
+            </SectionCard>
+          )}
+
+          {tab === "category" && (
+            <SectionCard icon={Tag} title={`${categoryLabel(e.category)} — other expenses`}
+              subtitle={`${others.length} more, ${rupees(others.reduce((t, x) => t + Number(x.amount), 0))} in all`} bodyPadding="">
+              <ScrollableX>
+                <table className="w-full text-sm">
+                  <thead><tr>
+                    <th className="text-left">Date</th><th className="text-left">What for</th><th className="text-left">Project / event</th><th className="text-right">Amount</th>
+                  </tr></thead>
+                  <tbody>
+                    {others.length === 0 && <tr><td colSpan={4} className="py-6 text-center text-muted-foreground">No other expenses in this category</td></tr>}
+                    {others.map((x) => (
+                      <tr key={x.id} className={ROW_OPEN_CLASS} {...rowOpenProps(() => navigate(`/finance/expenses/${x.id}`))}>
+                        <td className="whitespace-nowrap">{formatDate(x.date)}</td>
+                        <td>{x.description || "—"}</td>
+                        <td className="text-muted-foreground">{x.project_name ?? x.pitch_name ?? "—"}</td>
+                        <td className="text-right font-medium tabular-nums text-red-600">{rupees(x.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </ScrollableX>
+            </SectionCard>
+          )}
+        </div>
       )}
 
       {e && (

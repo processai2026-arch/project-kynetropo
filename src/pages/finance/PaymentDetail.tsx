@@ -3,15 +3,17 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { CalendarDays, CreditCard, FolderKanban, IndianRupee, Pencil, ShieldCheck, StickyNote, Tag, Trash2, Users, Wallet } from "lucide-react";
 import { RecordDetailPage } from "@/components/RecordDetailPage";
 import { RecordProfileHeader, ProfileLinkCard } from "@/components/RecordProfileHeader";
-import { DetailWorkspace } from "@/components/DetailStats";
+import { DetailTabs } from "@/components/DetailTabs";
 import { SectionCard } from "@/components/SectionCard";
 import { ActionDialog } from "@/components/ActionDialog";
 import { Button } from "@/components/ui/button";
 import { useLoad } from "@/hooks/useLoad";
+import { useUrlTab } from "@/hooks/useUrlTab";
 import { opsFinanceApi } from "@/lib/api/ops";
 import { formatDate, formatDateTime, humanise } from "@/lib/format";
 import { rupees } from "@/pages/crm/components/crm";
 import { PAYMENT_MODES, PAYMENT_TYPES, PaymentDialog } from "@/pages/crm/components/PaymentDialog";
+import { AmcContractTable } from "./components/AmcTables";
 
 const label = (options: { value: string; label: string }[], v: string) => options.find((o) => o.value === v)?.label ?? humanise(v);
 
@@ -22,6 +24,7 @@ export default function PaymentDetail() {
   const { data: p, loading, error, reload } = useLoad(() => opsFinanceApi.payment(id), [id]);
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [tab, setTab] = useUrlTab(["payment", "money", "notes"] as const, "payment");
 
   if (error) return <p className="text-destructive">{error}</p>;
 
@@ -64,8 +67,14 @@ export default function PaymentDetail() {
       />
 
       {p && (
-        <DetailWorkspace
-          main={<>
+        <div className="space-y-4">
+          <DetailTabs value={tab} onValueChange={setTab} ariaLabel="Payment details" tabs={[
+            { value: "payment", label: "Payment", icon: Wallet },
+            isAmc ? { value: "money", label: "AMC", icon: ShieldCheck } : { value: "money", label: "Project money", icon: FolderKanban },
+            { value: "notes", label: "Notes", icon: StickyNote, count: p.notes ? 1 : 0 },
+          ]} />
+
+          {tab === "payment" && (
             <SectionCard icon={Wallet} title="Payment">
               <table className="w-full text-sm"><tbody>
                 {rows.map(([k, v]) => (
@@ -73,34 +82,39 @@ export default function PaymentDetail() {
                 ))}
               </tbody></table>
             </SectionCard>
-            {p.notes && (
-              <SectionCard icon={StickyNote} title="Notes">
-                <p className="whitespace-pre-wrap text-sm text-muted-foreground">{p.notes}</p>
-              </SectionCard>
-            )}
-          </>}
-          side={isAmc ? (
-            <SectionCard icon={ShieldCheck} title="AMC">
+          )}
+
+          {tab === "money" && isAmc && (
+            <SectionCard icon={ShieldCheck} title="AMC"
+              headerAction={p.amc && <Button size="sm" variant="outline" onClick={() => navigate(`/amc/${p.amc!.id}`)}>Open AMC</Button>}>
               {p.amc ? (
-                <div className="space-y-2 text-sm">
-                  <p>{rupees(p.amc.amount)} a year · next due {formatDate(p.amc.due_date)}</p>
+                <div className="space-y-4 text-sm">
+                  <AmcContractTable amc={p.amc} />
                   <p className="text-muted-foreground">AMC money is not part of the project's quoted amount or balance.</p>
                   {p.amc_current && <p className="text-muted-foreground">This is the AMC's latest collection — deleting it puts the AMC back to how it was before.</p>}
-                  <Button size="sm" variant="outline" onClick={() => navigate(`/amc/${p.amc!.id}`)}>Open AMC</Button>
                 </div>
               ) : <p className="text-sm text-muted-foreground">Not linked to an AMC.</p>}
             </SectionCard>
-          ) : (
-            <SectionCard icon={FolderKanban} title="Project money">
+          )}
+
+          {tab === "money" && !isAmc && (
+            <SectionCard icon={FolderKanban} title="Project money"
+              headerAction={<Button size="sm" variant="outline" onClick={() => navigate(`/finance/projects/${p.project_id}`)}>Open project money</Button>}>
               <table className="w-full text-sm"><tbody>
-                <tr><th scope="row" className="text-left font-normal text-muted-foreground">Quoted</th><td className="text-right tabular-nums">{rupees(p.project_quoted ?? 0)}</td></tr>
-                <tr><th scope="row" className="text-left font-normal text-muted-foreground">Received</th><td className="text-right tabular-nums text-emerald-700">{rupees(p.project_received ?? 0)}</td></tr>
-                <tr><th scope="row" className="text-left font-normal text-muted-foreground">Balance</th><td className="text-right tabular-nums text-red-600">{rupees(p.project_balance ?? 0)}</td></tr>
-                <tr><th scope="row" className="text-left font-normal text-muted-foreground">Status</th><td className="text-right">{humanise(p.project_payment_status ?? "")}</td></tr>
+                <tr><th scope="row" className="w-40 text-left font-normal text-muted-foreground">Quoted</th><td className="tabular-nums">{rupees(p.project_quoted ?? 0)}</td></tr>
+                <tr><th scope="row" className="text-left font-normal text-muted-foreground">Received</th><td className="tabular-nums text-emerald-700">{rupees(p.project_received ?? 0)}</td></tr>
+                <tr><th scope="row" className="text-left font-normal text-muted-foreground">Balance</th><td className="tabular-nums text-red-600">{rupees(p.project_balance ?? 0)}</td></tr>
+                <tr><th scope="row" className="text-left font-normal text-muted-foreground">Status</th><td>{humanise(p.project_payment_status ?? "")}</td></tr>
               </tbody></table>
             </SectionCard>
           )}
-        />
+
+          {tab === "notes" && (
+            <SectionCard icon={StickyNote} title="Notes">
+              <p className="whitespace-pre-wrap text-sm text-muted-foreground">{p.notes || "No notes."}</p>
+            </SectionCard>
+          )}
+        </div>
       )}
 
       {p && <>

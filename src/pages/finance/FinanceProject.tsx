@@ -6,10 +6,12 @@ import { RecordProfileHeader, ProfileLinkCard } from "@/components/RecordProfile
 import { DetailStats } from "@/components/DetailStats";
 import { StatCard } from "@/components/StatCard";
 import { SectionCard } from "@/components/SectionCard";
+import { DetailTabs } from "@/components/DetailTabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollableX } from "@/components/ui/scrollable-x";
 import { useLoad } from "@/hooks/useLoad";
+import { useUrlTab } from "@/hooks/useUrlTab";
 import { opsFinanceApi } from "@/lib/api/ops";
 import { formatDate, humanise } from "@/lib/format";
 import { rowOpenProps, ROW_OPEN_CLASS } from "@/lib/rowNav";
@@ -26,6 +28,7 @@ export default function FinanceProject() {
   const navigate = useNavigate();
   const { data: p, loading, error, reload } = useLoad(() => opsFinanceApi.project(id), [id]);
   const [paying, setPaying] = useState(false);
+  const [tab, setTab] = useUrlTab(["payments", "amc", "expenses"] as const, "payments");
 
   if (error) return <p className="text-destructive">{error}</p>;
 
@@ -64,7 +67,13 @@ export default function FinanceProject() {
         <StatCard title="Net" value={p ? rupees(p.net) : "—"} subtitle={p ? `Received + AMC − ${rupees(p.expenses_total)} spent` : undefined} icon={TrendingUp} accent="teal" subtitleColor="muted" />
       </DetailStats>
 
-      <SectionCard icon={Wallet} title={`Payments (${payments.length})`} subtitle="Project payments and AMC — open one to see it, change it or delete it" bodyPadding=""
+      <DetailTabs value={tab} onValueChange={setTab} ariaLabel="Project money" tabs={[
+        { value: "payments", label: "Payments", icon: Wallet, count: payments.length },
+        { value: "amc", label: "AMC", icon: ShieldCheck, count: amcs.length },
+        { value: "expenses", label: "Expenses", icon: Receipt, count: expenses.length },
+      ]} />
+
+      {tab === "payments" && <SectionCard icon={Wallet} title={`Payments (${payments.length})`} subtitle="Project payments and AMC — open one to see it, change it or delete it" bodyPadding=""
         headerAction={<Button size="sm" onClick={() => setPaying(true)}><Plus className="h-4 w-4" /> Record payment</Button>}>
         <ScrollableX>
           <table className="w-full text-sm">
@@ -87,9 +96,17 @@ export default function FinanceProject() {
             </tbody>
           </table>
         </ScrollableX>
-      </SectionCard>
+      </SectionCard>}
 
-      {amcs.map((a) => (
+      {tab === "amc" && amcs.length === 0 && (
+        <SectionCard icon={ShieldCheck} title="AMC">
+          <p className="py-4 text-center text-sm text-muted-foreground">No AMC for this project.{" "}
+            {p && <button type="button" className="text-primary hover:underline" onClick={() => navigate(`/amc/new?project_id=${p.id}`)}>Add one</button>}
+          </p>
+        </SectionCard>
+      )}
+
+      {tab === "amc" && amcs.map((a) => (
         <SectionCard key={a.id} icon={ShieldCheck} title={`AMC · ${rupees(a.amount)} a year`}
           headerAction={<Button size="sm" variant="outline" onClick={() => navigate(`/amc/${a.id}`)}>Open AMC — collect or revert</Button>}>
           <div className="space-y-5">
@@ -102,7 +119,7 @@ export default function FinanceProject() {
         </SectionCard>
       ))}
 
-      <SectionCard icon={Receipt} title={`Expenses (${expenses.length})`} subtitle="Spent on this project" bodyPadding=""
+      {tab === "expenses" && <SectionCard icon={Receipt} title={`Expenses (${expenses.length})`} subtitle="Spent on this project" bodyPadding=""
         headerAction={p && <Button size="sm" variant="outline" onClick={() => navigate(`/finance/expenses/new?project_id=${p.id}`)}><Plus className="h-4 w-4" /> Add expense</Button>}>
         <ScrollableX>
           <table className="w-full text-sm">
@@ -124,7 +141,7 @@ export default function FinanceProject() {
             </tbody>
           </table>
         </ScrollableX>
-      </SectionCard>
+      </SectionCard>}
 
       {p && (
         <PaymentDialog open={paying} onOpenChange={setPaying}
